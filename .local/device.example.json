@@ -1,0 +1,10 @@
+{
+  "$comment": "Copy to .local/device.json and fill in. Gitignored: this file records a host on someone's LAN, and the API has no authentication of any kind.",
+  "host": "192.168.1.100",
+  "scheme": "http",
+  "port": 80,
+  "label": "Heatit WiFi Panel — where?",
+  "firmware": null,
+  "maxLoad": null,
+  "notes": "Anything a probe run should know: model wattage, which room, whether it is safe to write to."
+}
