@@ -1,0 +1,1175 @@
+openapi: 3.0.0
+servers:
+  # Added by API Auto Mocking Plugin
+  - description: Local HTTP API
+    url: http://{APIUrl}
+    variables:
+      APIUrl:
+        default: "192.168.1.100"
+        description: Base Url to API
+
+info:
+  version: "12.0.0"
+  title: Heatit WiFi Panel
+  description: The API documentation for WiFi Panel
+  contact:
+    name: Heatit Support
+    url: https://heatit.com/contact
+    email: post@heatit.com
+  termsOfService: https://heatit.com/terms-of-use-private
+
+externalDocs:
+  description: Heatit's documents page
+  url: http://documents.heatit.com
+
+tags:
+  - name: "Panel"
+    description: Get data from the device
+  - name: "Parameters"
+    description: Change parameters on the device
+  - name: "BlueFusion"
+    description: Get data and change parameters on BlueFusion connected devices.
+  - name: "DirectLink"
+    description: Set and delete DirectLinks between devices.
+  - name: "Reset"
+    description: Reset settings, kwh or entire device to factory defaults
+
+paths:
+  /api/status:
+    get:
+      tags:
+        - Panel
+      summary: Gets status of the device.
+      description: returns all information about the device.
+      responses:
+        "200":
+          description: Get the information from the device.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceInfo"
+
+  /api/parameters:
+    post:
+      tags:
+        - Parameters
+      summary: Set parameters on the device.
+      description: Change parameters on the device. At least one parameter is required.
+      parameters:
+        -  $ref: "#/components/parameters/panelMode"
+        -  $ref: "#/components/parameters/sensorCalibration"
+        -  $ref: "#/components/parameters/temperatureDisplay"
+        -  $ref: "#/components/parameters/sensorMode"
+        -  $ref: "#/components/parameters/externalSensorFallback"
+        -  $ref: "#/components/parameters/activeDisplayBrightness"
+        -  $ref: "#/components/parameters/standbyDisplayBrightness"
+        -  $ref: "#/components/parameters/heatingSetpoint"
+        -  $ref: "#/components/parameters/ecoSetpoint"
+        -  $ref: "#/components/parameters/minimumTemperatureLimit"
+        -  $ref: "#/components/parameters/maximumTemperatureLimit"
+        -  $ref: "#/components/parameters/openWindowDetection"
+        -  $ref: "#/components/parameters/loadLimit"
+        -  $ref: "#/components/parameters/disableButtons"
+        -  $ref: "#/components/parameters/lowTemperatureProtection"
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  -  $ref: "#/components/schemas/panelMode"
+                  -  $ref: "#/components/schemas/sensorCalibration"
+                  -  $ref: "#/components/schemas/temperatureDisplay"
+                  -  $ref: "#/components/schemas/sensorMode"
+                  -  $ref: "#/components/schemas/externalSensorFallback"
+                  -  $ref: "#/components/schemas/activeDisplayBrightness"
+                  -  $ref: "#/components/schemas/standbyDisplayBrightness"
+                  -  $ref: "#/components/schemas/heatingSetpoint"
+                  -  $ref: "#/components/schemas/ecoSetpoint"
+                  -  $ref: "#/components/schemas/minimumTemperatureLimit"
+                  -  $ref: "#/components/schemas/maximumTemperatureLimit"
+                  -  $ref: "#/components/schemas/openWindowDetection"
+                  -  $ref: "#/components/schemas/loadLimit"
+                  -  $ref: "#/components/schemas/disableButtons"
+                  -  $ref: "#/components/schemas/lowTemperatureProtection"
+              examples:
+                Panel Mode (MODE):
+                  value:
+                    status: success
+                    panelMode: 1
+                Sensor calibration (CAL):
+                  value:
+                    status: success
+                    sensorCalibration: -1.0
+                Temperature display:
+                  value:
+                    status: success
+                    temperatureDisplay: true
+                Sensor mode:
+                  value:
+                    status: success
+                    sensorMode: false
+                External sensor fallback:
+                  value:
+                    status: success
+                    externalSensorFallback: true
+                Active display brightness (BR1):
+                  value:
+                    status: success
+                    activeDisplayBrightness: 7
+                Standby display brightness (BR2):
+                  value:
+                    status: success
+                    standbyDisplayBrightness: 5
+                heatingSetpoint:
+                  value:
+                    status: success
+                    heatingSetpoint: 23.0
+                ecoSetpoint:
+                  value:
+                    status: success
+                    ecoSetpoint: 19.0
+                Minimum temperature limit (MIN):
+                  value:
+                    status: success
+                    minimumTemperatureLimit: 6.0
+                Maximum temperature limit (MAX):
+                  value:
+                    status: success
+                    maximumTemperatureLimit: 35.0
+                Open Window Detection (OWD):
+                  value:
+                    status: success
+                    openWindowDetection: true
+                Load limit (LOLI):
+                  value:
+                    status: success
+                    loadLimit: 5
+                Disable buttons:
+                  value:
+                    status: success
+                    disableButtons: 0
+                Low temperature protection:
+                  value:
+                    status: success
+                    lowTemperatureProtection: 0
+                Multiple parameters at the same time:
+                  value:
+                    status: success
+                    panelMode: 1
+                    sensorCalibration: -1.0
+                    temperatureDisplay: true
+                    sensorMode: false
+                    externalSensorFallback: true
+                    activeDisplayBrightness: 7
+                    standbyDisplayBrightness: 5
+                    heatingSetpoint: 23.0
+                    ecoSetpoint: 19.0
+                    minimumTemperatureLimit: 6.0
+                    maximumTemperatureLimit: 35.0
+                    openWindowDetection: true
+                    loadLimit: 5
+                    disableButtons: 0
+                    lowTemperatureProtection: 0
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  reason:
+                    type: string
+              examples: 
+                Failed:
+                  value:
+                    status: failed
+                    reason: out of range.
+                Failed2:
+                  value:
+                    status: failed
+                    reason: invalid data.
+        "422":
+          description: Validation Error - At least one parameter needs to be changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: failed
+                  reason:
+                    type: string
+                    example: You need to change at least one parameter.
+              example:
+                status: failed
+                reason: You need to change at least one parameter.
+
+  /api/reset/factory:
+    delete:
+      tags:
+        - Reset
+      summary: Reset the device to factory default.
+      description: Reset the device to factory defaults. This will reset network settings or remove the device from the app.
+      parameters:
+        - name: reset
+          description: Reset the device to factory defaults. 
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - Reset
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reset:
+                    $ref: "#/components/schemas/ResetInfo/properties/statusSuccess"
+  /api/reset/settings:
+    delete:
+      tags:
+        - Reset
+      summary: Reset settings on the device to factory default.
+      description: Reset settings on the device to factory defaults. This will not reset network settings or remove the device from the app.
+      parameters:
+        - name: resetSettings
+          description: Resets all settings to factory defaults. 
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - Reset
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reset:
+                    $ref: "#/components/schemas/ResetInfo/properties/statusSuccess"
+  /api/reset/kwh:
+    delete:
+      tags:
+        - Reset
+      summary: Reset kWh to 0.
+      description: Reset kWh to zero.
+      parameters:
+        - name: resetKwh
+          description: Resets the Kwh counter to 0.
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - Reset
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reset:
+                    $ref: "#/components/schemas/ResetInfo/properties/statusSuccess"
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reset:
+                    $ref: "#/components/schemas/ResetInfo/properties/statusFailed"
+
+  /api/bluefusion/devices:
+    get:
+      tags:
+        - BlueFusion
+      summary: Get list of devices connected via BlueFusion
+      description: returns list of devices connected via BlueFusion
+      responses:
+        "200":
+          description: All devices connected via BlueFusion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Devices"
+
+  /api/bluefusion/{id}/status:
+    get:
+      tags:
+        - BlueFusion
+      summary: Get information from the BlueFusion device
+      description: Returns all information about the BlueFusion device. See the documentation for each device for response schema.
+      responses:
+        "200":
+          description: All the devices
+          content:
+            application/json:
+              examples:
+                BLE-Temp3:
+                  value:
+                    id: sdf87g4bnfc87a523rbsdf4
+                    name: BLE-Temp3 hall
+                    room: hall
+                    state: false
+                    temperature: 22.2
+                    parameters:
+                      disableButton: 2
+                      minimumTemperatureLimit: 8.5
+                      maximumTemperatureLimit: 35.5
+                      calibration: -2.5
+                      regulationMode: false
+                      temperatureControlHysteresis: 0.5
+                      temperatureDisplay: false
+                      activeDisplayBrightness: 10
+                      heatingSetpoint: 21.0
+                      coolingSetpoint: 18.0
+                      ecoSetpoint: 18.0
+                      operatingMode: 1
+                      OWD:
+                        openWindowDetection: 0
+                        activeNow: false
+                        activeTime: 0
+                      directLink:
+                        relayControl: []
+                        masterThermostat: []
+                    firmware: 1.2.2
+
+  /api/bluefusion/{id}/parameters:
+    post:
+      tags:
+        - BlueFusion
+      summary: Adjust parameters on a BlueFusion device.
+      description: Adjust parameters on a BlueFusion connected device. See the documentation for each device for available parameters.
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              examples:
+                Disable Buttons:
+                  value:
+                    status: success
+                    disableButton: 0
+                Minimum temperature limit (MIN):
+                  value:
+                    status: success
+                    minimumTemperature: 8.5
+                Maximum temperature limit (MAX):
+                  value:
+                    status: success
+                    maximumTemperature: 35.5
+                Sensor calibration (CAR):
+                  value:
+                    status: success
+                    sensorCalibration: -1.0
+                Regulation mode (REG):
+                  value:
+                    status: success
+                    regulationMode: false
+                Temperature control hysteresis:
+                  value:
+                    status: success
+                    temperatureControlHysteresis: 0.5
+                Temperature display:
+                  value:
+                    status: success
+                    temperatureDisplay: true
+                Active Display Brightness:
+                  value:
+                    status: success
+                    activeDisplayBrightness: 10
+                Heating setpoint:
+                  value:
+                    status: success
+                    setpoint: 21.5
+                Cooling setpoint:
+                  value:
+                    status: success
+                    setpoint: 18.5
+                ECO setpoint:
+                  value:
+                    status: success
+                    setpoint: 18.5
+                Operating mode:
+                  value:
+                    status: success
+                    operationMode: 1
+                Open Window Detection (OWD):
+                  value:
+                    status: success
+                    openWindowDetection: false
+                Multiple parameters at the same time:
+                  value:
+                    status: success
+                    disableButton: true
+                    minimumTemperature: 5.0
+                    maximumTemperature: 40.0
+                    sensorCalibration: -1.2
+                    regulationMode: false
+                    temperatureControlHysteresis: 0.5
+                    temperatureDisplay: true
+                    activeDisplayBrightness: 10
+                    heatingSetpoint: 21.0
+                    coolingSetpoint: 18.0
+                    ecoSetpoint: 18.0
+                    operationMode: 1
+                    openWindowDetection: false
+        "400":
+          description: Failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  reason:
+                    type: string
+              examples: 
+                Failed:
+                  value:
+                    status: failed
+                    reason: out of range.
+                Failed2:
+                  value:
+                    status: failed
+                    reason: invalid data.
+        "422":
+          description: Validation Error - At least one parameter needs to be changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: failed
+                  reason:
+                    type: string
+                    example: You need to change at least one parameter.
+              example:
+                status: failed
+                reason: You need to change at least one parameter.
+
+  /api/bluefusion/{id}/reset/factory:
+    delete:
+      tags:
+        - BlueFusion
+      summary: Reset the BlueFusion device to factory default.
+      description: Reset the BlueFusion device to factory defaults. This will reset network settings or remove the device from the app.
+      parameters:
+        - name: reset
+          description: Reset the BlueFusion device to factory defaults.
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - Reset
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+              examples:
+                Success:
+                  value:
+                    status: success
+                Failed:
+                  value:
+                    status: failed
+                    reason: no response from device
+
+  /api/bluefusion/{id}/reset/settings:
+    delete:
+      tags:
+        - BlueFusion
+      summary: Reset settings on a BlueFusion device to factory default.
+      description: Reset settings on a BlueFusion device to factory defaults. This will not reset network settings or remove the device from the app.
+      parameters:
+        - name: resetSettings
+          description: Resets all settings to factory defaults. This will not reset network settings or remove the device from the app.
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - Reset
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+              examples:
+                Success:
+                  value:
+                    status: success
+                Failed:
+                  value:
+                    status: failed
+                    reason: no response from device
+
+  /api/bluefusion/{id}/reset/kwh:
+    delete:
+      tags:
+        - BlueFusion
+      summary: Reset the kWh counter on a BlueFusion device to 0.
+      description: Reset the kWh counter on a BlueFusion device to 0.
+      parameters:
+        - name: resetKwh
+          description: Resets the Kwh counter to 0.
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - Reset
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+              examples:
+                Success:
+                  value:
+                    status: success
+                Failed:
+                  value:
+                    status: failed
+                    reason: no response from device
+
+  /api/directlink:
+    get:
+      tags:
+        - DirectLink
+      summary: Get current DirectLink connections
+      description: Returns list of all DirectLink connections for this device
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  relayControl:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Unique id of the connected device
+                        name:
+                          type: string
+                          description: Name of the connected device
+                        macAddress:
+                          type: string
+                          description: MAC address of the connected device
+                  masterThermostat:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        macAddress:
+                          type: string
+              examples:
+                Success:
+                  value:
+                    relayControl:
+                      - id: "df4g8b7n2gh9a1c4r4sd2f7"
+                        name: "Relay living room"
+                        macAddress: "AA:BB:CC:DD:EE:FF"
+                    masterThermostat:
+                      - id: "9d8c7a6b5f4g1h2i3j4k5l6"
+                        name: "Thermostat bedroom"
+                        macAddress: "11:22:33:44:55:66"
+                Empty:
+                  value:
+                    relayControl: []
+                    masterThermostat: []
+    post:
+      tags:
+        - DirectLink
+      summary: Set a Directlink connection.
+      description: Set a DirectLink. Requires IP address of the device to connect to.
+      parameters:
+        - name: directLink
+          description: Choose which function you want to DirectLink
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - relayControl
+              - masterThermostat
+        - name: ipAddress
+          description: IP address of the device to connect to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: ipv4
+            example: "192.168.1.100"
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  macAddress:
+                    type: string
+                    description: MAC address of the connected device
+              examples:
+                Success:
+                  value:
+                    status: success.
+                    macAddress: "AA:BB:CC:DD:EE:FF"
+                Failed:
+                  value:
+                    status: failed
+                    reason: no response from device
+                Incompatible:
+                  value:
+                    status: failed
+                    reason: This DirectLink is not supported on the receiving device.
+    delete:
+      tags:
+        - DirectLink
+      summary: Delete a DirectLink connection.
+      description: Removes a DirectLink connection.
+      parameters:
+        - name: directLink
+          description: Choose which DirectLink function you want to remove from. 
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - relayControl
+              - masterThermostat
+        - name: device
+          description: Enter the id of the device you want to remove from the DirectLink connections.
+          in: query
+          required: false
+          schema:
+            type: string
+            format: id
+            example: sdf87g4bnfc87a523rbsdf4
+      responses:
+        "200":
+          description: Successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+              examples:
+                Success:
+                  value:
+                    status: success. 
+                Failed:
+                  value:
+                    status: failed
+                    reason: no response from device
+
+
+
+components:
+  parameters:
+    panelMode:
+      name: panelMode
+      description: Chooses the mode of the panel
+        <br>**0** = Off
+        <br>**1** = Heating
+        <br>**2** = Eco
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/panelMode"
+      example: 1
+    sensorCalibration:
+      name: sensorCalibration
+      description: Calibrate the sensor
+        <br>**-6.0** = -6.0°
+        <br>**6.0** = 6.0°
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/sensorCalibration"
+    temperatureDisplay:
+      name: temperatureDisplay
+      description: Choose what temperature to show in the display in standby mode.
+        <br>**false** = Display setpoint temperature
+        <br>**true** = Display measured temperature
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/temperatureDisplay"
+    sensorMode:
+      name: sensorMode
+      description: Choose which sensor mode the device should operate with
+        <br>**false** = Internal sensor (Default)
+        <br>**true** = External wireless sensor
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/sensorMode"
+    externalSensorFallback:
+      name: externalSensorFallback
+      description: Choose what happens if the external sensor stops reporting. 
+        <br>**false** = Off
+        <br>**true** = internal sensor (Default)
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/externalSensorFallback"
+    activeDisplayBrightness:
+      name: activeDisplayBrightness
+      description: Set display brightness for active state
+        <br>**1** = 10%
+        <br>**10** = 100%
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/activeDisplayBrightness"
+    standbyDisplayBrightness:
+      name: standbyDisplayBrightness
+      description: Set display brightness for standby state
+        <br>**0** = 0%
+        <br>**10** = 100%
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/standbyDisplayBrightness"
+    heatingSetpoint:
+      name: heatingSetpoint
+      description: Desired heating temperature
+        <br>**5.0** = 5.0°
+        <br>**40.0** = 40.0°
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/heatingSetpoint"
+    ecoSetpoint:
+      name: ecoSetpoint
+      description: Desired ECO temperature
+        <br>**5.0** = 5.0°
+        <br>**40.0** = 40.0°
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/ecoSetpoint"
+    minimumTemperatureLimit:
+      name: minimumTemperatureLimit
+      description: Set lowest temperature
+        <br>**5.0** = 5.0°
+        <br>**40.0** = 40.0°
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/minimumTemperatureLimit"
+    maximumTemperatureLimit:
+      name: maximumTemperatureLimit
+      description: Set highest temperature
+        <br>**5.0** = 5.0°
+        <br>**40.0** = 40.0°
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/maximumTemperatureLimit"
+    openWindowDetection:
+      name: openWindowDetection
+      description: Shows if the Open Window Detection feature is enabled or disabled.
+        <br>**false** = disabled
+        <br>**true** = enabled
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/openWindowDetection"
+    loadLimit:
+      name: loadLimit
+      description: The power the Panel should operate at. **1**=100W, **2**=200W, etc.
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/loadLimit"
+    disableButtons:
+      name: disableButtons
+      description: Disable device buttons
+        <br>**0** = Buttons are not disabled
+        <br>**1** = Buttons are disabled
+        <br>**2** = lock menu
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/disableButtons"
+    lowTemperatureProtection:
+      name: lowTemperatureProtection
+      description: Will turn on heating if the temperature drops below the value set in the parameter
+        <br>**0** = disabled (Default)
+        <br>**1-10** = Turn on when temperature is below value in °C
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/lowTemperatureProtection"
+  schemas:
+    panelMode:
+        type: integer
+        description: Chooses the mode of the panel
+          <br>**0** = Off
+          <br>**1** = Heating
+          <br>**2** = Eco
+        enum:
+          - 0
+          - 1
+          - 2
+        default: 1
+        minimum: 0
+        maximum: 2
+    sensorCalibration:
+        type: number
+        format: float
+        pattern: '^-?\d+\.\d{1}$'
+        description: Calibrate the sensor
+          <br>**-6.0** = -6.0° (minimum)
+          <br>**6.0** = 6.0° (maximum)
+        default: 0.0
+        minimum: -6.0
+        maximum: 6.0
+        example: 0.0
+    temperatureDisplay:
+        type: boolean
+        description: Choose what temperature to show in the display in standby mode.
+          <br>**false** = Display setpoint temperature
+          <br>**true** = Display measured temperature
+        enum:
+          - false
+          - true
+        default: false
+    sensorMode:
+      type: boolean
+      description: Choose which sensor mode the device should operate with
+        <br>**false** = Internal sensor (Default)
+        <br>**true** = External wireless sensor
+      enum:
+        - false
+        - true
+      default: false
+    externalSensorFallback:
+      type: boolean
+      description: Choose what happens if the external sensor stops reporting. 
+        <br>**false** = Off
+        <br>**true** = internal sensor (Default)
+      enum:
+        - false
+        - true
+      default: true
+    activeDisplayBrightness:
+        type: integer
+        description: Set display brightness for active state
+          <br>**1** = 10%
+          <br>**10** = 100%
+        default: 10
+        minimum: 1
+        maximum: 10
+    standbyDisplayBrightness:
+        type: integer
+        description: Set display brightness for standby state
+          <br>**0** = 0%
+          <br>**10** = 100%
+        default: 5
+        minimum: 0
+        maximum: 10
+    heatingSetpoint:
+        type: number
+        format: float
+        pattern: '^\d+\.\d{1}$'
+        description: Desired heating temperature
+          <br>**5.0** = 5.0°
+          <br>**40.0** = 40.0°
+        default: 21.0
+        minimum: 5.0
+        maximum: 40.0
+    ecoSetpoint:
+        type: number
+        format: float
+        pattern: '^\d+\.\d{1}$'
+        description: Desired ECO temperature
+          <br>**5.0** = 5.0°
+          <br>**40.0** = 40.0°
+        default: 18.0
+        minimum: 5.0
+        maximum: 40.0
+    minimumTemperatureLimit:
+        type: number
+        format: float
+        pattern: '^\d+\.\d{1}$'
+        description: Set lowest temperature
+          <br>**5.0** = 5.0°
+          <br>**40.0** = 40.0°
+        default: 5.0
+        minimum: 5.0
+        maximum: 40.0
+    maximumTemperatureLimit:
+        type: number
+        format: float
+        pattern: '^\d+\.\d{1}$'
+        description: Set highest temperature
+          <br>**5.0** = 5.0°
+          <br>**40.0** = 40.0°
+        default: 40.0
+        minimum: 5.0
+        maximum: 40.0
+    openWindowDetection:
+        type: boolean
+        description: Shows if the Open Window Detection feature is enabled or disabled.
+          <br>**false** = disabled
+          <br>**true** = enabled
+        default: false
+    loadLimit:
+        type: integer
+        description: The power the Panel should operate at. **1**=100W, **2**=200W, etc.
+        default: 15
+        minimum: 1
+        maximum: 15
+    disableButtons:
+        type: integer
+        description: Disable device buttons
+          <br>**0** = Buttons are not disabled
+          <br>**1** = Buttons are disabled
+          <br>**2** = lock menu
+        enum:
+          - 0
+          - 1
+          - 2
+        default: 0
+    lowTemperatureProtection:
+      type: integer
+      description: Will turn on heating if the temperature drops below the value set in the parameter
+        <br>**0** = disabled (Default)
+        <br>**1-10** = Turn on when temperature is below value in °C
+      default: 0
+      minimum: 0
+      maximum: 10
+    DeviceInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique id for each device
+          example: sdf87g4bnfc87a523rbsdf4
+        name:
+          type: string
+          description: Device name used in the MyHeatit app.
+          example: Panel hall
+        room:
+          type: string
+          description: The room the device is assigned to in the MyHeatit app.
+          example: hall
+        state:
+          type: string
+          description: The current state for heating. Is the heating element currently on?
+          enum:
+            - Idle
+            - Heating
+          example: Idle
+        currentPower:
+          type: integer
+          pattern: '^\d+$'
+          description: Power consumption in W
+          minimum: 0
+          maximum: 1500
+          example: 1500
+        totalConsumption:
+          type: number
+          format: float
+          pattern: '^\d+\.\d{2}$'
+          description: Total consumption in kWh
+          example: 624.25
+        roomTemperature:
+          type: number
+          format: float
+          pattern: '^-?\d+\.\d{1}$'
+          description: Current temperature measurement
+          example: 22.2
+        parameters:
+          type: object
+          properties:
+            panelMode:
+              $ref: "#/components/schemas/panelMode"
+            sensorCalibration:
+              $ref: "#/components/schemas/sensorCalibration"
+            temperatureDisplay:
+              $ref: "#/components/schemas/temperatureDisplay"
+            sensorMode:
+              $ref: "#/components/schemas/sensorMode"
+            externalSensorFallback:
+              $ref: "#/components/schemas/externalSensorFallback"
+            activeDisplayBrightness:
+              $ref: "#/components/schemas/activeDisplayBrightness"
+            standbyDisplayBrightness:
+              $ref: "#/components/schemas/standbyDisplayBrightness"
+            heatingSetpoint:
+              $ref: "#/components/schemas/heatingSetpoint"
+            ecoSetpoint:
+              $ref: "#/components/schemas/ecoSetpoint"
+            minimumTemperatureLimit:
+              $ref: "#/components/schemas/minimumTemperatureLimit"
+            maximumTemperatureLimit:
+              $ref: "#/components/schemas/maximumTemperatureLimit"
+            lowTemperatureProtection:
+              type: object
+              properties:
+                lowTemperatureProtection:
+                  $ref: "#/components/schemas/lowTemperatureProtection"
+                activeNow:
+                  type: string
+                  description: Shows the current state of the Low Temperature Protection.
+                    <br>**disabled** = Feature is disabled
+                    <br>**Idle** = Feature is enabled but not active
+                    <br>**Heating** = Feature is active and heating
+                  enum: 
+                    - disabled
+                    - Idle
+                    - Heating
+                  default: disabled
+                  example: Idle
+            OWD:
+              type: object
+              properties:
+                openWindowDetection:
+                  $ref: "#/components/schemas/openWindowDetection"
+                activeNow:
+                  type: boolean
+                  description: Shows the current state of the Open Window Detection.
+                    false = No open window detected. 
+                    true = Open window detected. Setpoint is lowered.
+                  enum: 
+                    - false
+                    - true
+                  default: false
+                  example: false
+                activeTime:
+                  type: integer
+                  pattern: '^\d+$'
+                  description: Seconds left until the Open Window Detection done.
+                  default: 0
+                  example: 3245
+            loadLimit:
+              $ref: "#/components/schemas/loadLimit"
+            maxLoad:
+              type: integer
+              description: Maximum load the device can handle. Varies on the model of the device.
+              default: 15
+              minimum: 4
+              maximum: 15
+            disableButtons:
+              $ref: "#/components/schemas/disableButtons"
+        Network:
+          type: object
+          properties:
+            SSID:
+              type: string
+              description: SSID of the connected wifi network
+              example: "Home WiFi"
+            mac:
+              type: string
+              description: Mac address of the device
+              example: "aa:bb:cc:11:22:33"
+            ipAddress:
+              type: string
+              description: IP address of the device on the local network. 
+              example: 192.168.1.10
+            wifiSignalStrength:
+              type: string
+              description: Wifi signal strength
+              example: "65dBm"
+            status:
+              type: string
+              description: status of the connection.
+              example: ok
+        firmware:
+          type: string
+          example: "1.2"
+    ResetInfo:
+      type: object
+      properties:
+        statusSuccess:
+          type: string
+          enum:
+            - success
+          example: success
+        statusFailed:
+          type: string
+          enum:
+            - failed
+          example: failed
+    Devices:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: Unique id for each device
+            format: id
+            example: sdf87g4bnfc87a523rbsdf4
+          name:
+            type: string
+            description: Device name used in the MyHeatit app.
+            example: BLE-Temp3 hall
+          device:
+            type: string
+            description: What type of product the device is. 
+            example: BLE-Temp3
+      example:
+        - id: df4g8b7n2gh9a1c4r4sd2f7
+          name: Thermostat living room
+          device: Heatit BLE-Temp3
+        - id: 6f7g8s5a4h9j2k3l1m0n5b2
+          name: Thermostat kitchen
+          device: Heatit BLE-Temp3
+        - id: 9d8c7a6b5f4g1h2i3j4k5l6
+          name: Thermostat bedroom
+          device: Heatit BLE-Temp3
