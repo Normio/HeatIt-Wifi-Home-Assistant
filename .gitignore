@@ -1,2 +1,7 @@
 # Orca workspace state — tooling, not project content
 .orca/
+
+# Local, machine-specific device pointer — never committed.
+# The example file is tracked so the shape stays discoverable.
+/.local/*
+!/.local/device.example.json
