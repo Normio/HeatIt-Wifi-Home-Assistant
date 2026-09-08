@@ -64,6 +64,10 @@ _Avoid_: wrong device, id mismatch (in prose), swapped panel
 The parts of a status without which the panel cannot be described at all: the device id, the relay state, the room temperature, the panel mode and both setpoint banks. A status missing any of them is not a status; anything else missing leaves only its own reading unknown.
 _Avoid_: mandatory fields, minimum schema
 
+**Poll budget**:
+The longest a single status read may take, retry included, before the panel counts as unreachable for that poll. There is no grace beyond it: a poll that exhausts its budget makes the panel unavailable.
+_Avoid_: timeout, poll timeout, grace period
+
 **Silent undo**:
 A write the panel acknowledged as successful and then did not apply, so the next status shows the old value. Observed once, when the external sensor mode was enabled with no sensor paired.
 _Avoid_: lying echo, phantom write, rejected write
