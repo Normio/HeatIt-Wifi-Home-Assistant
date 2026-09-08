@@ -1,5 +1,7 @@
 # Heatit WiFi Panel Heater — Home Assistant integration handoff
 
+> **Superseded.** This is the originating brief, kept verbatim as the historical record. The design spec at `docs/spec/heatit-wifi-panel-v1.md` supersedes it wherever the two differ. In particular, the recommendation below to fork or crib from `mattik-gh/heatit_wifi6` was **rejected** (see `docs/adr/0001-no-fork-of-heatit-wifi6.md`); do not consult that repository when implementing.
+
 ## Goal
 
 Build a Home Assistant integration (HACS custom component) for the **Heatit WiFi Panel** wall heater using its local HTTP API. No cloud, no auth, plain HTTP on the LAN.
