@@ -37,7 +37,7 @@ The panel's optional feature that infers an open window from a temperature drop 
 _Avoid_: OWD (in prose), window sensor
 
 **Low temperature protection**:
-An optional frost guard that heats whenever the room falls below a threshold of 1–10 °C, in any panel mode; a threshold of 0 turns it off. Its threshold and its live state share one wire name and must be kept apart in prose. Absent on firmware 1.21.
+An optional frost guard that heats whenever the room falls below a threshold of 1–10 °C, in any panel mode; a threshold of 0 turns it off. Its threshold and its live state share one wire name and must be kept apart in prose. Documented by the vendor; unobserved.
 _Avoid_: frost protection, LTP
 
 **Load limit**:
@@ -47,3 +47,11 @@ _Avoid_: power limit, max power
 **Rated load**:
 The panel model's maximum power in watts, reported by the device and never written. Wire name `maxLoad`, in units of 100 W.
 _Avoid_: max load, model wattage
+
+**Observed parameter**:
+A parameter a real panel has returned in its status. Only observed parameters are modelled, exposed, or tested; a captured status is the evidence that admits one.
+_Avoid_: present parameter, supported parameter
+
+**Unobserved parameter**:
+A parameter the vendor's document lists that no panel has yet returned. Neither absent nor unsupported: simply never seen, and so not modelled until it is.
+_Avoid_: absent parameter, missing parameter, spec-only parameter
