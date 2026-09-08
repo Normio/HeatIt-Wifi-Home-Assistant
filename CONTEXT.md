@@ -31,3 +31,19 @@ _Avoid_: range, min/max
 **Relay state**:
 Whether the heating element is currently on. Wire name `state`, values Idle and Heating. Independent of panel mode; leads the reported power by several seconds.
 _Avoid_: heating state, status, demand
+
+**Open window detection**:
+The panel's optional feature that infers an open window from a temperature drop and lowers the live setpoint until a countdown expires. Wire object `OWD`: the setting `openWindowDetection`, the detection `activeNow`, the countdown `activeTime`.
+_Avoid_: OWD (in prose), window sensor
+
+**Low temperature protection**:
+An optional frost guard that heats whenever the room falls below a threshold of 1–10 °C, in any panel mode; a threshold of 0 turns it off. Its threshold and its live state share one wire name and must be kept apart in prose. Absent on firmware 1.21.
+_Avoid_: frost protection, LTP
+
+**Load limit**:
+The maximum power the panel will draw, in watts, chosen by the user up to the rated load. Wire name `loadLimit`, stored in units of 100 W.
+_Avoid_: power limit, max power
+
+**Rated load**:
+The panel model's maximum power in watts, reported by the device and never written. Wire name `maxLoad`, in units of 100 W.
+_Avoid_: max load, model wattage
