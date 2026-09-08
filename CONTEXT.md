@@ -55,3 +55,19 @@ _Avoid_: present parameter, supported parameter
 **Unobserved parameter**:
 A parameter the vendor's document lists that no panel has yet returned. Neither absent nor unsupported: simply never seen, and so not modelled until it is.
 _Avoid_: absent parameter, missing parameter, spec-only parameter
+
+**Foreign panel**:
+A panel answering at a configured address whose device id is not the one the address was set up for; another unit has taken over the address. Its status is never accepted as data.
+_Avoid_: wrong device, id mismatch (in prose), swapped panel
+
+**Required core**:
+The parts of a status without which the panel cannot be described at all: the device id, the relay state, the room temperature, the panel mode and both setpoint banks. A status missing any of them is not a status; anything else missing leaves only its own reading unknown.
+_Avoid_: mandatory fields, minimum schema
+
+**Silent undo**:
+A write the panel acknowledged as successful and then did not apply, so the next status shows the old value. Observed once, when the external sensor mode was enabled with no sensor paired.
+_Avoid_: lying echo, phantom write, rejected write
+
+**Verified firmware**:
+A firmware version for which a captured status from a real panel exists. A panel running any other version is unverified, not unsupported.
+_Avoid_: supported firmware, known firmware, tested firmware
