@@ -48,6 +48,10 @@ _Avoid_: power limit, max power
 The panel model's maximum power in watts, reported by the device and never written. Wire name `maxLoad`, in units of 100 W.
 _Avoid_: max load, model wattage
 
+**Energy counter**:
+The panel's cumulative consumption in kWh since it was last zeroed. Wire name `totalConsumption`. Published in steps of roughly 0.04 kWh rather than continuously, so it sits flat and then jumps; zeroed immediately by the kWh reset, from Home Assistant or the app.
+_Avoid_: total consumption, kWh meter, energy meter
+
 **Observed parameter**:
 A parameter a real panel has returned in its status. Only observed parameters are modelled, exposed, or tested; a captured status is the evidence that admits one.
 _Avoid_: present parameter, supported parameter
