@@ -1670,4 +1670,30 @@ rather than a surprise.
 Corrections to this document after v1 was frozen. Each entry names the register row or issue that
 forced it, and the PR that carried it.
 
-*None yet.*
+**2026-09-09 — `scripts/check_layout.py` joins §3.1 and §9.4** ([#36](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/36), PR #49).
+Three of #36's acceptance criteria — no `strings.json` anywhere, brand assets nowhere else in the
+repository, `hacs.json` holding exactly three keys — have no upstream enforcer: hassfest validates
+`strings.json` only when the file exists, and the HACS Action never looks past `hacs.json` and the
+manifest. §3.1's `scripts/` listing gains `check_layout.py` and §9.4's command list gains one line.
+It also asserts §10.1's fixed manifest keys and their order, and that no `quality_scale` key is
+present — **§9.2's failure condition 4 moves to `check_quality_scale.py` when that script lands
+([#47](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/47)), rather than living in
+both.**
+
+**2026-09-09 — `config_flow.py` ships with the scaffold** ([#36](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/36), PR #49).
+§3.1 lists it, but #36 named only `manifest.json` and `__init__.py`. hassfest *errors* — not warns —
+when a manifest declares `config_flow: true` and the file is absent, and this holds for custom
+integrations. The scaffold therefore ships a `ConfigFlow` subclass with no steps;
+[#40](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/40) fills it in. `const.py` is
+present for the same reason, holding `DOMAIN` alone.
+
+**2026-09-09 — §9.3's "ruff runs once, in its own `test.yml` job" is deferred, not dropped** ([#36](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/36), PR #49).
+§9.4's "`test.yml` calls `scripts/check.sh`" was taken as the binding half. Until §8.7's rows exist
+there is nothing to matrix over, so one job runs the whole script.
+[#38](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/38) adds the two rows and splits
+ruff back out, so it does not run once per row.
+
+**2026-09-09 — required status checks join §10.3's human-applied list** ([#36](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/36), PR #49).
+§9.3 says both linters "block a merge" and §10.3 lists what a workflow cannot apply, but branch
+protection was named in neither. `Checks`, `HACS Action`, `hassfest` and `Changelog entry` must be
+marked required on `main` by the owner; nothing in the repository can assert that they are.

@@ -1,0 +1,36 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Nightly. HACS and hassfest can change their rules under us between our own
+    # pushes, and the scheduled run against our own repository is the only fully
+    # truthful signal: five HACS checks carry allow_fork = False and skip on
+    # fork pull requests, while hacs/default runs all ten.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  hacs:
+    name: HACS Action
+    runs-on: ubuntu-latest
+    steps:
+      # Deliberately unpinned, here and in hassfest below: the nightly run
+      # exists to catch a validator changing its rules, and pinning is what
+      # would make it stop telling the truth. No ignore: input, ever — a
+      # skipped check is a rejection deferred to the hacs/default reviewer.
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      # Unlike the HACS Action, hassfest reads the working tree.
+      - uses: actions/checkout@v7
+      - uses: home-assistant/actions/hassfest@master

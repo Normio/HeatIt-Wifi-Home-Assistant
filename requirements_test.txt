@@ -1,0 +1,8 @@
+# The floor row of the CI matrix, and what a developer installs locally.
+# pytest-homeassistant-custom-component releases in lockstep with core: this
+# version pins homeassistant==2026.3.1, the floor declared in hacs.json.
+pytest-homeassistant-custom-component==0.13.317
+
+# Both gates are pinned exactly: a gate must not go red on its own.
+mypy==2.3.1
+ruff==0.16.6
