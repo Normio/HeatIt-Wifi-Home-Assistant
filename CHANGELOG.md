@@ -20,8 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `hacs.json`'s three keys, and the manifest's fixed keys in order.
 - `scripts/probe.py`, the hardware conformance probe: stdlib only, four
   ascending tiers, claim text read from the register at runtime, a
-  snapshot-and-restore ledger verified from a fresh status read, `--restore`
-  to replay a snapshot, fail-closed fixture capture, and the spec's exit codes.
+  snapshot-and-restore ledger verified from a fresh status read after every
+  check, `--restore` to replay a snapshot, fail-closed fixture capture, and the
+  spec's exit codes. `--destructive` and `--thermal` both refuse a
+  non-interactive stdin (a spec amendment records why).
 - `scripts/check_conformance.py`, the CI gate over the conformance register:
   the six drift conditions of §12.4, including that the register's automated
   ids are exactly the ids `probe.py` registers. `VERIFIED_FIRMWARES` lands in

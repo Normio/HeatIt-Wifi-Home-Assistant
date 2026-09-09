@@ -9,6 +9,7 @@ import ast
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -72,11 +73,21 @@ class FakePanel:
         raw = json.dumps(self.doc).encode()
         return probe.Status(raw=raw, headers={}, doc=json.loads(raw))
 
+    def apply(self, name: str, value: str) -> None:
+        """Store a wire value the way the panel would, typed like the field."""
+        parameters = self.doc["parameters"]
+        current = probe.read_parameter(self.doc, name)
+        parsed = probe.coerce_like(current, probe.parse_wire_value(value))
+        if name == "openWindowDetection":
+            parameters["OWD"]["openWindowDetection"] = parsed
+        else:
+            parameters[name] = parsed
+
     def write(self, name: str, value: str) -> probe.Response:
         """Acknowledge a write, applying it only when honest."""
         self.writes.append((name, value))
         if self.honest:
-            probe.apply_wire_value(self.doc["parameters"], name, value)
+            self.apply(name, value)
         body = json.dumps({"status": "Success", name: value}).encode()
         return probe.Response(
             status=200, reason="OK", headers={}, body=body, raw_headers=b""
@@ -249,15 +260,10 @@ def test_replaying_a_snapshot_restores_only_the_touched_parameters(
 
 
 def make_run(panel: FakePanel, tmp_path: Path) -> probe.Run:
-    """Build a run context over the fake panel that never sleeps or waits."""
+    """Build a run context over the fake panel that never sleeps."""
     ledger = probe.Ledger(panel, snapshot_dir=tmp_path, sleep=no_sleep)
-    ticks = iter(range(10_000))
     return probe.Run(
-        panel=cast("probe.Panel", panel),
-        ledger=ledger,
-        fixtures=None,
-        sleep=no_sleep,
-        clock=lambda: float(next(ticks)),
+        panel=cast("probe.Panel", panel), ledger=ledger, fixtures=None, sleep=no_sleep
     )
 
 
@@ -307,8 +313,12 @@ def test_a_revert_the_status_denies_stops_the_run(tmp_path: Path) -> None:
     assert run.ledger.pending == ("sensorMode",)
 
 
-def test_the_reflect_poll_compares_like_the_panel_stores(tmp_path: Path) -> None:
+def test_the_reflect_poll_compares_like_the_panel_stores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """``0`` written to a boolean and ``18`` to a float both count as reflected."""
+    ticks = iter(range(10_000))
+    monkeypatch.setattr(time, "monotonic", lambda: float(next(ticks)))
     panel = FakePanel()
     run = make_run(panel, tmp_path)
     panel.write("temperatureDisplay", "0")

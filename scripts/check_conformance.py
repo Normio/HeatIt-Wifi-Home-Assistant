@@ -77,8 +77,14 @@ def cell_references(cell: str) -> list[str]:
     return tokens
 
 
-def check_shape(cells: tuple[str, ...], seen: set[str]) -> list[str]:
-    """Condition 1: id well-formed and unique, seven columns, vocabulary held."""
+def check_shape(
+    cells: tuple[str, ...], seen: set[str]
+) -> tuple[list[str], probe.Row | None]:
+    """Condition 1: id well-formed and unique, seven columns, vocabulary held.
+
+    Returns the problems and the row, or ``None`` when the column count is
+    wrong and no row can be built from the cells.
+    """
     row_id = cells[0] if cells else "?"
     problems: list[str] = []
     if not probe.ROW_ID.fullmatch(row_id):
@@ -88,7 +94,7 @@ def check_shape(cells: tuple[str, ...], seen: set[str]) -> list[str]:
     seen.add(row_id)
     if len(cells) != len(probe.REGISTER_COLUMNS):
         problems.append(f"{row_id}: {len(cells)} cells, must be 7 columns")
-        return problems
+        return problems, None
     row = probe.row_from_cells(cells)
     if row.vs_spec not in VS_SPEC:
         problems.append(
@@ -101,7 +107,7 @@ def check_shape(cells: tuple[str, ...], seen: set[str]) -> list[str]:
             f"{row_id}: status {row.status!r} is not open, verified fw <v> "
             f"or contradicted fw <v>"
         )
-    return problems
+    return problems, row
 
 
 def check_firmware(row: probe.Row, verified_firmwares: frozenset[str]) -> list[str]:
@@ -195,11 +201,10 @@ def problems(
     found: list[str] = []
     rows: list[probe.Row] = []
     for cells in all_cells:
-        shape = check_shape(cells, seen)
+        shape, row = check_shape(cells, seen)
         found += shape
-        if len(cells) != len(probe.REGISTER_COLUMNS):
-            continue
-        rows.append(probe.row_from_cells(cells))
+        if row is not None:
+            rows.append(row)
     for row in rows:
         found += check_firmware(row, verified_firmwares)
         found += check_evidence(row, repo_root=repo_root, procedures=procedures)

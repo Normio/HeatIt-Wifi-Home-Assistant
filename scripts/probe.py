@@ -372,24 +372,6 @@ def parse_wire_value(value: str) -> object:
     return float(value)
 
 
-def apply_wire_value(parameters: dict[str, Any], name: str, value: str) -> None:
-    """Store a wire value into a parameters object, the way the panel would."""
-    parsed = parse_wire_value(value)
-    current = (
-        parameters["OWD"]["openWindowDetection"]
-        if name == "openWindowDetection"
-        else parameters.get(name)
-    )
-    if isinstance(current, bool):
-        parsed = bool(parsed)
-    elif isinstance(current, float):
-        parsed = float(parsed)  # type: ignore[arg-type]
-    if name == "openWindowDetection":
-        parameters["OWD"]["openWindowDetection"] = parsed
-    else:
-        parameters[name] = parsed
-
-
 def on_grid(value: float, step: float = 0.5) -> bool:
     """Whether a temperature sits on the panel's grid."""
     return math.isclose(round(value / step) * step, value, abs_tol=1e-9)
@@ -505,11 +487,6 @@ class Panel:
         self.host = host
         self.port = port
 
-    @property
-    def base_url(self) -> str:
-        """The panel's base URL, for the banner's curl lines."""
-        return f"http://{self.host}:{self.port}"
-
     def connection(self) -> http.client.HTTPConnection:
         """Open a fresh connection."""
         return http.client.HTTPConnection(self.host, self.port, timeout=REQUEST_TIMEOUT)
@@ -521,37 +498,34 @@ class Panel:
         *,
         body: bytes | None = None,
         headers: dict[str, str] | None = None,
-        connection: http.client.HTTPConnection | None = None,
     ) -> Response:
-        """Send one request and read the whole response."""
-        own = connection is None
-        conn = connection or self.connection()
+        """Send one request on a fresh connection and read the whole response."""
+        conn = self.connection()
         started = time.monotonic()
         try:
             conn.request(method, path, body=body, headers=headers or {})
             raw = conn.getresponse()
-            payload = raw.read()
+            body_bytes = raw.read()
             header_items = list(raw.getheaders())
         finally:
-            if own:
-                conn.close()
+            conn.close()
         raw_headers = "".join(f"{k}: {v}\r\n" for k, v in header_items).encode()
         return Response(
             status=raw.status,
             reason=raw.reason,
             headers=dict(header_items),
-            body=payload,
+            body=body_bytes,
             raw_headers=raw_headers,
             elapsed=time.monotonic() - started,
         )
 
-    def status_response(self) -> Response:
+    def read_status(self) -> Response:
         """``GET /api/status`` as a response."""
         return self.request("GET", "/api/status")
 
     def status(self) -> Status:
         """Read the status; usage error if the panel does not answer 200 JSON."""
-        response = self.status_response()
+        response = self.read_status()
         if response.status != HTTPStatus.OK:
             msg = f"GET /api/status returned {response.status} {response.reason}"
             raise UsageError(msg)
@@ -561,10 +535,16 @@ class Panel:
         """Write one parameter through the query string, body-less."""
         return self.write_query(f"{name}={value}")
 
-    def write_query(self, query: str, **kwargs: Any) -> Response:  # noqa: ANN401
+    def write_query(
+        self,
+        query: str,
+        *,
+        body: bytes | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> Response:
         """``POST /api/parameters`` with an arbitrary query string."""
         path = f"/api/parameters?{query}" if query else "/api/parameters"
-        return self.request("POST", path, **kwargs)
+        return self.request("POST", path, body=body, headers=headers)
 
     def reset_kwh(self) -> Response:
         """``DELETE /api/reset/kwh`` bare — the documented parameter is Q7's point."""
@@ -847,11 +827,17 @@ class FixtureStore:
 # --------------------------------------------------------------------------- #
 
 
+#: Seconds into the sequence, the relay state, the power draw.
+RelaySample = tuple[float, str, int]
+#: Seconds into the watch, the status document read then.
+StatusSample = tuple[float, dict[str, Any]]
+
+
 @dataclass
 class HeatOutcome:
     """What one heater-on sequence recorded."""
 
-    timeline: list[tuple[float, str, int]]
+    timeline: list[RelaySample]
     heating_at: float | None
     power_at: float | None
     idle_at: float | None
@@ -874,22 +860,22 @@ class SettingsResetOutcome:
 
     before: Status
     response: Response
-    timeline: list[tuple[float, dict[str, Any]]]
+    timeline: list[StatusSample]
     read_failures: int
 
 
 @dataclass
 class Run:
-    """Everything a check may reach: the panel, the ledger, fixtures, memo."""
+    """Everything a check may reach: the panel, the ledger, fixtures, shared."""
 
     panel: Panel
     ledger: Ledger
     fixtures: FixtureStore | None
     measurements: dict[str, str] = field(default_factory=dict)
-    memo: dict[str, Any] = field(default_factory=dict)
+    #: Outcomes shared between the rows one reset or one heating serves.
+    shared: dict[str, Any] = field(default_factory=dict)
     confirm_thermal: Callable[[str], bool] = lambda _row_id: False
     sleep: Callable[[float], None] = time.sleep
-    clock: Callable[[], float] = time.monotonic
 
     def measure(self, key: str, value: str) -> None:
         """Record a measurement for the measurements block."""
@@ -911,11 +897,11 @@ class Run:
 
     def reflect(self, name: str, wire_value: str) -> tuple[Status, float | None]:
         """Poll the status until a parameter shows a value; ``None`` if it never did."""
-        started = self.clock()
+        started = time.monotonic()
         status = self.panel.status()
         wanted = parse_wire_value(wire_value)
         while True:
-            elapsed = self.clock() - started
+            elapsed = time.monotonic() - started
             observed = read_parameter(status.doc, name)
             if serialise(observed) == serialise(coerce_like(observed, wanted)):
                 return status, elapsed
@@ -953,9 +939,11 @@ def expect(condition: bool, message: str) -> None:  # noqa: FBT001 — an assert
         raise CheckFailedError(message)
 
 
-def inconclusive(message: str) -> Inconclusive:
-    """Build an ``Inconclusive`` to raise."""
-    return Inconclusive(message)
+def require[T](value: T | None, message: str) -> T:
+    """Fail the check when a value is missing; otherwise return it, narrowed."""
+    if value is None:
+        raise CheckFailedError(message)
+    return value
 
 
 def body_text(response: Response, limit: int = 120) -> str:
@@ -976,7 +964,7 @@ def cold_setpoint(status: Status, *, offset: float = COLD_OFFSET) -> float:
             f"({status.room_temperature:.1f} °C) fits inside the limits "
             f"{minimum:.1f}-{maximum:.1f}"
         )
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     return value
 
 
@@ -1053,13 +1041,13 @@ def mac_is_uppercase_with_colons(run: Run) -> str | None:
     )
     if not re.search(r"[A-F]", mac):
         msg = "this MAC has no letters, so its case cannot be told"
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     return None
 
 
 @check("Q18", tier=WRITE)
 def state_is_idle_when_off(run: Run) -> str | None:
-    """``state`` reads ``Idle`` when the panel mode is Off."""
+    """Switch the panel Off and expect the relay state to read idle."""
     run.write_applied("panelMode", str(MODE_OFF))
     run.sleep(REFLECT_BOUND)
     seen = {run.panel.status().doc["state"] for _ in range(3)}
@@ -1069,11 +1057,12 @@ def state_is_idle_when_off(run: Run) -> str | None:
 
 @check("Q22", tier=READ)
 def consumption_has_two_decimals_on_the_wire(run: Run) -> str | None:
-    """``totalConsumption`` carries two decimals on the wire."""
+    """Check the energy counter's wire literal for exactly two decimals."""
     raw = run.panel.status().raw
-    match = re.search(rb'"totalConsumption"\s*:\s*(-?\d+\.\d+)', raw)
-    expect(match is not None, "totalConsumption is not a decimal on the wire")
-    assert match is not None  # noqa: S101 — narrowed by expect above
+    match = require(
+        re.search(rb'"totalConsumption"\s*:\s*(-?\d+\.\d+)', raw),
+        "totalConsumption is not a decimal on the wire",
+    )
     literal = match.group(1).decode()
     expect(len(literal.split(".")[1]) == 2, f"wire literal is {literal}")  # noqa: PLR2004
     return f"wire literal {literal}"
@@ -1090,12 +1079,12 @@ def no_field_is_null(run: Run) -> str | None:
 
 
 @check("Q25", tier=READ)
-def owd_active_time_is_zero_when_inactive(run: Run) -> str | None:
-    """``OWD.activeTime`` is ``0`` while ``activeNow`` is false."""
+def open_window_active_time_is_zero_when_inactive(run: Run) -> str | None:
+    """Check the open-window countdown reads zero while no detection is active."""
     owd = run.panel.status().parameters["OWD"]
     if owd["activeNow"]:
         msg = "open window detection is active right now"
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     expect(owd["activeTime"] == 0, f"activeTime is {owd['activeTime']}")
     return None
 
@@ -1128,12 +1117,6 @@ def unknown_paths_are_the_cherrypy_404(run: Run) -> str | None:
     return None
 
 
-def timed_status(panel: Panel) -> tuple[Response, float]:
-    """One fresh-connection status read and how long it took."""
-    response = panel.status_response()
-    return response, response.elapsed
-
-
 @check("Q30", tier=READ)
 def accepts_concurrent_connections(run: Run) -> str | None:
     """At least two concurrent connections are served."""
@@ -1142,10 +1125,10 @@ def accepts_concurrent_connections(run: Run) -> str | None:
     def one() -> float | None:
         try:
             barrier.wait(timeout=REQUEST_TIMEOUT)
-            response, elapsed = timed_status(run.panel)
+            response = run.panel.read_status()
         except OSError, http.client.HTTPException, threading.BrokenBarrierError:
             return None
-        return elapsed if response.status == HTTPStatus.OK else None
+        return response.elapsed if response.status == HTTPStatus.OK else None
 
     with ThreadPoolExecutor(max_workers=CONCURRENT_CONNECTIONS) as pool:
         outcomes = list(pool.map(lambda _: one(), range(CONCURRENT_CONNECTIONS)))
@@ -1196,9 +1179,10 @@ def http_1_0_is_refused_with_505(run: Run) -> str | None:
     """Check that an HTTP/1.0 request is refused with 505."""
     request = f"GET /api/status HTTP/1.0\r\nHost: {run.panel.host}\r\n\r\n".encode()
     with run.panel.raw_socket() as sock:
-        response = raw_exchange(sock, request)
-    expect(response is not None, "the panel closed the connection with no response")
-    assert response is not None  # noqa: S101 — narrowed by expect above
+        response = require(
+            raw_exchange(sock, request),
+            "the panel closed the connection with no response",
+        )
     expect(
         response.status == HTTPStatus.HTTP_VERSION_NOT_SUPPORTED,
         f"HTTP/1.0 got {response.status} {response.reason}",
@@ -1210,7 +1194,7 @@ def http_1_0_is_refused_with_505(run: Run) -> str | None:
 @check("Q40", tier=READ)
 def responses_carry_content_length(run: Run) -> str | None:
     """Responses carry ``Content-Length`` and never chunked transfer."""
-    response = run.panel.status_response()
+    response = run.panel.read_status()
     expect(response.header("Content-Length") is not None, "no Content-Length")
     expect(response.header("Transfer-Encoding") is None, "Transfer-Encoding present")
     expect(
@@ -1223,9 +1207,10 @@ def responses_carry_content_length(run: Run) -> str | None:
 @check("Q41", tier=READ)
 def success_is_application_json(run: Run) -> str | None:
     """Success responses carry ``Content-Type: application/json``."""
-    content_type = run.panel.status_response().header("Content-Type")
-    expect(content_type is not None, "no Content-Type on the status")
-    assert content_type is not None  # noqa: S101 — narrowed by expect above
+    content_type = require(
+        run.panel.read_status().header("Content-Type"),
+        "no Content-Type on the status",
+    )
     expect(
         content_type.split(";")[0].strip() == "application/json",
         f"Content-Type is {content_type!r}",
@@ -1246,16 +1231,15 @@ def keep_alive_survives_an_idle_minute(run: Run) -> str | None:
         except OSError as error:
             msg = f"second request after {KEEPALIVE_IDLE:.0f} s idle: {error}"
             raise CheckFailedError(msg) from error
-    expect(second is not None, f"socket closed within {KEEPALIVE_IDLE:.0f} s idle")
-    assert second is not None  # noqa: S101 — narrowed by expect above
-    expect(second.status == HTTPStatus.OK, f"second read got {second.status}")
+    served = require(second, f"socket closed within {KEEPALIVE_IDLE:.0f} s idle")
+    expect(served.status == HTTPStatus.OK, f"second read got {served.status}")
     return f"served after {KEEPALIVE_IDLE:.0f} s idle"
 
 
 @check("Q43", tier=READ)
 def status_read_is_fast(run: Run) -> str | None:
     """Check that a status read completes in under 5 s."""
-    timings = [timed_status(run.panel)[1] for _ in range(STATUS_SAMPLES)]
+    timings = [run.panel.read_status().elapsed for _ in range(STATUS_SAMPLES)]
     run.measure(
         "Q43 status read",
         f"{min(timings) * 1000:.0f}-{max(timings) * 1000:.0f} ms over "
@@ -1279,7 +1263,7 @@ def status_is_computed_per_request(run: Run) -> str | None:
             f"{CACHE_SAMPLES} reads over {CACHE_INTERVAL * (CACHE_SAMPLES - 1):.0f} s "
             f"were byte-identical: a cache and a quiet panel look the same"
         )
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     return f"{distinct} distinct bodies of {CACHE_SAMPLES}"
 
 
@@ -1462,7 +1446,7 @@ def load_limit_above_max_load_is_rejected(run: Run) -> str | None:
     max_load = int(parameters["maxLoad"])
     if max_load >= LOAD_LIMIT_MAX:
         msg = f"maxLoad is {max_load}; nothing above it can be sent"
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     run.write_rejected("loadLimit", str(max_load + 1))
     run.sleep(REFLECT_BOUND)
     stored = run.panel.status().parameters["loadLimit"]
@@ -1478,7 +1462,7 @@ def calibration_shifts_room_temperature(run: Run) -> str | None:
     delta = 1.0 if current + 1.0 <= CALIBRATION_MAX else -1.0
     if delta < 0:
         msg = "calibration is at its maximum; a downward shift could heat"
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     before = status.room_temperature
     run.write_applied("sensorCalibration", f"{current + delta:.1f}")
     started = time.monotonic()
@@ -1500,9 +1484,9 @@ def write_is_reflected_within_the_bound(run: Run) -> str | None:
     value = str(other_brightness(current))
     response = run.write("standbyDisplayBrightness", value)
     expect(response.status == HTTPStatus.OK, f"got {response.status}")
-    _, elapsed = run.reflect("standbyDisplayBrightness", value)
-    expect(elapsed is not None, "never reflected")
-    assert elapsed is not None  # noqa: S101 — narrowed by expect above
+    elapsed = require(
+        run.reflect("standbyDisplayBrightness", value)[1], "never reflected"
+    )
     run.measure(
         "Q31 write→status",
         f"write {response.elapsed * 1000:.0f} ms, reflected {elapsed * 1000:.0f} ms",
@@ -1553,7 +1537,7 @@ def parameter_less_post_gets_no_response(run: Run) -> str | None:
     try:
         response = run.panel.write_query("")
     except http.client.RemoteDisconnected, http.client.BadStatusLine, ConnectionError:
-        after = run.panel.status_response()
+        after = run.panel.read_status()
         expect(after.status == HTTPStatus.OK, "the panel stopped answering afterwards")
         return "connection closed, no bytes; panel answered afterwards"
     msg = f"got a response: {response.status} {body_text(response)}"
@@ -1575,7 +1559,7 @@ def sensor_mode_echo_lies_when_unpaired(run: Run) -> str | None:
     """``sensorMode=true`` with no sensor echoes true and stays false."""
     if run.panel.status().parameters["sensorMode"]:
         msg = "sensorMode is already true: a sensor seems to be paired"
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     response = run.write("sensorMode", "true")
     expect(response.status == HTTPStatus.OK, f"got {response.status}")
     expect(response.json().get("sensorMode") is True, f"echo {body_text(response)}")
@@ -1595,8 +1579,8 @@ def sensor_mode_echo_lies_when_unpaired(run: Run) -> str | None:
 
 def kwh_reset(run: Run) -> KwhResetOutcome:
     """Reset the energy counter once per run and remember what happened."""
-    if "kwh" in run.memo:
-        outcome: KwhResetOutcome = run.memo["kwh"]
+    if "kwh" in run.shared:
+        outcome: KwhResetOutcome = run.shared["kwh"]
         return outcome
     before = float(run.panel.status().doc["totalConsumption"])
     response = run.panel.reset_kwh()
@@ -1617,15 +1601,16 @@ def kwh_reset(run: Run) -> KwhResetOutcome:
         f"{before} before; zero after "
         + (f"{zero_after:.2f} s" if zero_after is not None else "never"),
     )
-    run.memo["kwh"] = KwhResetOutcome(before, response, zero_after, raw_after)
-    return run.memo["kwh"]  # type: ignore[no-any-return]
+    outcome = KwhResetOutcome(before, response, zero_after, raw_after)
+    run.shared["kwh"] = outcome
+    return outcome
 
 
 def require_banked_energy(outcome: KwhResetOutcome) -> None:
     """Refuse to judge a reset when the counter was already at zero."""
     if outcome.before == 0.0:
         msg = "the counter was already 0.00; bank some kWh first"
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
 
 
 @check("Q7", tier=DESTRUCTIVE)
@@ -1656,9 +1641,10 @@ def counter_is_zero_within_five_seconds(run: Run) -> str | None:
     """Check that the counter reads ``0.00`` within 5 s of the acknowledgement."""
     outcome = kwh_reset(run)
     require_banked_energy(outcome)
-    expect(outcome.zero_after is not None, f"not zero within {RESET_ZERO_BOUND:.0f} s")
-    assert outcome.zero_after is not None  # noqa: S101 — narrowed by expect above
-    return f"zero after {outcome.zero_after:.2f} s"
+    zero_after = require(
+        outcome.zero_after, f"not zero within {RESET_ZERO_BOUND:.0f} s"
+    )
+    return f"zero after {zero_after:.2f} s"
 
 
 @check("Q57", tier=DESTRUCTIVE)
@@ -1674,8 +1660,8 @@ def reset_uses_the_status_envelope(run: Run) -> str | None:
 
 def settings_reset(run: Run) -> SettingsResetOutcome:
     """Reset the settings once per run, every writable parameter registered."""
-    if "settings" in run.memo:
-        outcome: SettingsResetOutcome = run.memo["settings"]
+    if "settings" in run.shared:
+        outcome: SettingsResetOutcome = run.shared["settings"]
         return outcome
     for name in WRITABLE_PARAMETERS:
         run.ledger.touch(name)
@@ -1684,7 +1670,7 @@ def settings_reset(run: Run) -> SettingsResetOutcome:
     if response.status == HTTPStatus.OK:
         run.save_fixture("reset-settings", response)
     started = time.monotonic()
-    timeline: list[tuple[float, dict[str, Any]]] = []
+    timeline: list[StatusSample] = []
     read_failures = 0
     while time.monotonic() - started < SETTINGS_WATCH:
         try:
@@ -1694,13 +1680,12 @@ def settings_reset(run: Run) -> SettingsResetOutcome:
         else:
             timeline.append((time.monotonic() - started, status.doc))
         run.sleep(SETTINGS_POLL)
-    run.memo["settings"] = SettingsResetOutcome(
-        before, response, timeline, read_failures
-    )
-    return run.memo["settings"]  # type: ignore[no-any-return]
+    outcome = SettingsResetOutcome(before, response, timeline, read_failures)
+    run.shared["settings"] = outcome
+    return outcome
 
 
-def last_change_at(timeline: list[tuple[float, dict[str, Any]]]) -> float:
+def last_change_at(timeline: list[StatusSample]) -> float:
     """When the parameters last changed during the watch."""
     last = 0.0
     for (_, earlier), (at, later) in itertools.pairwise(timeline):
@@ -1768,7 +1753,7 @@ def watch_relay(
     run: Run, started: float, *, until: Callable[[], bool], deadline: float
 ) -> None:
     """Poll state and power once a second, recording, until a condition or deadline."""
-    timeline: list[tuple[float, str, int]] = run.memo["timeline"]
+    timeline: list[RelaySample] = run.shared["timeline"]
     while time.monotonic() - started < deadline:
         doc = run.panel.status().doc
         timeline.append(
@@ -1779,20 +1764,23 @@ def watch_relay(
         run.sleep(1.0)
 
 
-def latest(timeline: list[tuple[float, str, int]]) -> tuple[float, str, int]:
+def latest(timeline: list[RelaySample]) -> RelaySample:
     """Return the latest timeline sample, or a zero sample before the first."""
     return timeline[-1] if timeline else (0.0, "", 0)
 
 
 def heat_sequence(run: Run, row_id: str) -> HeatOutcome:
     """Close the relay once per run in Eco mode, briefly, and record the edges."""
-    if "heat" in run.memo:
-        outcome: HeatOutcome = run.memo["heat"]
+    if "heat" in run.shared:
+        outcome: HeatOutcome = run.shared["heat"]
         return outcome
     if not run.confirm_thermal(row_id):
         msg = "thermal confirmation not given"
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     status = run.panel.status()
+    if status.doc["state"] != "Idle":
+        msg = f"the relay is already {status.doc['state']!r}; nothing to switch on"
+        raise Inconclusive(msg)
     target = thermal_target(
         status.room_temperature,
         maximum_limit=float(status.parameters["maximumTemperatureLimit"]),
@@ -1800,8 +1788,8 @@ def heat_sequence(run: Run, row_id: str) -> HeatOutcome:
     assert_thermal_setpoint(room_temperature=status.room_temperature, target=target)
     run.ledger.touch("panelMode")
     run.ledger.touch("ecoSetpoint")
-    timeline: list[tuple[float, str, int]] = []
-    run.memo["timeline"] = timeline
+    timeline: list[RelaySample] = []
+    run.shared["timeline"] = timeline
 
     def heating() -> bool:
         return latest(timeline)[1] == "Heating"
@@ -1818,8 +1806,10 @@ def heat_sequence(run: Run, row_id: str) -> HeatOutcome:
     started = time.monotonic()
     heating_at: float | None = None
     try:
-        run.write_applied("panelMode", str(MODE_ECO))
+        # The guarded setpoint lands first, so switching to Eco can never
+        # regulate to a stored eco setpoint the guard never saw.
         run.write_applied("ecoSetpoint", f"{target:.1f}")
+        run.write_applied("panelMode", str(MODE_ECO))
         watch_relay(run, started, until=heating, deadline=THERMAL_CLOSE_DEADLINE)
         if heating():
             heating_at = latest(timeline)[0]
@@ -1844,10 +1834,9 @@ def heat_sequence(run: Run, row_id: str) -> HeatOutcome:
         f"heating at {fmt_at(heating_at)}, power at {fmt_at(power_at)}, "
         f"idle at {fmt_at(idle_at)}, power zero at {fmt_at(power_zero_at)}",
     )
-    run.memo["heat"] = HeatOutcome(
-        timeline, heating_at, power_at, idle_at, power_zero_at
-    )
-    return run.memo["heat"]  # type: ignore[no-any-return]
+    outcome = HeatOutcome(timeline, heating_at, power_at, idle_at, power_zero_at)
+    run.shared["heat"] = outcome
+    return outcome
 
 
 def fmt_at(moment: float | None) -> str:
@@ -1869,10 +1858,10 @@ def power_trails_the_relay(run: Run) -> str | None:
     outcome = heat_sequence(run, "Q20")
     if outcome.heating_at is None:
         msg = "the relay never closed"
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     if outcome.power_at is None:
         msg = "power never rose within the relay cap"
-        raise inconclusive(msg)
+        raise Inconclusive(msg)
     expect(
         outcome.power_at > outcome.heating_at,
         "power rose in the same sample as the relay",
@@ -1940,8 +1929,11 @@ def select_checks(register: dict[str, Row], args: argparse.Namespace) -> list[Ch
 
 
 def ask_yes_no(question: str) -> bool:
-    """Ask a y/N question; anything but ``y`` is no."""
-    answer = input(f"{question} [y/N] ")
+    """Ask a y/N question; anything but ``y``, including end of input, is no."""
+    try:
+        answer = input(f"{question} [y/N] ")
+    except EOFError:
+        return False
     return answer.strip().lower() == "y"
 
 
@@ -1967,7 +1959,6 @@ def make_thermal_confirmer(host: str) -> Callable[[str], bool]:
 class Report:
     """What a run prints once the checks are done."""
 
-    host: str
     status: Status
     flags: str
     results: list[Result]
@@ -2145,7 +2136,8 @@ def confirm_tiers(
         question = (
             f"Run destructive checks on the panel at {host}? The kWh counter is "
             f"zeroed for good, and a settings reset puts the panel at its defaults "
-            f"(comfort 21.0 °C, Heating mode) until the restore lands."
+            f"(comfort 21.0 °C, Heating mode) for about 15 s until the restore "
+            f"lands — the heater runs for that long if the room is colder."
         )
         if not ask_yes_no(question):
             enabled = enabled - {DESTRUCTIVE}
@@ -2181,8 +2173,11 @@ def main_probe(args: argparse.Namespace) -> int:
         raise UsageError(msg) from error
     say(f"panel at {host}: firmware {status.doc.get('firmware')!r}")
 
-    if args.thermal and not sys.stdin.isatty():
-        msg = "--thermal needs an interactive terminal: no CI job or cron may heat"
+    if (args.thermal or args.destructive) and not sys.stdin.isatty():
+        # A settings reset lands the panel at its defaults — comfort 21 °C in
+        # Heating mode — until the restore, so it can heat as surely as the
+        # thermal tier can. Neither may ever run from a cron or a pipe.
+        msg = "--destructive and --thermal need an interactive terminal"
         raise UsageError(msg)
     enabled = enabled_tiers(
         writes=args.writes, destructive=args.destructive, thermal=args.thermal
@@ -2211,12 +2206,14 @@ def main_probe(args: argparse.Namespace) -> int:
         say(f"\ninterrupted: {error or 'SIGINT'}")
     except RevertFailedError as error:
         say(f"stopping: {error}")
+    except Exception as error:  # noqa: BLE001 — a bug must not skip the report
+        interrupted = True
+        say(f"\naborted by an internal error: {error!r}")
     finally:
         clean = restore_and_report(ledger, panel)
 
     flags = " ".join(sys.argv[1:]) or "(read tier)"
     report = Report(
-        host,
         status,
         flags,
         results,

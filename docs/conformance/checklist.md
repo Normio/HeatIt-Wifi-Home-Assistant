@@ -35,8 +35,8 @@ Automated rows are run by `scripts/probe.py`, which selects checks by the ids in
 ```
 probe.py                 → read tier only, unattended, no approval
 probe.py --writes        → + benign writes, snapshotted and restore-verified
-probe.py --destructive   → + kWh reset, settings reset          (y/N)
-probe.py --thermal       → + heater-on sequences                (y/N, TTY required)
+probe.py --destructive   → + kWh reset, settings reset          (y/N, TTY required)
+probe.py --thermal       → + heater-on sequences                (typed confirmation, TTY required)
 ```
 
 `/api/reset/factory` is **structurally absent** from the probe: the path string appears nowhere in
