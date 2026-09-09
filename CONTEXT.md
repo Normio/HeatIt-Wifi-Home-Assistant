@@ -60,6 +60,14 @@ _Avoid_: present parameter, supported parameter
 A parameter the vendor's document lists that no panel has yet returned. Neither absent nor unsupported: simply never seen, and so not modelled until it is.
 _Avoid_: absent parameter, missing parameter, spec-only parameter
 
+**Device id**:
+The panel's own identifier, returned as `id`: 22 mixed-case alphanumerics, used verbatim and never lowercased. Home Assistant's identity for the panel, and the prefix of every entity's unique id.
+_Avoid_: serial number, panel id, device identifier
+
+**Assigned room**:
+The free-text room name the MyHeatit app stores on the panel, wire name `room`, an empty string when no room is assigned. Read once when the panel is added, as a suggestion only; Home Assistant's own area wins from then on.
+_Avoid_: area, zone, location
+
 **Foreign panel**:
 A panel answering at a configured address whose device id is not the one the address was set up for; another unit has taken over the address. Its status is never accepted as data.
 _Avoid_: wrong device, id mismatch (in prose), swapped panel
@@ -71,6 +79,10 @@ _Avoid_: mandatory fields, minimum schema
 **Poll budget**:
 The longest a single status read may take, retry included, before the panel counts as unreachable for that poll. There is no grace beyond it: a poll that exhausts its budget makes the panel unavailable.
 _Avoid_: timeout, poll timeout, grace period
+
+**Poll interval**:
+How often the integration reads a status, chosen by the user. Distinct from the poll budget, which bounds one such read.
+_Avoid_: scan interval, update interval, refresh rate
 
 **Silent undo**:
 A write the panel acknowledged as successful and then did not apply, so the next status shows the old value. Observed once, when the external sensor mode was enabled with no sensor paired.
