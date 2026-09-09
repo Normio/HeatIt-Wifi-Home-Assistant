@@ -11,3 +11,8 @@
 # virtualenv full of strings.json cannot trip it — but keep it out of sight.
 .venv/
 __pycache__/
+
+# Tool caches.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

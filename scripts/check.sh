@@ -9,5 +9,7 @@ cd "$(dirname "$0")/.."
 
 ruff check .
 ruff format --check .
-mypy custom_components scripts
+mypy custom_components scripts tests
+python3 -m pytest --quiet
 python3 scripts/check_layout.py
+python3 scripts/check_conformance.py
