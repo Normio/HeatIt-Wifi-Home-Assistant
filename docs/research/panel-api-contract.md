@@ -391,6 +391,11 @@ Independent of the device, the document has internal defects. A downstream imple
 
 ## 9. What the spec cannot answer
 
+> **Superseded.** The live version of this section is the conformance register at
+> [`docs/conformance/checklist.md`](../conformance/checklist.md), which keeps these Q-numbers,
+> records what each one is now known to do, and adds the rows raised by later tickets. Read this
+> section for the reasoning behind a question; read the register for its answer.
+
 Thirty-eight questions the document leaves open. Every one is a question **only a real device settles**. This is the seed for the hardware conformance checklist (issue #13). Each is phrased so a probe script can answer it, and each is numbered so downstream tickets can cite it.
 
 Q8, Q3, Q7 and Q13 are the four that can each independently break a user-visible feature, and should lead the probe script.

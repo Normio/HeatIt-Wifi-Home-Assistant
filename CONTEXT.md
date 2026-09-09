@@ -91,3 +91,15 @@ _Avoid_: lying echo, phantom write, rejected write
 **Verified firmware**:
 A firmware version for which a captured status from a real panel exists. A panel running any other version is unverified, not unsupported.
 _Avoid_: supported firmware, known firmware, tested firmware
+
+**Conformance claim**:
+A falsifiable statement about panel behaviour that the integration depends on, phrased so a real device can settle it. Held in the conformance register with the firmware it was verified at; verified always means verified on one panel at one firmware, never verified outright.
+_Avoid_: conformance test, checklist item, requirement
+
+**Contradicted claim**:
+A conformance claim a later run disproved on a real panel. Distinct from a claim the vendor's document merely disagrees with: that one was never true, while a contradicted claim stopped being true and has shipped code resting on it.
+_Avoid_: failed check, broken claim, regression
+
+**Probe tier**:
+The hazard class of a conformance check, and so what it takes to run one: a read, a benign write that reverts itself, a write that destroys data, one that turns the heater on, or manual work no script may do.
+_Avoid_: probe level, safety flag, risk level
