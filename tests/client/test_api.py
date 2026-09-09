@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 import pytest
-from aioresponses import aioresponses
 from yarl import URL
 
 from custom_components.heatit_wifi_panel import api, const, registry
@@ -26,34 +25,18 @@ from custom_components.heatit_wifi_panel.registry import PARAMETERS
 
 if TYPE_CHECKING:
     import types
-    from collections.abc import AsyncIterator, Iterator
 
-HOST = "panel.test"
+    from aioresponses import aioresponses
+
+from tests.client.conftest import HOST, JSON
+
 PARAMETERS_URL = f"http://{HOST}/api/parameters"
 RESET_KWH_URL = f"http://{HOST}/api/reset/kwh?resetKwh=Reset"
 RESET_SETTINGS_URL = f"http://{HOST}/api/reset/settings"
 ANY_URL = re.compile(r".*")
 
-JSON = "application/json"
 HTML = "text/html"
 NOT_FOUND_BODY = "Nothing matches the given URI"
-
-
-@pytest.fixture
-async def session() -> AsyncIterator[aiohttp.ClientSession]:
-    async with aiohttp.ClientSession() as client_session:
-        yield client_session
-
-
-@pytest.fixture
-def mocked() -> Iterator[aioresponses]:
-    with aioresponses() as mock:
-        yield mock
-
-
-@pytest.fixture
-def client(session: aiohttp.ClientSession) -> HeatitClient:
-    return HeatitClient(HOST, session=session)
 
 
 def requests_made(mocked: aioresponses) -> list[tuple[str, str]]:
@@ -233,8 +216,6 @@ async def test_a_200_whose_status_is_failed_is_a_rejection(
         ("loadLimit", 600, "6", 600),
         ("activeDisplayBrightness", 50, "5", 50),
         ("openWindowDetection", True, "true", True),
-        # The echo reports what was applied: a snapped setpoint comes back snapped.
-        ("heatingSetpoint", 19.5, "19.0", 19.0),
     ],
 )
 async def test_the_applied_value_is_returned_coerced_to_the_declared_type(

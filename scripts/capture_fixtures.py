@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -41,11 +40,13 @@ from custom_components.heatit_wifi_panel.api import (  # noqa: E402
     HeatitError,
     redact_status_bytes,
     resolve,
+    substitute_string_field,
 )
 
 CAPTURE_SCRIPT_VERSION = 1
 
 DEVICE_FILE = REPO_ROOT / ".local" / "device.json"
+DEFAULT_PORT = 80
 OBSERVED_DIR = REPO_ROOT / "tests" / "fixtures" / "observed"
 
 #: The fixture-only fifth placeholder (§8.3). ``name`` is kept by the shared
@@ -84,7 +85,7 @@ def device_host() -> str:
     device = json.loads(DEVICE_FILE.read_text(encoding="utf-8"))
     host = str(device["host"])
     port = int(device.get("port", 80))
-    return host if port == 80 else f"{host}:{port}"  # noqa: PLR2004 - the default port
+    return host if port == DEFAULT_PORT else f"{host}:{port}"
 
 
 async def read_status(host: str) -> tuple[bytes, dict[str, str], str | None]:
@@ -100,12 +101,10 @@ async def read_status(host: str) -> tuple[bytes, dict[str, str], str | None]:
 
 def scrub(raw: bytes) -> bytes:
     """Apply the shared four-field scrub, then the fixture-only ``name``."""
-    scrubbed = redact_status_bytes(raw)
-    pattern = rb'("name"\s*:\s*)"(?:[^"\\]|\\.)*"'
-    return re.sub(pattern, rb'\1"' + NAME_PLACEHOLDER.encode() + b'"', scrubbed)
+    return substitute_string_field(redact_status_bytes(raw), "name", NAME_PLACEHOLDER)
 
 
-def scrub_holds(scrubbed: bytes) -> list[str]:
+def scrub_problems(scrubbed: bytes) -> list[str]:
     """Every scrubbed field must read exactly its placeholder; else the problems."""
     document = json.loads(scrubbed.decode("utf-8"))
     return [
@@ -125,7 +124,7 @@ def flatten(node: object, prefix: str = "") -> dict[str, object]:
     return flat
 
 
-def report(
+def report_drift(
     committed: bytes | None,
     committed_headers: str | None,
     scrubbed: bytes,
@@ -218,7 +217,7 @@ def main() -> int:
         return EXIT_USAGE
 
     scrubbed = scrub(raw)
-    problems = scrub_holds(scrubbed)
+    problems = scrub_problems(scrubbed)
     if problems:
         say("scrub did not hold; nothing written:\n  " + "\n  ".join(problems))
         return EXIT_SCRUB_FAILED
@@ -232,7 +231,7 @@ def main() -> int:
     )
     room = resolve(json.loads(scrubbed), "room")
     say(f"firmware {firmware}, {len(raw)} bytes, room {room!r}")
-    drift = report(committed, committed_headers, scrubbed, headers)
+    drift = report_drift(committed, committed_headers, scrubbed, headers)
 
     if args.dry_run:
         say("dry run; nothing written")

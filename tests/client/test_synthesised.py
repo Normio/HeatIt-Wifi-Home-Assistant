@@ -7,40 +7,22 @@ sitting unused, and what tells the probe which ones its captures replace.
 import json
 from typing import TYPE_CHECKING, Any
 
-import aiohttp
 import pytest
-from aioresponses import aioresponses
 
 from custom_components.heatit_wifi_panel.api import (
     HeatitClient,
     HeatitParameterRejected,
     HeatitResponseError,
 )
+from custom_components.heatit_wifi_panel.registry import PARAMETERS
+from tests.client.conftest import HOST
 from tests.conftest import SYNTHESISED_DIR
 from tests.fakes import synthesised, synthesised_manifest
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterator
+    from aioresponses import aioresponses
 
-HOST = "panel.test"
 MANIFEST = synthesised_manifest()
-
-
-@pytest.fixture
-async def session() -> AsyncIterator[aiohttp.ClientSession]:
-    async with aiohttp.ClientSession() as client_session:
-        yield client_session
-
-
-@pytest.fixture
-def mocked() -> Iterator[aioresponses]:
-    with aioresponses() as mock:
-        yield mock
-
-
-@pytest.fixture
-def client(session: aiohttp.ClientSession) -> HeatitClient:
-    return HeatitClient(HOST, session=session)
 
 
 def test_the_manifest_and_the_directory_agree() -> None:
@@ -113,7 +95,5 @@ def _value(parameter: str) -> object:
 
 
 def _wire(parameter: str, entry: dict[str, Any]) -> str:
-    from custom_components.heatit_wifi_panel.registry import PARAMETERS  # noqa: PLC0415
-
     value = entry.get("applied", _value(parameter))
     return PARAMETERS[parameter].encode(value)

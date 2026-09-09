@@ -99,9 +99,11 @@ class HeatitResponseError(HeatitError):
     reason phrase stands in, so raw response bytes never reach a log line.
     """
 
-    def __init__(self, status_code: int, reason: str) -> None:
+    def __init__(
+        self, status_code: int, reason: str, message: str | None = None
+    ) -> None:
         """Record the code and the device's own words."""
-        super().__init__(f"HTTP {status_code}: {reason}")
+        super().__init__(message or f"HTTP {status_code}: {reason}")
         self.status_code = status_code
         self.reason = reason
 
@@ -115,9 +117,10 @@ class HeatitParameterRejected(HeatitResponseError):  # noqa: N818 - the spec nam
 
     def __init__(self, parameter: str, status_code: int, reason: str) -> None:
         """Record which of our parameters the device refused, and why."""
-        super().__init__(status_code, reason)
+        super().__init__(
+            status_code, reason, f"{parameter} rejected by the panel: {reason}"
+        )
         self.parameter = parameter
-        self.args = (f"{parameter} rejected by the panel: {reason}",)
 
 
 class HeatitProtocolError(HeatitError):
@@ -176,12 +179,13 @@ class PanelStatus:
     device_id: str
     """The panel's own identifier — 22 mixed-case alphanumerics, verbatim."""
 
-    state: str
-    """The *relay state*: ``Idle`` or ``Heating``. No ``Off`` value exists."""
+    relay_state: str
+    """The *relay state*, wire name ``state``: ``Idle`` or ``Heating``."""
 
     room_temperature: float
     panel_mode: int
-    heating_setpoint: float
+    comfort_setpoint: float
+    """The *comfort setpoint*, wire name ``heatingSetpoint``."""
     eco_setpoint: float
 
     document: Mapping[str, Any]
@@ -274,11 +278,13 @@ def parse_status(raw: bytes, content_type: str = "application/json") -> PanelSta
             raise HeatitMissingFieldError(path)
     return PanelStatus(
         device_id=_required_str(document, "id"),
-        state=_required_str(document, "state"),
+        relay_state=_required_str(document, "state"),
         room_temperature=_required_float(document, "roomTemperature"),
-        panel_mode=_required_int(document, "parameters.panelMode"),
-        heating_setpoint=_required_float(document, "parameters.heatingSetpoint"),
-        eco_setpoint=_required_float(document, "parameters.ecoSetpoint"),
+        panel_mode=_required_int(document, PARAMETERS["panelMode"].read_path),
+        comfort_setpoint=_required_float(
+            document, PARAMETERS["heatingSetpoint"].read_path
+        ),
+        eco_setpoint=_required_float(document, PARAMETERS["ecoSetpoint"].read_path),
         document=document,
     )
 
@@ -335,16 +341,26 @@ def redact_status(document: Mapping[str, Any]) -> dict[str, Any]:
     return redacted
 
 
+def substitute_string_field(raw: bytes, key: str, placeholder: str) -> bytes:
+    """Replace the string value of every ``"key"`` in raw JSON bytes, in place.
+
+    Only the quoted value moves; spacing, ordering and every other byte stay
+    as the device sent them, so ``0.00`` stays ``0.00``.
+    """
+    pattern = rb'("' + re.escape(key.encode()) + rb'"\s*:\s*)"(?:[^"\\]|\\.)*"'
+    return re.sub(pattern, rb'\1"' + placeholder.encode() + b'"', raw)
+
+
 def redact_status_bytes(raw: bytes) -> bytes:
     """Apply the same scrub to the raw bytes, by targeted substitution.
 
-    Each of the four keys' string values is replaced in place and nothing else
-    is touched, so ``0.00`` stays ``0.00`` and the bytes remain the device's.
+    At the wire level a field is found by its key wherever it appears, not by
+    its path — a superset that can only ever over-scrub. On a real status the
+    two agree, and a test asserts that :func:`redact_status` of the parsed
+    document equals the parse of these bytes.
     """
     for path, placeholder in REDACTED_FIELDS.items():
-        key = path.rsplit(".", 1)[-1].encode()
-        pattern = rb'("' + re.escape(key) + rb'"\s*:\s*)"(?:[^"\\]|\\.)*"'
-        raw = re.sub(pattern, rb'\1"' + placeholder.encode() + b'"', raw)
+        raw = substitute_string_field(raw, path.rsplit(".", 1)[-1], placeholder)
     return raw
 
 
@@ -551,8 +567,8 @@ class HeatitClient:
         A ``text/html`` body therefore never becomes a message.
         """
         try:
-            envelope = json.loads(response.body.decode("utf-8"))
-        except UnicodeDecodeError, json.JSONDecodeError:
+            envelope = _decode_json(response.body, response.content_type)
+        except HeatitProtocolError:
             return response.reason
         if isinstance(envelope, dict) and isinstance(envelope.get("reason"), str):
             return str(envelope["reason"])

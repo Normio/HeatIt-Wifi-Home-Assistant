@@ -1707,10 +1707,15 @@ taxonomy gains ``HeatitMissingFieldError``, a subclass of ``HeatitProtocolError`
 dotted path of the absent *required core* field, because §6.3's ``missing_field`` translation
 key needs the path and the coordinator must not re-parse. ``HeatitParameterRejected`` is raised
 for a ``400`` **and** for a ``200`` whose envelope is not success: a refusal is a refusal, and
-both carry ``reason`` verbatim. (3) §8.7's matrix lands with the client rather than with the
+both carry ``reason`` verbatim; the same ``failed`` envelope on a reset is a
+``HeatitResponseError`` with ``status_code`` 200 and the ``reason``. (3) §8.7's matrix lands with the client rather than with the
 integration tests, so `test.yml`'s single `Checks` job becomes `Lint`, `Tests (floor)` and
 `Tests (latest)`; the required status checks named in the amendment of PR #49 are now `Lint`,
 `Tests (floor)`, `HACS Action`, `hassfest` and `Changelog entry`. `scripts/check.sh` takes a
-`lint` or `test` stage so CI still runs the one shared file. The shared redaction of §7.1 lives
+`lint` or `test` stage so CI still runs the one shared file; the monthly cron runs both rows
+rather than the latest row alone, since the floor row is free and confirms the pin still
+installs; and §8.7's `config_flow.py` coverage gate joins `check.sh` with the config flow
+([#40](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/40)), there being no
+`config_flow.py` to cover yet. The shared redaction of §7.1 lives
 in `api.py` beside the parser it scrubs for, and the fixture-only fifth placeholder for `name`
 (§8.3) is applied by `scripts/capture_fixtures.py` alone — logging and diagnostics keep `name`.

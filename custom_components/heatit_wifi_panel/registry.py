@@ -102,15 +102,6 @@ class ParameterDescriptor:
         """
         return self.serialise(self.to_wire(value))
 
-    def to_wire(self, value: object) -> int | float | bool:
-        """Validate a user-facing value and scale it into the device's unit.
-
-        The checked half of :meth:`encode`; ``decode`` of the result is the
-        value as the device will hold it, which is what a caller falls back to
-        when the echo is missing.
-        """
-        return self._wire_value(value)
-
     def decode(self, echo: object) -> int | float | bool | None:
         """Coerce an echoed (or read) wire value to the declared type and scale.
 
@@ -135,7 +126,13 @@ class ParameterDescriptor:
         """Whether the read path resolves — the presence flag at runtime."""
         return status.get(self.read_path) is not None
 
-    def _wire_value(self, value: object) -> int | float | bool:
+    def to_wire(self, value: object) -> int | float | bool:
+        """Validate a user-facing value and scale it into the device's unit.
+
+        The checked half of :meth:`encode`; ``decode`` of the result is the
+        value as the device will hold it, which is what a caller falls back to
+        when the echo is missing.
+        """
         if self.kind == "bool":
             if not isinstance(value, bool):
                 self._reject(value, "must be a boolean")

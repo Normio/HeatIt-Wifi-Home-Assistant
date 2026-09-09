@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 import pytest
-from aioresponses import aioresponses
 
 from custom_components.heatit_wifi_panel.api import (
     HeatitClient,
@@ -28,12 +27,13 @@ from tests.conftest import observed_directories
 from tests.fakes import ABSENT, mutated
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterator
     from pathlib import Path
 
-HOST = "panel.test"
+    from aioresponses import aioresponses
+
+from tests.client.conftest import HOST, JSON
+
 STATUS_URL = f"http://{HOST}/api/status"
-JSON = "application/json"
 
 OBSERVED = observed_directories()
 
@@ -55,23 +55,6 @@ REFERENCE_READINGS: dict[str, object] = {
 }
 
 
-@pytest.fixture
-async def session() -> AsyncIterator[aiohttp.ClientSession]:
-    async with aiohttp.ClientSession() as client_session:
-        yield client_session
-
-
-@pytest.fixture
-def mocked() -> Iterator[aioresponses]:
-    with aioresponses() as mock:
-        yield mock
-
-
-@pytest.fixture
-def client(session: aiohttp.ClientSession) -> HeatitClient:
-    return HeatitClient(HOST, session=session)
-
-
 # --- parsing the observed bytes ---------------------------------------------
 
 
@@ -80,10 +63,10 @@ def test_the_reference_fixture_parses_to_its_required_core(
 ) -> None:
     status = parse_status(reference_status_bytes)
     assert status.device_id == "FIXTUREFIXTUREFIXTUREX"
-    assert status.state == "Idle"
+    assert status.relay_state == "Idle"
     assert status.room_temperature == 23.0
     assert status.panel_mode == 1
-    assert status.heating_setpoint == 19.0
+    assert status.comfort_setpoint == 19.0
     assert status.eco_setpoint == 18.0
 
 
@@ -208,7 +191,7 @@ def test_unknown_keys_are_ignored_at_top_level_and_under_parameters(
         {"futureField": "x", "parameters.lowTemperatureProtection": 3},
     )
     status = parse_status(raw)
-    assert status.heating_setpoint == 19.0
+    assert status.comfort_setpoint == 19.0
     assert all(d.present_in(status) for d in PARAMETERS.values())
 
 
@@ -263,6 +246,16 @@ def test_redact_status_replaces_exactly_the_four_identifiers(
     # The original is untouched.
     assert status.document["id"] == UNSCRUBBED["id"]
     assert status.document["Network"]["mac"] == UNSCRUBBED["Network.mac"]
+
+
+def test_the_wire_and_parsed_scrubs_agree_on_a_real_status(
+    reference_status_bytes: bytes,
+) -> None:
+    """One scrub, two levels: the same document either way."""
+    unscrubbed = mutated(reference_status_bytes, UNSCRUBBED)
+    via_bytes = parse_status(redact_status_bytes(unscrubbed)).document
+    via_document = redact_status(parse_status(unscrubbed).document)
+    assert via_bytes == via_document
 
 
 def test_redact_status_tolerates_a_status_without_a_network_block(

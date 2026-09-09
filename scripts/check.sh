@@ -22,6 +22,8 @@ run_lint() {
 
 run_tests() {
   mypy custom_components scripts
+  # Coverage is measured and reported, not gated (§8.7). The one gate — 100 %
+  # line coverage of config_flow.py — arrives with the config flow itself.
   python3 -m pytest \
     --cov=custom_components/heatit_wifi_panel \
     --cov-report=term-missing
