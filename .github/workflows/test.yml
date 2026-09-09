@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
   # release.yml runs this whole file against a tagged commit as part of its
   # gate, so whatever this workflow grows into is what a release must pass.
+  # A job that is continue-on-error here must not be on a tag — the gate would
+  # pass over its failure; guard it with
+  # `continue-on-error: ${{ !startsWith(github.ref, 'refs/tags/') }}`.
   workflow_call:
 
 permissions:

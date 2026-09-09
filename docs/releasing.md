@@ -36,7 +36,7 @@ Every job runs against the tagged commit, and the publish job `needs` all of:
 | Job | What it is |
 |---|---|
 | Validate | `validate.yml` called whole: HACS Action and hassfest, no `ignore:` |
-| Test | `test.yml` called whole: `scripts/check.sh`, so ruff, mypy, the check scripts and the tests — and both pytest rows once #38 adds them |
+| Test | `test.yml` called whole: `scripts/check.sh`, so ruff, mypy, the check scripts and the tests — and both pytest rows once #38 adds them. A job that is `continue-on-error` on pull requests must not be on a tag, or the gate would pass over its failure |
 | Lockstep | `scripts/check_release.py`: the tag names the manifest's version; the tagged commit is an ancestor of `main`; `LICENSE`, `hacs.json`, the manifest and `brand/icon.png` exist; `hacs.json` has `hide_default_branch: true` and an AwesomeVersion-parseable `homeassistant`; `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section |
 
 To rehearse the lockstep half before pushing, from the checkout holding the tag:
@@ -91,9 +91,14 @@ repository's administrators as the only bypass actors. This is what makes
 token tag deletion whatever `permissions:` it declares.
 
 **The `main` ruleset** ("Main", target `branch`): no deletion, no
-force-push, changes only through a pull request, and the status checks
-`Checks`, `HACS Action`, `hassfest` and `Changelog entry` required. This is
-the "blocks a merge" half of the linters and validators.
+force-push, changes only through a pull request, and the blocking jobs of
+`test.yml`, `validate.yml` and `changelog.yml` required as status checks. On
+2026-09-09 those were `Checks`, `HACS Action`, `hassfest` and
+`Changelog entry`; when #38 splits `Checks` into `Lint`, `Tests (floor)` and
+`Tests (latest)`, the ruleset must follow by hand — `Lint` and
+`Tests (floor)` required, `Tests (latest)` not, since it is
+`continue-on-error`. This is the "blocks a merge" half of the linters and
+validators.
 
 Check both with:
 
