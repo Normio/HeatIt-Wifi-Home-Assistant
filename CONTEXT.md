@@ -4,6 +4,10 @@ A Home Assistant integration for the Heatit WiFi Panel wall heater over its loca
 
 ## Language
 
+**Status**:
+The panel's complete state in one document, returned by its only read endpoint and computed fresh per request. Everything the integration knows about a panel comes from one; a poll is a single status read. Kept apart from the *relay state*, from the connectivity field inside the network block, and from the success key in a write response, all of which the wire also calls status.
+_Avoid_: status response, state, payload, device info
+
 **Panel mode**:
 The panel's three-way state selected by the user: Off, Heating, or Eco. One field on the device; Off replaces whichever on-mode was active.
 _Avoid_: operating mode, HVAC mode, thermostat mode
@@ -84,8 +88,12 @@ _Avoid_: timeout, poll timeout, grace period
 How often the integration reads a status, chosen by the user. Distinct from the poll budget, which bounds one such read.
 _Avoid_: scan interval, update interval, refresh rate
 
+**Write echo**:
+The parameter value the panel returns alongside its success acknowledgement. It reports what was *applied*, not what was requested — an off-step setpoint echoes back snapped — and it normalises types, so a float may return as an integer. Honest for every parameter but one, which is why it is trusted for the optimistic update and never for state.
+_Avoid_: response value, confirmation, acknowledgement
+
 **Silent undo**:
-A write the panel acknowledged as successful and then did not apply, so the next status shows the old value. Observed once, when the external sensor mode was enabled with no sensor paired.
+A write the panel acknowledged as successful and then did not apply, so the next status shows the old value. The *write echo* says one thing and the following status says another. Observed once, when the external sensor mode was enabled with no sensor paired.
 _Avoid_: lying echo, phantom write, rejected write
 
 **Verified firmware**:
