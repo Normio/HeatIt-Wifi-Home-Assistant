@@ -1,0 +1,1 @@
+{"status":"failed","reason":"minimumTemperatureLimit is greater than current max temperature limit or equal to it"}

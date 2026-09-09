@@ -27,11 +27,17 @@ If a real Heatit WiFi Panel is reachable, its address lives in `.local/device.js
 hardware-conformance run read the host from there — never hardcode an IP, and
 never commit one.
 
+`scripts/capture_fixtures.py` reads the panel's status through the real client
+(read-only, no writes) and refreshes `tests/fixtures/observed/fw-<firmware>/`,
+scrubbing on the way. Run it by hand, never from CI; a new firmware means a new
+directory, and `VERIFIED_FIRMWARES` in `const.py` must grow with it.
+
 ## Before a push
 
 Run `scripts/check.sh`. It is the one shared entry point — ruff,
-`ruff format --check`, mypy strict and the repository-layout check — and
-`.github/workflows/test.yml` calls the same file, so local and CI cannot drift.
+`ruff format --check`, the repository-layout check, mypy strict and pytest —
+and `.github/workflows/test.yml` calls the same file, so local and CI cannot
+drift. `scripts/check.sh lint` and `scripts/check.sh test` run either half.
 There are deliberately no git hooks and no pre-commit framework.
 
 Install what it needs with `pip install -r requirements_test.txt`.

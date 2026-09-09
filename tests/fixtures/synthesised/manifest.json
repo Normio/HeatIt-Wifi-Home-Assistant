@@ -1,0 +1,74 @@
+{
+  "$comment": "Write-path responses transcribed from what the panel returned at firmware 1.21 (spec §2.5, issue #7, register Q29/Q36/Q37/Q56/Q57). Each file is the body as it would come off the wire. The conformance probe, run with writes enabled, saves the real responses into observed/fw-<version>/ and those replace these.",
+  "files": {
+    "write-echo-heatingSetpoint.json": {
+      "kind": "write-echo",
+      "parameter": "heatingSetpoint",
+      "applied": 19.0,
+      "source": "§2.5: the echo reports the applied value, type-normalised (19 for 19.0); Q5, Q37"
+    },
+    "write-echo-sensorCalibration.json": {
+      "kind": "write-echo",
+      "parameter": "sensorCalibration",
+      "applied": -1.0,
+      "source": "§2.5: -1 for -1.0; Q5"
+    },
+    "write-echo-openWindowDetection.json": {
+      "kind": "write-echo",
+      "parameter": "openWindowDetection",
+      "applied": true,
+      "source": "§2.5: the echo uses the exact parameter name sent, flat; Q3, Q5"
+    },
+    "write-echo-sensorMode-inert.json": {
+      "kind": "write-echo",
+      "parameter": "sensorMode",
+      "applied": true,
+      "source": "§2.5, Q58: echoes true while the device keeps false — the silent undo. The client returns the echo; the coordinator's refresh is the authority"
+    },
+    "reset-envelope.json": {
+      "kind": "reset",
+      "source": "Q57: a reset returns the uniform status envelope, capitalised Success; no reset key"
+    },
+    "error-400-invalid.txt": {
+      "kind": "rejection",
+      "status": 400,
+      "parameter": "heatingSetpoint",
+      "reason": "heatingSetpoint is invalid!",
+      "source": "§2.5 punctuation style 1; Q56"
+    },
+    "error-400-range.txt": {
+      "kind": "rejection",
+      "status": 400,
+      "parameter": "standbyDisplayBrightness",
+      "reason": "standbyDisplayBrightness is not in range 0~10",
+      "source": "§2.5 punctuation style 2; Q56"
+    },
+    "error-400-step.txt": {
+      "kind": "rejection",
+      "status": 400,
+      "parameter": "minimumTemperatureLimit",
+      "reason": "minimumTemperatureLimit must be step values of 0.5",
+      "source": "§2.5 punctuation style 3, Q1: the limits reject an off-step value"
+    },
+    "error-400-outrange.txt": {
+      "kind": "rejection",
+      "status": 400,
+      "parameter": "heatingSetpoint",
+      "reason": "heatingSetpoint outrange of temperature limit(min or max)",
+      "source": "§2.5 punctuation style 4; Q15"
+    },
+    "error-400-limits.txt": {
+      "kind": "rejection",
+      "status": 400,
+      "parameter": "minimumTemperatureLimit",
+      "reason": "minimumTemperatureLimit is greater than current max temperature limit or equal to it",
+      "source": "§2.5 punctuation style 5; Q15"
+    },
+    "error-404.txt": {
+      "kind": "response-error",
+      "status": 404,
+      "content_type": "text/html",
+      "source": "Q29: an unknown path is a CherryPy default 404, text/html"
+    }
+  }
+}
