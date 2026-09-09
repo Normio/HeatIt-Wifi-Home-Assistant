@@ -1,0 +1,28 @@
+name: Changelog
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  entry:
+    name: Changelog entry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history, so the base branch is available to diff against.
+          fetch-depth: 0
+      - name: Require a CHANGELOG.md entry
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') }}
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if git diff --name-only "origin/${BASE_REF}...HEAD" | grep -qx CHANGELOG.md; then
+            exit 0
+          fi
+          echo "::error file=CHANGELOG.md::This pull request does not touch CHANGELOG.md. Add an entry under '## [Unreleased]', or label the pull request 'skip-changelog' if it is docs-only or CI-only."
+          exit 1
