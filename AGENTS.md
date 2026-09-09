@@ -30,7 +30,7 @@ never commit one.
 ## Before a push
 
 Run `scripts/check.sh`. It is the one shared entry point — ruff,
-`ruff format --check`, mypy strict and the repository-layout check — and
+`ruff format --check`, mypy strict, the repository-layout check and pytest — and
 `.github/workflows/test.yml` calls the same file, so local and CI cannot drift.
 There are deliberately no git hooks and no pre-commit framework.
 
@@ -41,3 +41,9 @@ Install what it needs with `pip install -r requirements_test.txt`.
 Every pull request writes its entry under `## [Unreleased]` in `CHANGELOG.md`.
 A pull-request check fails when `CHANGELOG.md` is untouched, unless the pull
 request carries the `skip-changelog` label (docs-only or CI-only changes).
+
+## Releases
+
+Pushing a `vX.Y.Z` tag is the only way a release is created, and only the
+owner may push one. `docs/releasing.md` holds the procedure, the gate, and
+the repository settings the release depends on.

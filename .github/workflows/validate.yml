@@ -10,6 +10,8 @@ on:
     # fork pull requests, while hacs/default runs all ten.
     - cron: "0 4 * * *"
   workflow_dispatch:
+  # release.yml runs both jobs against a tagged commit as part of its gate.
+  workflow_call:
 
 permissions: {}
 

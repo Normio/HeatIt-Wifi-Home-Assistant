@@ -1697,3 +1697,23 @@ ruff back out, so it does not run once per row.
 §9.3 says both linters "block a merge" and §10.3 lists what a workflow cannot apply, but branch
 protection was named in neither. `Checks`, `HACS Action`, `hassfest` and `Changelog entry` must be
 marked required on `main` by the owner; nothing in the repository can assert that they are.
+
+**2026-09-09 — the lockstep script is `scripts/check_release.py`, and joins §3.1** ([#39](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/39)).
+§10.2 describes the gate's third member without naming it. It is `scripts/check_release.py`, run by
+`release.yml` alone — it needs a pushed tag, so it is the one script §9.4's entry point does not
+run — and it writes the changelog section the publish job uses as the release body. Its tests are
+the first residents of `tests/`, under `tests/scripts/`, a directory §8.7's layout did not list;
+`scripts/check.sh` gains `pytest` and mypy strict extends to `tests/`.
+
+**2026-09-09 — the gate calls `test.yml` whole, so §8.7's rows join it when they land** ([#39](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/39)).
+§10.2 says the publish job needs "both pytest rows from §8.7, exposed via `workflow_call`". The rows
+do not exist yet ([#38](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/38) adds them),
+so `release.yml` calls `test.yml` and `validate.yml` as reusable workflows rather than naming jobs:
+whatever either file holds is what a release must pass, and #38 changes nothing in `release.yml`.
+
+**2026-09-09 — §10.3's settings are applied, and `docs/releasing.md` records them** ([#39](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/39)).
+§10.3 says the description, topics and the `v*` tag ruleset "are still unapplied". As of this date
+all three, and the `main` ruleset with the required status checks from the amendment above, are
+applied and were verified through the API. `docs/releasing.md` holds the procedure, the gate, the
+commands and the ruleset shapes, so the owner can check or restore them; §11.2's gate item 5 reads
+from there.

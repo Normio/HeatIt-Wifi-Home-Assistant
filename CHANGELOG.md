@@ -18,3 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/check_layout.py`, asserting what the tree must not hold: no
   `strings.json`, brand assets in one place and at their stated sizes,
   `hacs.json`'s three keys, and the manifest's fixed keys in order.
+- `release.yml`: pushing a `vX.Y.Z` tag runs the validators, `test.yml` and
+  `scripts/check_release.py` against the tagged commit, and only when all of
+  them pass creates the GitHub release with the changelog section as its
+  body. A failed gate leaves the bare tag and deletes nothing.
+- `scripts/check_release.py`, the lockstep check: tag equals manifest
+  version, the tagged commit is on `main`, the files a release needs exist,
+  `hacs.json` keeps its floor gate, and the changelog section is non-empty.
+- `tests/`, with the lockstep check's tests as its first residents, run by
+  `scripts/check.sh` alongside the linters; mypy strict now covers it too.
+- `docs/releasing.md`, the release procedure and the repository settings the
+  release depends on.

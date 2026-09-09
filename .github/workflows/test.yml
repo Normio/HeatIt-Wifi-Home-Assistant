@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # release.yml runs this whole file against a tagged commit as part of its
+  # gate, so whatever this workflow grows into is what a release must pass.
+  workflow_call:
 
 permissions:
   contents: read

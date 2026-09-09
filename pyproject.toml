@@ -23,6 +23,16 @@ ignore = [
   "ISC001", # implicit string concatenation on one line is what the formatter produces
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Tests assert, and a test's literal is its expected value, not a magic number.
+"tests/**" = ["S101", "PLR2004"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The scripts are standalone entry points, not a package; tests import them by
+# module name from here.
+pythonpath = ["scripts"]
+
 [tool.mypy]
 python_version = "3.14"
 strict = true

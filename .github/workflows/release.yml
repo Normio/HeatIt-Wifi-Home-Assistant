@@ -1,0 +1,78 @@
+name: Release
+
+# Pushing a vX.Y.Z tag is the only way a release is created (spec §10.2,
+# ADR-0002). Every gate below runs against the tagged commit; the publish job
+# needs all of them. A failed gate leaves the bare tag — HACS ignores tags
+# without releases — and deletes nothing: the owner deletes it, bumps, and
+# retags. No job here may delete a tag: the token's `contents: write` in the
+# publish job is the minimum for creating a release, and the owner-only `v*`
+# tag ruleset denies that token tag creation, update and deletion.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  # The same two validator jobs as validate.yml, no ignore: input.
+  validate:
+    name: Validate
+    uses: ./.github/workflows/validate.yml
+
+  # Everything test.yml runs — the shared entry point, so the linters, mypy,
+  # the check scripts and the tests — and, once §8.7's two pytest rows exist
+  # there, both of them: a Home Assistant release that breaks us blocks our own
+  # release until fixed, by choice.
+  test:
+    name: Test
+    uses: ./.github/workflows/test.yml
+
+  lockstep:
+    name: Lockstep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history: the gate asks git whether the tagged commit is
+          # an ancestor of main, and needs main to answer.
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+      - run: pip install --requirement requirements_test.txt
+      - name: Tag, manifest, main, files, hacs.json, changelog
+        run: >
+          python3 scripts/check_release.py "$GITHUB_REF_NAME"
+          --main origin/main
+          --notes "$RUNNER_TEMP/release-notes.md"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/release-notes.md
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: [validate, test, lockstep]
+    runs-on: ubuntu-latest
+    permissions:
+      # The minimum that creates a release. Nothing is checked out here: the
+      # release is made from the tag GitHub already holds and the notes the
+      # lockstep job extracted.
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: >
+          gh release create "$GITHUB_REF_NAME"
+          --verify-tag
+          --title "$GITHUB_REF_NAME"
+          --notes-file release-notes.md
