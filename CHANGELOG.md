@@ -15,3 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   strict and `scripts/check_layout.py`, run locally and by CI from the same file.
 - `validate.yml` (HACS Action, hassfest), `test.yml` and a changelog check on
   pull requests.
+- `scripts/check_layout.py`, asserting what the tree must not hold: no
+  `strings.json`, brand assets in one place and at their stated sizes,
+  `hacs.json`'s three keys, and the manifest's fixed keys in order.

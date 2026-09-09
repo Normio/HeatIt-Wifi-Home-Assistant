@@ -5,3 +5,9 @@
 # The example file is tracked so the shape stays discoverable.
 /.local/*
 !/.local/device.example.json
+
+# Python: a local virtualenv for requirements_test.txt, and bytecode.
+# scripts/check_layout.py asks git what is in the repository, so an untracked
+# virtualenv full of strings.json cannot trip it — but keep it out of sight.
+.venv/
+__pycache__/

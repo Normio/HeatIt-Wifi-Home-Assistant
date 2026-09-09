@@ -24,4 +24,7 @@ jobs:
       - run: pip install --requirement requirements_test.txt
       # The commands live in the script, never here, so local and CI cannot
       # drift: ruff, ruff format --check, mypy strict, and the layout check.
+      # This is one job because there is nothing yet to matrix over. §8.7's
+      # two rows — floor blocking, latest continue-on-error on a monthly
+      # cron — arrive with the test suite, and take mypy per row with them.
       - run: scripts/check.sh

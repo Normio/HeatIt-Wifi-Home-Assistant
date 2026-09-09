@@ -2,7 +2,7 @@
 
 hassfest validates ``strings.json`` only when the file is present, and the HACS
 Action never looks past ``hacs.json`` and the manifest. The parts of the spec
-that say what must *not* be in the tree — no ``strings.json``, brand icons in
+that say what must *not* be in the tree — no ``strings.json``, brand assets in
 one place, ``hacs.json`` holding exactly three keys, no ``quality_scale`` in the
 manifest — are therefore checked here or nowhere.
 
@@ -12,12 +12,10 @@ one line per problem and exits non-zero.
 
 import json
 import struct
+import subprocess
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION_DIR = REPO_ROOT / "custom_components" / "heatit_wifi_panel"
@@ -26,42 +24,81 @@ BRAND_DIR = INTEGRATION_DIR / "brand"
 #: ``hacs.json`` holds these and nothing else — the schema rejects unknown keys.
 HACS_JSON_KEYS = frozenset({"name", "homeassistant", "hide_default_branch"})
 
+#: The manifest's fixed keys, in their fixed order: domain, name, then
+#: alphabetical. A key added or dropped here is a deliberate edit, not a drift.
+MANIFEST_KEYS = [
+    "domain",
+    "name",
+    "codeowners",
+    "config_flow",
+    "dhcp",
+    "documentation",
+    "import_executor",
+    "integration_type",
+    "iot_class",
+    "issue_tracker",
+    "requirements",
+    "version",
+]
+
 #: The brand assets, and the square edge each must have.
 BRAND_ICONS = {"icon.png": 256, "icon@2x.png": 512}
 
 #: A logo is rejected by the brands validator when it is byte-identical to the
-#: icon, and no dark variant is shipped; neither may appear under the package.
-FORBIDDEN_BRAND_PREFIXES = ("logo", "dark_")
+#: icon, and no dark variant is shipped. Neither may appear anywhere.
+FORBIDDEN_IMAGE_PREFIXES = ("logo", "dark_")
+IMAGE_SUFFIXES = frozenset({".png", ".svg", ".jpg", ".jpeg", ".webp"})
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-PNG_HEADER_LENGTH = 24
+#: Offset of the end of the IHDR width and height fields, which begin at 16.
+IHDR_DIMENSIONS_END = 24
 
 
-def repository_files() -> Iterator[Path]:
-    """Yield every file in the repository, ignoring dot-directories."""
-    for path in REPO_ROOT.rglob("*"):
-        if any(part.startswith(".") for part in path.relative_to(REPO_ROOT).parts):
-            continue
-        if path.is_file():
-            yield path
+def rel(path: Path) -> str:
+    """Render a path the way a problem line names it: relative to the root."""
+    return str(path.relative_to(REPO_ROOT))
+
+
+def tracked_files() -> list[Path]:
+    """Return every file git tracks — the definition of "in the repository".
+
+    Asking git rather than walking the tree keeps an untracked virtualenv, with
+    a Home Assistant install and its hundreds of ``strings.json``, out of the
+    answer, and keeps dot-directories like ``.github`` in it.
+    """
+    listing = subprocess.run(  # noqa: S603
+        ["git", "-C", str(REPO_ROOT), "ls-files", "-z"],  # noqa: S607
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return [REPO_ROOT / name for name in listing.stdout.split("\0") if name]
 
 
 def png_dimensions(path: Path) -> tuple[int, int] | None:
     """Return a PNG's pixel dimensions, or ``None`` when it is not a PNG."""
-    header = path.read_bytes()[:PNG_HEADER_LENGTH]
-    if len(header) < PNG_HEADER_LENGTH or not header.startswith(PNG_SIGNATURE):
+    header = path.read_bytes()[:IHDR_DIMENSIONS_END]
+    if len(header) < IHDR_DIMENSIONS_END or not header.startswith(PNG_SIGNATURE):
         return None
-    width, height = struct.unpack(">II", header[16:PNG_HEADER_LENGTH])
+    width, height = struct.unpack(">II", header[16:IHDR_DIMENSIONS_END])
     return width, height
+
+
+def json_document(path: Path) -> dict[str, Any] | None:
+    """Return a parsed JSON object, or ``None`` when the file is missing."""
+    if not path.is_file():
+        return None
+    parsed: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return parsed
 
 
 def check_no_strings_json(files: list[Path]) -> list[str]:
     """Assert no ``strings.json`` exists anywhere in the repository."""
     return [
-        f"{path.relative_to(REPO_ROOT)}: strings.json is never shipped — its "
-        f"[%key:...%] syntax is a build-time feature nothing resolves at "
-        f"runtime, so a custom integration shipping one shows raw keys. The "
-        f"authored artifact is a fully-expanded translations/en.json."
+        f"{rel(path)}: strings.json is never shipped — its [%key:...%] syntax "
+        f"is a build-time feature nothing resolves at runtime, so a custom "
+        f"integration shipping one shows raw keys. The authored artifact is a "
+        f"fully-expanded translations/en.json."
         for path in files
         if path.name == "strings.json"
     ]
@@ -70,90 +107,85 @@ def check_no_strings_json(files: list[Path]) -> list[str]:
 def check_brand_assets(files: list[Path]) -> list[str]:
     """Assert the brand assets exist, are the right size, and stand alone."""
     problems = [
-        f"{path.relative_to(REPO_ROOT)}: brand assets live in "
-        f"{BRAND_DIR.relative_to(REPO_ROOT)} and nowhere else"
+        f"{rel(path)}: brand assets live in {rel(BRAND_DIR)} and nowhere else"
         for path in files
         if path.name in BRAND_ICONS and path.parent != BRAND_DIR
     ]
     problems += [
-        f"{path.relative_to(REPO_ROOT)}: no logo* and no dark_* — the icon is "
-        f"the logo fallback, and a byte-identical logo is rejected"
+        f"{rel(path)}: no logo* and no dark_* image anywhere — the icon is the "
+        f"logo fallback, and a byte-identical logo is rejected"
         for path in files
-        if path.is_relative_to(INTEGRATION_DIR)
-        and path.name.startswith(FORBIDDEN_BRAND_PREFIXES)
+        if path.name.startswith(FORBIDDEN_IMAGE_PREFIXES)
+        and path.suffix.lower() in IMAGE_SUFFIXES
     ]
 
     for name, edge in BRAND_ICONS.items():
         icon = BRAND_DIR / name
         if not icon.is_file():
-            problems.append(f"{icon.relative_to(REPO_ROOT)}: missing")
+            problems.append(f"{rel(icon)}: missing")
             continue
         dimensions = png_dimensions(icon)
         if dimensions is None:
-            problems.append(f"{icon.relative_to(REPO_ROOT)}: not a PNG")
+            problems.append(f"{rel(icon)}: not a PNG")
         elif dimensions != (edge, edge):
             problems.append(
-                f"{icon.relative_to(REPO_ROOT)}: is {dimensions[0]}x"
-                f"{dimensions[1]}, must be {edge}x{edge}"
+                f"{rel(icon)}: is {dimensions[0]}x{dimensions[1]}, "
+                f"must be {edge}x{edge}"
             )
 
     return problems
 
 
-def check_hacs_json() -> list[str]:
+def check_hacs_json(path: Path) -> list[str]:
     """Assert ``hacs.json`` holds exactly its three keys, with the gate on."""
-    path = REPO_ROOT / "hacs.json"
-    if not path.is_file():
-        return [f"{path.relative_to(REPO_ROOT)}: missing"]
+    hacs = json_document(path)
+    if hacs is None:
+        return [f"{rel(path)}: missing"]
 
-    hacs = json.loads(path.read_text(encoding="utf-8"))
     problems = []
     if set(hacs) != HACS_JSON_KEYS:
         problems.append(
-            f"hacs.json: keys are {sorted(hacs)}, must be exactly "
+            f"{rel(path)}: keys are {sorted(hacs)}, must be exactly "
             f"{sorted(HACS_JSON_KEYS)}"
         )
     if hacs.get("hide_default_branch") is not True:
         problems.append(
-            "hacs.json: hide_default_branch must be true — without it an "
-            "install falls back to the default branch, past the floor gate"
+            f"{rel(path)}: hide_default_branch must be true — without it an "
+            f"install falls back to the default branch, past the floor gate"
         )
     return problems
 
 
-def check_manifest() -> list[str]:
-    """Assert the manifest's key order and the absence of ``quality_scale``."""
-    path = INTEGRATION_DIR / "manifest.json"
-    if not path.is_file():
-        return [f"{path.relative_to(REPO_ROOT)}: missing"]
+def check_manifest(path: Path) -> list[str]:
+    """Assert the manifest's fixed keys, their order, and no ``quality_scale``."""
+    manifest = json_document(path)
+    if manifest is None:
+        return [f"{rel(path)}: missing"]
 
-    manifest = json.loads(path.read_text(encoding="utf-8"))
     problems = []
     if "quality_scale" in manifest:
         problems.append(
-            "manifest.json: no quality_scale key — quality_scale.yaml says what "
-            "we hold ourselves to, and the manifest makes no claim a reviewer "
-            "never graded"
+            f"{rel(path)}: no quality_scale key — quality_scale.yaml says what "
+            f"we hold ourselves to, and the manifest makes no claim a reviewer "
+            f"never graded"
         )
 
-    keys = list(manifest)
-    expected = ["domain", "name", *sorted(set(keys) - {"domain", "name"})]
-    if keys != expected:
+    keys = [key for key in manifest if key != "quality_scale"]
+    if keys != MANIFEST_KEYS:
         problems.append(
-            f"manifest.json: keys are {keys}, must be domain, name, then "
-            f"alphabetical: {expected}"
+            f"{rel(path)}: keys are {keys}, must be exactly {MANIFEST_KEYS}"
         )
     return problems
 
 
 def main() -> None:
-    """Run every layout check and exit non-zero on the first problems found."""
-    files = list(repository_files())
+    """Run every layout check and exit non-zero when any of them speaks."""
+    files = tracked_files()
     problems = [
         *check_no_strings_json(files),
         *check_brand_assets(files),
-        *check_hacs_json(),
-        *check_manifest(),
+        *check_hacs_json(REPO_ROOT / "hacs.json"),
+        *check_manifest(INTEGRATION_DIR / "manifest.json"),
     ]
     if problems:
         sys.exit("\n".join(f"check_layout: {problem}" for problem in problems))

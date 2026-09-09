@@ -6,9 +6,10 @@
 # Home Assistant 2026.3.1, the declared floor, requires Python 3.14.2.
 target-version = "py314"
 
-# Ruff lints and formats Python inside Markdown fences. The docs quote
-# illustrative snippets that are deliberately not the shipped code — a spec
-# excerpt eliding its annotations is not a lint failure.
+# `ruff format` reformats Python inside Markdown fences: without this, a run
+# rewrites five of the documents under docs/. They quote illustrative
+# snippets that are deliberately not the shipped code, and a spec excerpt
+# eliding its annotations is not a formatting failure.
 extend-exclude = ["docs"]
 
 [tool.ruff.lint]
