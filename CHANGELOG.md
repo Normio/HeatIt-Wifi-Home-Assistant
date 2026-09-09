@@ -27,5 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `hacs.json` keeps its floor gate, and the changelog section is non-empty.
 - `tests/`, with the lockstep check's tests as its first residents, run by
   `scripts/check.sh` alongside the linters; mypy strict now covers it too.
+  One test asserts that no job in the workflows the gate calls is
+  `continue-on-error` on a tag, so a failing row can never be passed over.
 - `docs/releasing.md`, the release procedure and the repository settings the
   release depends on.

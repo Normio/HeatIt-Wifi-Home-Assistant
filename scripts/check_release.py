@@ -19,15 +19,14 @@ writing nothing. It never creates, deletes or moves anything.
 """
 
 import argparse
-import json
 import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from awesomeversion import AwesomeVersion
+from check_layout import json_document
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -71,14 +70,6 @@ def git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def json_document(path: Path) -> dict[str, Any] | None:
-    """Return a parsed JSON object, or ``None`` when the file is missing."""
-    if not path.is_file():
-        return None
-    parsed: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    return parsed
-
-
 def version_from_tag(tag: str) -> str | None:
     """Return the bare version a ``vX.Y.Z`` tag names, or ``None`` otherwise."""
     match = TAG_PATTERN.match(tag)
@@ -90,7 +81,8 @@ def changelog_section(text: str, version: str) -> str | None:
 
     The body runs to the next ``##`` heading or the end of the file, with the
     trailing link definitions dropped and surrounding blank lines trimmed. An
-    empty string means the heading is there and nothing is under it.
+    empty string means the heading is there and nothing but sub-headings, if
+    that, is under it: a ``### Added`` with no entries is not release notes.
     """
     heading = re.compile(rf"^## \[{re.escape(version)}\](\s|$)")
     lines = text.splitlines()
@@ -104,7 +96,9 @@ def changelog_section(text: str, version: str) -> str | None:
     )
     body = [line for line in lines[start:end] if not LINK_DEFINITION.match(line)]
     section = "\n".join(body).strip()
-    return f"{section}\n" if section else ""
+    if not any(line.strip() and not line.startswith("#") for line in body):
+        return ""
+    return f"{section}\n"
 
 
 def check_required_files(root: Path) -> list[str]:
@@ -192,14 +186,14 @@ def check_release(root: Path, tag: str, main_ref: str) -> ReleaseCheck:
             problems=[f"{tag}: a release tag is vX.Y.Z, a v-prefixed SemVer triple"]
         )
 
-    problems, notes = check_changelog(root, version)
+    changelog_problems, notes = check_changelog(root, version)
     result = ReleaseCheck(
         problems=[
             *check_ancestry(root, tag, main_ref),
             *check_manifest_version(root, version),
             *check_required_files(root),
             *check_hacs_json(root),
-            *problems,
+            *changelog_problems,
         ]
     )
     if not result.problems:

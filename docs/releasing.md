@@ -36,7 +36,7 @@ Every job runs against the tagged commit, and the publish job `needs` all of:
 | Job | What it is |
 |---|---|
 | Validate | `validate.yml` called whole: HACS Action and hassfest, no `ignore:` |
-| Test | `test.yml` called whole: `scripts/check.sh`, so ruff, mypy, the check scripts and the tests — and both pytest rows once #38 adds them. A job that is `continue-on-error` on pull requests must not be on a tag, or the gate would pass over its failure |
+| Test | `test.yml` called whole: `scripts/check.sh`, so ruff, mypy, the check scripts and the tests — and both pytest rows once #38 adds them. A job that is `continue-on-error` on pull requests must not be on a tag, or the gate would pass over its failure; `tests/scripts/test_release_gate.py` fails when one is |
 | Lockstep | `scripts/check_release.py`: the tag names the manifest's version; the tagged commit is an ancestor of `main`; `LICENSE`, `hacs.json`, the manifest and `brand/icon.png` exist; `hacs.json` has `hide_default_branch: true` and an AwesomeVersion-parseable `homeassistant`; `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section |
 
 To rehearse the lockstep half before pushing, from the checkout holding the tag:

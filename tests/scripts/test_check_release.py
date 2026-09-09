@@ -183,13 +183,14 @@ def test_changelog_section_must_exist(repo: Path) -> None:
     assert any("## [0.1.0]" in p for p in problems(repo))
 
 
-def test_changelog_section_must_not_be_empty(repo: Path) -> None:
-    """A heading alone, or a heading over link definitions, is not release notes."""
-    write(
-        repo,
-        "CHANGELOG.md",
-        "# Changelog\n\n## [0.1.0] - 2026-09-09\n\n[0.1.0]: https://example.invalid\n",
-    )
+@pytest.mark.parametrize(
+    "body",
+    ["", "[0.1.0]: https://example.invalid\n", "### Added\n\n### Changed\n"],
+    ids=["nothing", "link definitions", "sub-headings only"],
+)
+def test_changelog_section_must_not_be_empty(repo: Path, body: str) -> None:
+    """A heading over nothing, link definitions or bare sub-headings is not notes."""
+    write(repo, "CHANGELOG.md", f"# Changelog\n\n## [0.1.0] - 2026-09-09\n\n{body}")
     assert any("## [0.1.0]" in p and "empty" in p for p in problems(repo))
 
 
