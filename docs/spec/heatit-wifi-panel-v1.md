@@ -370,12 +370,12 @@ async def async_setup_entry(hass, entry: HeatitWifiPanelConfigEntry) -> bool:
     coordinator = HeatitWifiPanelCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
-    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    _async_register_device(hass, entry, coordinator.data)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 ```
 
-Order matters: first refresh → assign `runtime_data` → forward platforms. **Do not clear
+Order matters: first refresh → assign `runtime_data` → register the device → forward platforms. **Do not clear
 `runtime_data` on unload** — core removes it. `hass.data` is untouched.
 `async_forward_entry_setup` (singular) and `async_setup_platforms` are removed from core; do not use
 them. **No sleep of any kind in setup** (§3.6).
@@ -388,8 +388,9 @@ The coordinator subclasses `DataUpdateCoordinator[PanelStatus]`, carries a class
 `__init__.py`'s `async_setup_entry` — it asserts `SETUP_IN_PROGRESS` and hard-raises anywhere else.
 The coordinator is built in `__init__.py`, never inside a platform's `async_setup_entry`.
 
-`update_interval` comes from the options *poll interval* (§4.5). Option changes take effect through
-the update listener → `async_reload`; `coordinator.update_interval` is never retimed in place.
+`update_interval` comes from the options *poll interval* (§4.5). Option changes take effect by
+**reloading the entry** — `OptionsFlowWithReload` does it, no update listener (§4.6);
+`coordinator.update_interval` is never retimed in place.
 
 ### 3.5 Entities — `entity.py` and the platform modules
 
@@ -589,7 +590,7 @@ The host is **not** an options field. A static DHCP reservation is recommended i
 | Field | *poll interval*, seconds |
 | Default | **60 s** |
 | Minimum | **30 s** |
-| Applied by | update listener → `async_reload` |
+| Applied by | `OptionsFlowWithReload` → entry reload |
 
 60 s because every write already schedules its own 1.5 s refresh, so the interval governs only how
 fast Home Assistant notices *external* changes: the physical buttons, the MyHeatit app, open window
@@ -841,11 +842,11 @@ translation key propagated.
 | Status carries an `id` different from the entry's unique id | **`ConfigEntryError`**, naming both ids | A *foreign panel* owns this address. Retrying can never fix it; the fix is the reconfigure step (§4.5) |
 
 **The id check runs on every poll, not only at setup.** A status whose `id` is not the entry's is
-`UpdateFailed` (key `foreign_panel`, placeholders `expected_id` / `actual_id`), never data — the
-alternative is writing one bedroom's setpoints into another room's entities. A `ConfigEntryError`
-raised from a scheduled refresh is caught and logged by the coordinator, never escalated, so at poll
-time the user sees the device unavailable and one error line; a reload turns it into the permanent
-setup error.
+`ConfigEntryError` (key `foreign_panel`, placeholders `expected_id` / `actual_id`), never data — the
+alternative is writing one bedroom's setpoints into another room's entities. One raise site serves
+both moments: a `ConfigEntryError` raised from a scheduled refresh is caught and logged by the
+coordinator, never escalated, so at poll time the user sees the device unavailable and one error
+line; a reload turns it into the permanent setup error.
 
 ### 6.3 Malformed or partial status
 
@@ -1806,3 +1807,39 @@ dropping it is not an acknowledgement either; coexistence with the other integra
 the distinct domain `heatit_wifi_panel` and never by this line. The prior-art audit, the handoff
 brief and the register rows that cite the other device as **evidence** are records of what was
 investigated rather than claims this integration makes, and stand unchanged.
+
+**2026-09-10 — the config flow and coordinator ticket refines §3.4, §3.5, §4.3, §4.6 and §6.2** ([#40](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/40)).
+Five refinements. (1) §3.4's `entry.add_update_listener(_async_update_listener)` and §4.6's
+"applied by update listener → `async_reload`" are replaced by **`OptionsFlowWithReload`**, which
+reloads the entry itself when the options change. Home Assistant's own documentation now says so —
+"since the most common reason to add an update listener is to reload the integration when the
+options have changed, `OptionsFlowWithReload` avoids the need for that listener" — and the class
+docstring forbids combining the two: "it's not allowed to use this class if the integration uses
+config entry update listeners". The observable contract is unchanged: an option change reloads the
+entry, `update_interval` is never retimed in place, and all the panel's entities go briefly
+unavailable. (2) §3.5 builds `DeviceInfo` on the base entity, but this ticket ships **no platforms**,
+and its acceptance criteria require a device with zero entities. The device is therefore registered
+in `__init__.py` from the first status, immediately after `runtime_data` is assigned; `entity.py`
+([#41](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/41)) needs only `identifiers` to
+attach to it. The values, and the absent `configuration_url`, are §3.5's unchanged. §4.4's
+"read at creation only" is taken literally for both fields it names: the registry honours
+`suggested_area` when it makes the device and ignores it afterwards, and `name` is passed only on
+the setup that creates the device — a later setup withholds it, so an app rename diverges rather
+than overwriting the device name on the next reload. `model` and `sw_version` are refreshed every
+setup instead, being facts about the hardware rather than labels the user owns, which is how §3.5
+has a firmware change picked up on reload. The entry title is read once, in the flow. (3) `PLATFORMS` starts
+**empty** and each platform ticket appends to it — §3.4's seven-entry list is the end state, not the
+state at this ticket, and forwarding to a module that does not exist yet would fail setup. (4) §4.3's
+`async_step_dhcp` lists three outcomes and a quiet abort; a fourth exists in code — a panel answering
+at the discovered address whose *device id* matches no entry. `registered_devices` should make it
+unreachable, but `_abort_if_unique_id_configured` returns rather than raising in that case, so it
+aborts with `not_configured` and is tested directly, this module being held at 100 % line coverage.
+The gate itself, deferred by the amendment of PR #50, now lives in `scripts/check.sh` as
+`coverage report --fail-under=100 --include='*/config_flow.py'`. (5) §6.2's table gives the setup-time
+*foreign panel* as `ConfigEntryError` and its following paragraph gives the poll-time one as
+`UpdateFailed`, but that paragraph then describes what a `ConfigEntryError` from a scheduled refresh
+already does — the coordinator catches it, logs one error line and fails the poll without escalating
+(`update_coordinator.py`'s `except ConfigEntryError` branch). The sentence is corrected to
+`ConfigEntryError` and the coordinator raises it at both moments from one site: the translation key,
+the placeholders and everything the user sees are unchanged, and the alternative was a
+`config_entry.state` check whose only effect would have been the wording of a core log line.
