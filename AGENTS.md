@@ -30,7 +30,22 @@ never commit one.
 `scripts/capture_fixtures.py` reads the panel's status through the real client
 (read-only, no writes) and refreshes `tests/fixtures/observed/fw-<firmware>/`,
 scrubbing on the way. Run it by hand, never from CI; a new firmware means a new
-directory, and `VERIFIED_FIRMWARES` in `const.py` must grow with it.
+directory, and `VERIFIED_FIRMWARES` in `const.py` and the README's
+`## Verified firmware` table must both grow with it, in that same pull request.
+
+## README
+
+`tests/test_readme.py` is what keeps the README from describing an integration
+other than the one in the tree, and it is the file to read before editing
+`README.md`. It asserts that the `## Verified firmware` table, the observed
+fixture directories and `VERIFIED_FIRMWARES` name the same versions; that the
+`## Entities` table lists exactly the entities the platform modules declare, so
+**a platform ships its README rows in the same pull request as its module**;
+that the stated Home Assistant floor is the one `hacs.json` declares; and that
+no "beta"/"experimental"/"pending validation" prose appears anywhere — the 0.x
+version number carries that message, and saying it in words is a documented
+`hacs/default` rejection. The install section is the release runbook's, not
+this file's: see `docs/releasing.md`.
 
 ## Before a push
 
