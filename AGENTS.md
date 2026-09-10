@@ -70,6 +70,14 @@ already its own record, and restating it in the changelog only means two places
 to keep true. Label such a pull request `skip-changelog`, which is what the
 pull-request check looks for; CI-only changes take the same label.
 
+A **correction to unreleased work** takes the same label, when the
+`## [Unreleased]` entry already describes the corrected behaviour. Code that
+disagrees with an entry written in the same release cycle is a bug that never
+shipped: Keep a Changelog folds that into the original entry rather than
+recording a fix for it, and a reader sees the same sentence before and after. If
+the correction changes what the entry *claims*, edit the entry instead — that
+touches `CHANGELOG.md` and needs no label at all.
+
 The test: would a reader of the changelog have to go and *do* something
-differently? If the answer is only "read the document that changed", it does not
-belong here.
+differently? If the answer is only "read the document that changed", or "nothing
+— the entry already said this", it does not belong here.
