@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/test_probe_safety.py` and `tests/test_check_conformance.py`; pytest
   joins `scripts/check.sh`.
 
+- The first observed write-path fixtures at firmware 1.21 under
+  `tests/fixtures/observed/fw-1.21/`: three write echoes (one the lying
+  `sensorMode` echo), a 400, the `text/html` 404 and the HTTP/1.0 505, each as
+  raw bytes with its headers beside it, captured by `probe.py --writes`.
+
 ### Changed
 
 - Register row Q18 moves from the `read` to the `write` tier: its evidence
