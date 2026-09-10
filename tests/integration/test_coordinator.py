@@ -22,7 +22,11 @@ from custom_components.heatit_wifi_panel.api import (
 from custom_components.heatit_wifi_panel.const import DOMAIN, VERIFIED_FIRMWARES
 from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.fakes import ABSENT, FakeHeatitClient
-from tests.integration.conftest import REFERENCE_DEVICE_ID, setup_entry
+from tests.integration.conftest import (
+    FOREIGN_DEVICE_ID,
+    REFERENCE_DEVICE_ID,
+    setup_entry,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -31,8 +35,6 @@ if TYPE_CHECKING:
     from custom_components.heatit_wifi_panel.coordinator import (
         HeatitWifiPanelCoordinator,
     )
-
-FOREIGN_DEVICE_ID = "OTHERPANELOTHERPANELXY"
 
 #: What each client failure becomes, and the placeholders the message needs.
 #: The dotted path travels on the exception rather than being re-parsed here.
@@ -290,6 +292,36 @@ async def test_a_parameter_appearing_after_setup_waits_for_a_reload(
     # The reload is what picks it up.
     assert await hass.config_entries.async_reload(mock_config_entry.entry_id)
     assert mock_config_entry.runtime_data.observed_parameters == frozenset(PARAMETERS)
+
+
+async def test_a_late_parameter_is_noted_once_per_transition(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """§7.2 says *once per transition*, and a transition can happen twice.
+
+    A parameter that was absent at setup, appeared, went away again and came
+    back has appeared **twice**, and the second debug line is the record that
+    the panel is flapping rather than that it changed once.
+    """
+    patched_client.set_status({"parameters.sensorMode": ABSENT})
+    coordinator = await loaded(hass, mock_config_entry)
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        for value in (False, ABSENT, False):
+            patched_client.set_status({"parameters.sensorMode": value})
+            await coordinator.async_refresh()
+            await coordinator.async_refresh()
+
+    appeared = [
+        record
+        for record in panel_lines(caplog, logging.DEBUG)
+        if "sensorMode" in record.getMessage()
+    ]
+    assert len(appeared) == 2
+    assert {record.levelno for record in appeared} == {logging.DEBUG}
 
 
 # --- firmware ---------------------------------------------------------------

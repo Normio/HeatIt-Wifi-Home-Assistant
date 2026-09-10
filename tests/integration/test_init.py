@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from custom_components.heatit_wifi_panel.api import (
     HeatitConnectionError,
@@ -29,6 +30,7 @@ from custom_components.heatit_wifi_panel.const import (
 )
 from tests.fakes import ABSENT, FakeHeatitClient
 from tests.integration.conftest import (
+    FOREIGN_DEVICE_ID,
     REFERENCE_DEVICE_ID,
     panel_device,
     setup_entry,
@@ -194,7 +196,7 @@ async def test_setup_fails_permanently_on_a_foreign_panel(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Retrying can never fix it; the fix is the reconfigure step (§6.2)."""
-    patched_client.set_status({"id": "OTHERPANELOTHERPANELXY"})
+    patched_client.set_status({"id": FOREIGN_DEVICE_ID})
 
     assert not await setup_entry(hass, mock_config_entry)
 
@@ -202,7 +204,7 @@ async def test_setup_fails_permanently_on_a_foreign_panel(
     assert mock_config_entry.error_reason_translation_key == "foreign_panel"
     assert mock_config_entry.error_reason_translation_placeholders == {
         "expected_id": REFERENCE_DEVICE_ID,
-        "actual_id": "OTHERPANELOTHERPANELXY",
+        "actual_id": FOREIGN_DEVICE_ID,
     }
 
 
@@ -219,16 +221,30 @@ async def test_a_retried_entry_loads_when_the_panel_returns(
 
 
 @pytest.mark.usefixtures("patched_client")
-async def test_unload_releases_the_entry(
+async def test_unload_releases_the_entry_and_retains_nothing(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
+    """§9.2's ``config-entry-unloading``: true, and nothing held afterwards.
+
+    That the entry unloads is the framework's own (§8.6), so the assertions
+    that earn their keep are the two halves that are ours to get wrong.
+    ``hass.data`` is untouched at every point in the entry's life (§3.4), and
+    the session belongs to Home Assistant — we borrow it through
+    ``async_get_clientsession`` and closing it on unload would take every other
+    integration's HTTP down with this one. ``runtime_data`` is core's to
+    remove, so this asserts core removed it rather than that we cleared it.
+    """
     assert await setup_entry(hass, mock_config_entry)
+    session = async_get_clientsession(hass)
 
     assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.NOT_LOADED
+    assert DOMAIN not in hass.data
+    assert not hasattr(mock_config_entry, "runtime_data")
+    assert not session.closed
 
 
 def test_nothing_on_the_setup_path_sleeps() -> None:

@@ -29,6 +29,7 @@ from custom_components.heatit_wifi_panel.const import (
 )
 from tests.fakes import ABSENT, FakeHeatitClient
 from tests.integration.conftest import (
+    FOREIGN_DEVICE_ID,
     REFERENCE_DEVICE_ID,
     REFERENCE_HOST,
     setup_entry,
@@ -39,7 +40,6 @@ if TYPE_CHECKING:
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 OTHER_HOST = "10.0.0.3"
-OTHER_DEVICE_ID = "OTHERPANELOTHERPANELXY"
 
 DISCOVERY = DhcpServiceInfo(ip=OTHER_HOST, hostname="heatit", macaddress="020000000001")
 
@@ -284,7 +284,7 @@ async def test_reconfigure_never_adopts_a_replacement_panel(
 ) -> None:
     """A replaced unit means delete-and-re-add, with the history loss (§4.5)."""
     mock_config_entry.add_to_hass(hass)
-    patched_client.set_status({"id": OTHER_DEVICE_ID})
+    patched_client.set_status({"id": FOREIGN_DEVICE_ID})
 
     result = await mock_config_entry.start_reconfigure_flow(hass)
     result = await hass.config_entries.flow.async_configure(
@@ -295,7 +295,7 @@ async def test_reconfigure_never_adopts_a_replacement_panel(
     assert result["reason"] == "wrong_panel"
     assert result["description_placeholders"] == {
         "expected_id": REFERENCE_DEVICE_ID,
-        "actual_id": OTHER_DEVICE_ID,
+        "actual_id": FOREIGN_DEVICE_ID,
     }
     assert mock_config_entry.unique_id == REFERENCE_DEVICE_ID
     assert mock_config_entry.data == {CONF_HOST: REFERENCE_HOST}

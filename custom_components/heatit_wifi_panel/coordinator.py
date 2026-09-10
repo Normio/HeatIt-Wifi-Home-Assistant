@@ -155,6 +155,10 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         for key in sorted(self.vanished_parameters & present):
             self.vanished_parameters.discard(key)
             LOGGER.info("%s is back in the panel's status", key)
+        # Once per *transition*, so a late parameter that goes away again is
+        # forgotten and its return is a second line: two appearances is the
+        # record that the panel is flapping rather than that it changed once.
+        self._appeared_parameters &= present
         appeared = present - self.observed_parameters - self._appeared_parameters
         for key in sorted(appeared):
             self._appeared_parameters.add(key)

@@ -24,6 +24,14 @@ REFERENCE_DEVICE_ID = "FIXTUREFIXTUREFIXTUREX"
 REFERENCE_HOST = "10.0.0.2"
 """Any address will do — the fake never looks at it — but a plausible one reads."""
 
+FOREIGN_DEVICE_ID = "OTHERPANELOTHERPANELXY"
+"""A *foreign panel*'s id: another unit that has taken over the address.
+
+Same shape as a real one, and deliberately never :data:`REFERENCE_DEVICE_ID` —
+the three suites that need one all mean the same panel, so they share it rather
+than each minting a look-alike.
+"""
+
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(request: pytest.FixtureRequest) -> None:
