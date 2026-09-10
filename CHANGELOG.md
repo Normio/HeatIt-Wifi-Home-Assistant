@@ -55,6 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `configuration_url`. `PLATFORMS` is empty until the platform tickets fill it,
   so a panel added now is one device with no entities.
 - `translations/en.json`, with the config, options and exception strings.
+- A spec amendment (§15) for the five contract corrections this work forced:
+  `OptionsFlowWithReload` in place of the update listener, the device
+  registered in `__init__.py` rather than by an entity, an empty `PLATFORMS`
+  until the platform tickets fill it, a fourth `async_step_dhcp` outcome, and
+  §6.2's poll-time *foreign panel* raising `ConfigEntryError` like the
+  setup-time one.
 - `tests/integration/`, the client seam: `FakeHeatitClient` joins `fakes.py`,
   and `config_flow.py` is held at 100 % line coverage by `scripts/check.sh`.
   mypy follows `pytest-homeassistant-custom-component` rather than ignoring it,

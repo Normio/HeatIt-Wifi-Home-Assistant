@@ -140,25 +140,54 @@ async def test_an_absent_mac_costs_only_the_connection(
     assert device.connections == set()
 
 
-async def test_a_poll_never_rewrites_the_name_or_the_title(
+async def test_the_name_and_the_room_are_read_once_at_creation(
     hass: HomeAssistant,
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """An app rename simply diverges; it does not reach Home Assistant (§4.4)."""
+    """An app rename simply diverges; it does not reach Home Assistant (§4.4).
+
+    Not only per poll: a reload does not pick it up either, because there is no
+    way to tell "the user renamed this in Home Assistant" from "the user never
+    touched it", and following the app would silently destroy the first.
+    """
     assert await setup_entry(hass, mock_config_entry)
+    original_area = dr.async_get(hass).async_get_device(
+        identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
+    )
+    assert original_area is not None
     patched_client.set_status({"name": "Renamed in the app", "room": "Hallway"})
 
     coordinator = mock_config_entry.runtime_data
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    assert await hass.config_entries.async_reload(mock_config_entry.entry_id)
 
     device = dr.async_get(hass).async_get_device(
         identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
     )
     assert device is not None
     assert device.name == "Näytehuone 1"
+    assert device.area_id == original_area.area_id
     assert mock_config_entry.title == "Näytehuone 1"
+
+
+async def test_the_firmware_and_model_are_refreshed_on_a_reload(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Facts about the hardware, not labels the user owns (§3.5)."""
+    assert await setup_entry(hass, mock_config_entry)
+    patched_client.set_status({"firmware": "1.22"})
+
+    assert await hass.config_entries.async_reload(mock_config_entry.entry_id)
+
+    device = dr.async_get(hass).async_get_device(
+        identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
+    )
+    assert device is not None
+    assert device.sw_version == "1.22"
 
 
 @pytest.mark.parametrize("failure", RETRYING_FAILURES)

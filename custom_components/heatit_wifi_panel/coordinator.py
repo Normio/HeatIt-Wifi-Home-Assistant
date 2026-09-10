@@ -35,6 +35,7 @@ from .const import (
     DOMAIN,
     LOGGER,
     VERIFIED_FIRMWARES,
+    foreign_panel_placeholders,
 )
 from .registry import PARAMETERS
 
@@ -116,10 +117,9 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
             raise ConfigEntryError(
                 translation_domain=DOMAIN,
                 translation_key="foreign_panel",
-                translation_placeholders={
-                    "expected_id": str(expected_id),
-                    "actual_id": status.device_id,
-                },
+                translation_placeholders=foreign_panel_placeholders(
+                    str(expected_id), status.device_id
+                ),
             )
 
         self._note_presence(status)

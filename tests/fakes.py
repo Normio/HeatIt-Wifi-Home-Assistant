@@ -69,19 +69,15 @@ class FakeHeatitClient:
     a later poll returns.
     """
 
-    def __init__(self, raw: bytes, headers: Mapping[str, str] | None = None) -> None:
+    def __init__(self, raw: bytes) -> None:
         """Answer reads from ``raw`` until a test says otherwise."""
         self.raw = raw
-        self.headers = dict(headers or {"Content-Type": "application/json"})
         self.status_reads = 0
         self.writes: list[tuple[str, object]] = []
         self.resets: list[str] = []
         self.echoes: dict[str, object] = {}
         """Force a *write echo* for one parameter — the *silent undo* case."""
         self._failures: deque[Exception] = deque()
-        self.last_raw_body: bytes | None = None
-        self.last_raw_headers: Mapping[str, str] | None = None
-        self.last_status_retried = False
 
     def fail(self, error: Exception, times: int = 1) -> None:
         """Queue ``error`` for the next ``times`` status reads."""
@@ -96,8 +92,6 @@ class FakeHeatitClient:
         self.status_reads += 1
         if self._failures:
             raise self._failures.popleft()
-        self.last_raw_body = self.raw
-        self.last_raw_headers = dict(self.headers)
         return parse_status(self.raw)
 
     async def set_parameter(self, key: str, value: object) -> object:

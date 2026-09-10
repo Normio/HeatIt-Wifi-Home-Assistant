@@ -20,6 +20,7 @@ from homeassistant.const import CONF_HOST, Platform
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import UNDEFINED
 
 from .api import HeatitClient
 from .const import DOMAIN, FALLBACK_DEVICE_NAME, MANUFACTURER
@@ -65,22 +66,26 @@ def _async_register_device(
     device id has a migration path rather than a dead end (ADR-0003). There is
     deliberately **no** ``configuration_url``: the panel serves no web UI.
 
-    ``suggested_area`` is honoured by the device registry at creation only, and
-    the entry title was read once when the entry was created, so neither an
-    app rename nor a room change reaches Home Assistant by itself. A Home
-    Assistant rename is held in the registry's own ``name_by_user`` and
-    survives this call.
+    ``name`` and ``suggested_area`` are written **at creation only** (§4.4).
+    The registry honours ``suggested_area`` when it makes the device and
+    ignores it afterwards; ``name`` is withheld on every later setup, so a
+    rename in the MyHeatit app simply diverges instead of overwriting what
+    Home Assistant shows. ``model`` and ``sw_version`` are refreshed each
+    setup instead — they are facts about the hardware, and §3.5 has a firmware
+    change picked up on reload.
     """
     device_registry = dr.async_get(hass)
+    identifiers = {(DOMAIN, status.device_id)}
+    creating = device_registry.async_get_device(identifiers=identifiers) is None
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, status.device_id)},
+        identifiers=identifiers,
         connections=(
             {(dr.CONNECTION_NETWORK_MAC, status.mac)} if status.mac else set()
         ),
         manufacturer=MANUFACTURER,
         model=status.model,
-        name=status.name or FALLBACK_DEVICE_NAME,
+        name=(status.name or FALLBACK_DEVICE_NAME) if creating else UNDEFINED,
         suggested_area=status.room or None,
         sw_version=status.firmware,
     )

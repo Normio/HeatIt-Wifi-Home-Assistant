@@ -6,8 +6,13 @@ one shows raw keys (§3.1). The authored artifact is a fully-expanded
 ``translations/en.json``, and an unresolved key here is a raw key in front of a
 user.
 
-The key lists are transcribed from §4 and §6 rather than read out of the
-module, so this compares two independent encodings.
+**Wording is reviewed, not tested** (§8.6.4). What is asserted is that a key
+resolves and that a message carries the placeholders its call site fills — an
+`{expected_id}` the code never substitutes renders as literal braces to the
+user, which is a bug and not a matter of phrasing. The key lists are
+transcribed from §4 and §6 rather than read out of the module, so the two
+encodings stay independent; the placeholder *names* are read from the code,
+because agreeing on them is the whole point.
 """
 
 import json
@@ -15,6 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+from custom_components.heatit_wifi_panel.const import foreign_panel_placeholders
 
 TRANSLATIONS = (
     Path(__file__).parents[2]
@@ -74,13 +81,10 @@ def test_every_exception_message_is_written(
     assert translations["exceptions"][key]["message"]
 
 
-def test_the_options_step_describes_the_poll_interval(
-    translations: dict[str, Any],
-) -> None:
+def test_the_options_step_is_written(translations: dict[str, Any]) -> None:
     form = translations["options"]["step"]["init"]
     assert form["data"] == {"poll_interval": "Poll interval"}
-    description = form["data_description"]["poll_interval"]
-    assert "30" in description
+    assert form["data_description"]["poll_interval"]
 
 
 @pytest.mark.parametrize(
@@ -93,19 +97,17 @@ def test_the_options_step_describes_the_poll_interval(
 def test_a_foreign_panel_is_named_on_both_sides(
     translations: dict[str, Any], message: str
 ) -> None:
-    """Naming one id leaves the user guessing which panel they are looking at."""
+    """Naming one id leaves the user guessing which panel they are looking at.
+
+    The names come from :func:`foreign_panel_placeholders`, the one builder both
+    call sites use, so a renamed placeholder fails here rather than reaching a
+    user as literal braces.
+    """
     node: Any = translations
     for segment in message.split("."):
         node = node[segment]
-    assert "{expected_id}" in node
-    assert "{actual_id}" in node
-
-
-def test_wrong_panel_says_a_replacement_is_a_new_device(
-    translations: dict[str, Any],
-) -> None:
-    """The alternative is a button that quietly rewrites device identity (§4.5)."""
-    assert "added as a new device" in translations["config"]["abort"]["wrong_panel"]
+    for placeholder in foreign_panel_placeholders("expected", "actual"):
+        assert f"{{{placeholder}}}" in node
 
 
 def test_the_missing_field_message_carries_the_path(

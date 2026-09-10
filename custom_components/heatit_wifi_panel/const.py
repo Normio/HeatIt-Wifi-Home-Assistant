@@ -52,3 +52,15 @@ how fast Home Assistant notices *external* changes (§4.6)."""
 
 MIN_POLL_INTERVAL = 30
 """Seconds: three times the *poll budget*."""
+
+
+def foreign_panel_placeholders(expected_id: str, actual_id: str) -> dict[str, str]:
+    """Name both sides of a *foreign panel*, for one message or the other.
+
+    The same two ids reach the user twice — ``config.abort.wrong_panel`` when a
+    reconfigure refuses to adopt a replacement, and ``exceptions.foreign_panel``
+    when a poll or a setup meets one. Built here so the two call sites and the
+    two translated strings cannot drift on the placeholder names; a test asserts
+    both strings carry exactly these keys.
+    """
+    return {"expected_id": expected_id, "actual_id": actual_id}

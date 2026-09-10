@@ -43,6 +43,7 @@ from .const import (
     DOMAIN,
     FALLBACK_DEVICE_NAME,
     MIN_POLL_INTERVAL,
+    foreign_panel_placeholders,
 )
 
 if TYPE_CHECKING:
@@ -141,10 +142,9 @@ class HeatitWifiPanelConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(status.device_id)
                 self._abort_if_unique_id_mismatch(
                     reason="wrong_panel",
-                    description_placeholders={
-                        "expected_id": str(entry.unique_id),
-                        "actual_id": status.device_id,
-                    },
+                    description_placeholders=foreign_panel_placeholders(
+                        str(entry.unique_id), status.device_id
+                    ),
                 )
                 return self.async_update_reload_and_abort(entry, data={CONF_HOST: host})
         return self.async_show_form(
