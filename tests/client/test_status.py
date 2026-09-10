@@ -25,7 +25,7 @@ from custom_components.heatit_wifi_panel.api import (
 )
 from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.conftest import observed_directories
-from tests.fakes import ABSENT, mutated
+from tests.fakes import ABSENT, UNSCRUBBED, mutated
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -223,14 +223,6 @@ def test_signal_strength_parses_or_answers_none(
 # --- the one redaction ------------------------------------------------------
 
 
-UNSCRUBBED = {
-    "id": "AbCdEfGhIjKlMnOpQrStUv",
-    "Network.mac": "E4:B3:23:6A:D9:08",
-    "Network.SSID": "IOT 24",
-    "Network.ipAddress": "10.10.30.40",
-}
-
-
 def test_redact_status_replaces_exactly_the_four_identifiers(
     reference_status_bytes: bytes,
 ) -> None:
@@ -385,6 +377,9 @@ async def test_get_status_gives_up_after_two_attempts(
         await client.get_status()
 
     assert len(mocked.requests[("GET", URL(STATUS_URL))]) == 2
+    # The retry fired; it just did not help. A diagnostics download from a
+    # panel that goes away has to be able to say so (§7.3).
+    assert client.last_status_retried is True
 
 
 async def test_a_non_200_status_read_is_not_retried(

@@ -26,6 +26,19 @@ if TYPE_CHECKING:
 ABSENT = object()
 """Set a path to this to drop it from the synthesised status."""
 
+UNSCRUBBED: dict[str, str] = {
+    "id": "AbCdEfGhIjKlMnOpQrStUv",
+    "Network.mac": "E4:B3:23:6A:D9:08",
+    "Network.SSID": "IOT 24",
+    "Network.ipAddress": "10.10.30.40",
+}
+"""The four scrubbed fields as a real panel would answer them.
+
+Every committed fixture carries the placeholders, so a test of the redaction
+has to put the real thing back first (§7.1). Shared by the client's scrub tests
+and the diagnostics rule test, which mean the same panel.
+"""
+
 
 def mutated(raw: bytes, changes: Mapping[str, object]) -> bytes:
     """Derive a status from observed bytes by setting or dropping dotted paths.
@@ -69,9 +82,14 @@ class FakeHeatitClient:
     a later poll returns.
     """
 
-    def __init__(self, raw: bytes) -> None:
+    def __init__(self, raw: bytes, headers: Mapping[str, str] | None = None) -> None:
         """Answer reads from ``raw`` until a test says otherwise."""
         self.raw = raw
+        self.headers = dict(headers or {})
+        self.last_raw_body: bytes | None = None
+        self.last_raw_headers: Mapping[str, str] | None = None
+        self.last_status_retried = False
+        """Never set by a read: assign it to script a status read that retried."""
         self.status_reads = 0
         self.writes: list[tuple[str, object]] = []
         self.resets: list[str] = []
@@ -88,10 +106,16 @@ class FakeHeatitClient:
         self.raw = mutated(self.raw, changes)
 
     async def get_status(self) -> PanelStatus:
-        """Read the whole status, or raise the next scripted failure."""
+        """Read the whole status, or raise the next scripted failure.
+
+        The raw body and headers are retained the way the real client retains
+        them — set before the parse, and untouched by a read that failed.
+        """
         self.status_reads += 1
         if self._failures:
             raise self._failures.popleft()
+        self.last_raw_body = self.raw
+        self.last_raw_headers = self.headers
         return parse_status(self.raw)
 
     async def set_parameter(self, key: str, value: object) -> object:

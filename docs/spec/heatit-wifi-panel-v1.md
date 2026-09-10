@@ -1843,3 +1843,24 @@ already does — the coordinator catches it, logs one error line and fails the p
 `ConfigEntryError` and the coordinator raises it at both moments from one site: the translation key,
 the placeholders and everything the user sees are unchanged, and the alternative was a
 `config_entry.state` check whose only effect would have been the wording of a core log line.
+
+**2026-09-10 — §7.3's `entry_data` is redacted by key, not by the shared redaction** ([#46](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/46)).
+§7.3 sends `entry_data` and `options` "through the shared redaction", but §7.1's function scrubs four
+dotted paths *of a status*, and `entry.data` holds `host` alone — which none of them names. Applied
+there it scrubs nothing, and the download would carry the user's local address in the one field that
+is only ever that address. `entry_data` therefore goes through `async_redact_data(entry.data,
+{CONF_HOST})`, the key-based helper the platform provides for exactly this, and reads
+`**REDACTED**`; the host is hidden for the same reason §7.1 hides `Network.ipAddress`, being the
+same address by another name. §7.3's own next sentence already reserves the shared scrub for the
+`raw` section, where a key-based helper can do nothing. `options` needs neither: the *poll interval*
+is a number the user chose.
+
+**2026-09-10 — the retained retry flag means the retry was *used*, not that it *worked*** ([#46](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/46)).
+§3.2's retained state was written for §7.2's debug line, which fires only when a second attempt
+succeeds. §7.3's `last_poll` asks "whether the retry was used", and the poll a user reports is
+usually the one where both attempts failed. The flag is now set when the second attempt is *made*,
+so a `cannot_connect` poll reports `retried: true`; the debug line's cadence is unchanged. The
+record itself — outcome, duration and that flag — is a frozen `PollRecord` the coordinator writes on
+the way out of every poll, good or bad, so the download describes the poll that just happened rather
+than the last one that happened to succeed. Its `outcome` is the poll's own translation key
+(`cannot_connect`, `missing_field`, `invalid_response`, `foreign_panel`), or `ok`.

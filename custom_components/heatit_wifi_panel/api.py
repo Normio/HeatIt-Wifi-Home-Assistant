@@ -406,7 +406,12 @@ class HeatitClient:
         self.last_raw_headers: Mapping[str, str] | None = None
         """The last status response headers as received."""
         self.last_status_retried = False
-        """Whether the last status read needed its retry."""
+        """Whether the last status read used its retry, successfully or not.
+
+        Set when the second attempt is *made*, so the diagnostics download of
+        §7.3 answers "did the retry fire?" for a poll that failed as well as
+        for one that recovered.
+        """
 
     async def get_status(self) -> PanelStatus:
         """Read the whole *status*: the only read, and the only retried request.
@@ -496,9 +501,9 @@ class HeatitClient:
                 if attempt == STATUS_ATTEMPTS:
                     raise
                 first_error = err
+                self.last_status_retried = True
                 continue
             if first_error is not None:
-                self.last_status_retried = True
                 LOGGER.debug(
                     "status read of %s succeeded on retry; first attempt: %s",
                     self._host,
