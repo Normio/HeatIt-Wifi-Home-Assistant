@@ -6,12 +6,18 @@ observed fixture: parse the reference bytes, change the named paths, re-encode.
 Every unobserved part of a synthesised status is therefore real, and no
 synthesised fixture may introduce a field no observed fixture contains.
 
-The fake client itself joins this module with the coordinator ticket.
+Alongside them: :class:`FakeHeatitClient`, the seam the config flow, the
+coordinator and the entities are tested at (§8.4). It is built from observed
+bytes and parses them with the **real** parser, so its status shape can never
+drift from what the client produces.
 """
 
 import json
+from collections import deque
 from typing import TYPE_CHECKING, Any
 
+from custom_components.heatit_wifi_panel.api import PanelStatus, parse_status
+from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.conftest import SYNTHESISED_DIR
 
 if TYPE_CHECKING:
@@ -50,3 +56,63 @@ def synthesised_manifest() -> dict[str, dict[str, Any]]:
     manifest = json.loads((SYNTHESISED_DIR / "manifest.json").read_text("utf-8"))
     files: dict[str, dict[str, Any]] = manifest["files"]
     return files
+
+
+class FakeHeatitClient:
+    """The real client's four methods over observed bytes, and a ledger.
+
+    Reads answer from :attr:`raw`, parsed by the real parser; writes are
+    recorded and echoed the way the device echoes — the *applied* value, type
+    normalised — so an optimistic update is exercised against real behaviour.
+    Failures are scripted rather than simulated: :meth:`fail` queues the
+    exceptions the next reads raise, and :meth:`set_status` mutates the status
+    a later poll returns.
+    """
+
+    def __init__(self, raw: bytes, headers: Mapping[str, str] | None = None) -> None:
+        """Answer reads from ``raw`` until a test says otherwise."""
+        self.raw = raw
+        self.headers = dict(headers or {"Content-Type": "application/json"})
+        self.status_reads = 0
+        self.writes: list[tuple[str, object]] = []
+        self.resets: list[str] = []
+        self.echoes: dict[str, object] = {}
+        """Force a *write echo* for one parameter — the *silent undo* case."""
+        self._failures: deque[Exception] = deque()
+        self.last_raw_body: bytes | None = None
+        self.last_raw_headers: Mapping[str, str] | None = None
+        self.last_status_retried = False
+
+    def fail(self, error: Exception, times: int = 1) -> None:
+        """Queue ``error`` for the next ``times`` status reads."""
+        self._failures.extend([error] * times)
+
+    def set_status(self, changes: Mapping[str, object]) -> None:
+        """Derive the status later reads return, by dotted path (:func:`mutated`)."""
+        self.raw = mutated(self.raw, changes)
+
+    async def get_status(self) -> PanelStatus:
+        """Read the whole status, or raise the next scripted failure."""
+        self.status_reads += 1
+        if self._failures:
+            raise self._failures.popleft()
+        self.last_raw_body = self.raw
+        self.last_raw_headers = dict(self.headers)
+        return parse_status(self.raw)
+
+    async def set_parameter(self, key: str, value: object) -> object:
+        """Record the write and echo what the device would have applied."""
+        descriptor = PARAMETERS[key]
+        wire_value = descriptor.to_wire(value)
+        self.writes.append((key, descriptor.serialise(wire_value)))
+        if key in self.echoes:
+            return self.echoes[key]
+        return descriptor.decode(wire_value)
+
+    async def reset_kwh(self) -> None:
+        """Record an *energy counter* reset."""
+        self.resets.append("kwh")
+
+    async def reset_settings(self) -> None:
+        """Record a settings reset."""
+        self.resets.append("settings")

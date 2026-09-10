@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - The `heatit_wifi_panel` integration package with its manifest and brand
-  assets, `hacs.json`, and a config flow with no steps yet.
+  assets, and `hacs.json`.
 - `scripts/check.sh`, the one entry point for ruff, `ruff format --check`, mypy
   strict and `scripts/check_layout.py`, run locally and by CI from the same file.
 - `validate.yml` (HACS Action, hassfest), `test.yml` and a changelog check on
@@ -35,6 +35,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the exception taxonomy of spec §3.2. Bytes are decoded as UTF-8 explicitly;
   the verdict is HTTP 200 and a `status` matched after stripping; the device's
   `reason` is surfaced verbatim and never parsed.
+- `config_flow.py`, the user, DHCP and reconfigure steps and the options flow
+  of spec §4. The user step is host-only and validates with a `GET` through the
+  client's own parser; `model` never gates it. `async_step_dhcp` reads the
+  status at the discovered address to learn the *device id*, which the DHCP
+  packet does not carry, then repoints the entry. Reconfigure never adopts a
+  replacement panel: `_abort_if_unique_id_mismatch` aborts with a string naming
+  both the expected and the found device id. Options hold the *poll interval*
+  alone — 60 s by default, 30 s minimum — applied by reloading the entry.
+- `coordinator.py`, the `HeatitWifiPanelConfigEntry` alias and the coordinator.
+  A failed poll is `UpdateFailed` and every entity goes unavailable on the
+  first one; a *foreign panel* is `ConfigEntryError`, naming both ids, at setup
+  and on every poll thereafter. The *observed parameters* are fixed at setup,
+  and one that vanishes, returns or appears late logs at spec §7.2's level,
+  once per transition.
+- `async_setup_entry` / `async_unload_entry`, and the device: identifiers from
+  the *device id*, the MAC in `connections`, manufacturer, model, name,
+  `sw_version`, the *assigned room* as an area suggestion, and no
+  `configuration_url`. `PLATFORMS` is empty until the platform tickets fill it,
+  so a panel added now is one device with no entities.
+- `translations/en.json`, with the config, options and exception strings.
+- `tests/integration/`, the client seam: `FakeHeatitClient` joins `fakes.py`,
+  and `config_flow.py` is held at 100 % line coverage by `scripts/check.sh`.
+  mypy follows `pytest-homeassistant-custom-component` rather than ignoring it,
+  so a `MockConfigEntry` does not decay to `Any` and disarm the type check.
 - `registry.py`, the thirteen observed parameters with their serialisers,
   steps, bounds, read paths, scales and presence flags. Off-step and
   out-of-range values are rejected locally, before any request exists.

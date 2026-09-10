@@ -32,3 +32,23 @@ STATUS_ATTEMPTS = 2
 
 POLL_BUDGET = STATUS_TIMEOUT_SECONDS * STATUS_ATTEMPTS
 """The longest a single status read may take, retry included: 10 s."""
+
+MANUFACTURER = "Heatit"
+"""``DeviceInfo.manufacturer``; the model comes from the device (§3.5)."""
+
+FALLBACK_DEVICE_NAME = "Heatit WiFi Panel"
+"""Entry title and device name when the panel returns no ``name``.
+
+``name`` is free text the MyHeatit app writes and is *not* part of the
+*required core*, so a panel that never had a name set still needs a title.
+"""
+
+CONF_POLL_INTERVAL = "poll_interval"
+"""The only option key: ``ConfigEntry.options`` holds the *poll interval* alone."""
+
+DEFAULT_POLL_INTERVAL = 60
+"""Seconds. Every write schedules its own refresh, so the interval governs only
+how fast Home Assistant notices *external* changes (§4.6)."""
+
+MIN_POLL_INTERVAL = 30
+"""Seconds: three times the *poll budget*."""

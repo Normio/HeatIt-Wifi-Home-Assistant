@@ -28,12 +28,18 @@ run_lint() {
 
 run_tests() {
   mypy custom_components scripts tests
-  # Coverage is measured and reported, not gated (§8.7). The one gate — 100 %
-  # line coverage of config_flow.py — arrives with the config flow itself.
+  # Overall coverage is measured and reported, not gated (§8.7): core's silver
+  # 95 % is not inherited.
   python3 -m pytest \
     --quiet \
     --cov=custom_components/heatit_wifi_panel \
     --cov-report=term-missing
+  # The one gate. config_flow.py is small and every line of it is a path a user
+  # can walk, so a missed line there is a user-facing bug rather than a
+  # coverage statistic. Reads the run above's .coverage.
+  python3 -m coverage report \
+    --fail-under=100 \
+    --include='*/config_flow.py'
 }
 
 case "${1:-all}" in

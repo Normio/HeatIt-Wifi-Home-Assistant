@@ -47,6 +47,14 @@ explicit_package_bases = true
 # pytest equivalent is ``pythonpath`` below.
 mypy_path = ["scripts"]
 
+[[tool.mypy.overrides]]
+# pytest-homeassistant-custom-component ships no py.typed marker, so mypy
+# strict refuses it outright. Its source is annotated, so follow it rather than
+# silencing it: ignore_missing_imports would make every MockConfigEntry an Any
+# and quietly disarm mypy across the integration tests.
+module = ["pytest_homeassistant_custom_component.*"]
+follow_untyped_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
