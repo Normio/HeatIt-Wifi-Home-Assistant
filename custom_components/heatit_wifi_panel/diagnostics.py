@@ -3,20 +3,23 @@
 ``async_get_config_entry_diagnostics`` **only** — one entry is one device
 (§4.7), so a device download would repeat this one word for word.
 
-Two scrubs meet here, and the difference between them is the point.
+Three scrubs meet here, and the differences between them are the point.
 ``async_redact_data`` replaces values by dict **key**, which is exactly right
 for ``entry.data``, where the sensitive thing is the key ``host``. It can do
-nothing for the ``raw`` section, which is a *string* of JSON as the panel sent
-it: there the shared wire-level scrub of §7.1 substitutes the four identifiers
-in place, the same substitution ``scripts/capture_fixtures.py`` writes into a
-fixture. So the raw section of a download from an unverified panel **is** a
-fixture candidate, byte for byte, and that is what shipping it is for — it
-preserves the fields the parser does not model.
+nothing for the ``raw`` body, a *string* of JSON as the panel sent it: there
+the wire-level scrub of §7.1 substitutes the four identifiers in place, the
+same substitution ``scripts/capture_fixtures.py`` writes into a fixture, so
+that body is a capture of this panel that preserves the fields the parser does
+not model. And neither works on a **header**, which names nothing and could
+carry anything, so a header value is scrubbed by looking for this panel's own
+identifiers in it (:func:`~.api.redact_text`). One field list, three shapes of
+text.
 
-``name`` and ``room`` survive both scrubs. They are human labels rather than
-identifiers, and ``name`` is the evidence that the charset-less UTF-8 decode is
-required; the fixture-only fifth placeholder is the capture script's alone
-(§8.3).
+A download from an unverified panel is therefore a fixture candidate: one
+``name`` substitution — §8.3's fifth placeholder, the capture script's alone —
+short of a committed capture. ``name`` and ``room`` survive every scrub here.
+They are human labels rather than identifiers, and ``name`` is the evidence
+that the charset-less UTF-8 decode is required.
 """
 
 from __future__ import annotations
@@ -27,10 +30,13 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_HOST
 
-from .api import redact_status, redact_status_bytes
+from .api import redact_status, redact_status_bytes, redact_text
 from .const import VERIFIED_FIRMWARES
+from .coordinator import poll_interval
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from homeassistant.core import HomeAssistant
 
     from .api import HeatitClient
@@ -56,27 +62,39 @@ async def async_get_config_entry_diagnostics(
     return {
         "entry_data": async_redact_data(dict(entry.data), TO_REDACT),
         "options": dict(entry.options),
+        # §7.3 wants the *poll interval* in the download, and ``options`` is
+        # empty until the user opens the options flow: the interval in force
+        # is a fact about the panel, the stored options a fact about the entry.
+        "poll_interval_seconds": poll_interval(entry).total_seconds(),
         "status": redact_status(status.document),
         "firmware": status.firmware,
         "firmware_verified": status.firmware in VERIFIED_FIRMWARES,
         "observed_parameters": sorted(coordinator.observed_parameters),
         "vanished_parameters": sorted(coordinator.vanished_parameters),
         "last_poll": (asdict(coordinator.last_poll) if coordinator.last_poll else None),
-        "raw": _raw_status(coordinator.client),
+        "raw": _raw_status(coordinator.client, status.document),
     }
 
 
-def _raw_status(client: HeatitClient) -> dict[str, Any] | None:
+def _raw_status(
+    client: HeatitClient, document: Mapping[str, Any]
+) -> dict[str, Any] | None:
     """Return the last status body and headers as received, scrubbed at the wire.
 
     The body is the panel's own bytes — key order, spacing and ``0.00``
     intact — decoded for the JSON download. ``errors="replace"`` cannot fire
     on a body that parsed, and is there so that a body that did *not* is still
     reportable rather than an exception inside diagnostics.
+
+    ``document`` is the parsed status the identifiers are read out of, because
+    a header carries values with no key to find them by.
     """
     if client.last_raw_body is None:
         return None
     return {
         "body": redact_status_bytes(client.last_raw_body).decode("utf-8", "replace"),
-        "headers": dict(client.last_raw_headers or {}),
+        "headers": {
+            name: redact_text(value, document)
+            for name, value in (client.last_raw_headers or {}).items()
+        },
     }

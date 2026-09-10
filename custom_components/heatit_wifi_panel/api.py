@@ -351,6 +351,24 @@ def substitute_string_field(raw: bytes, key: str, placeholder: str) -> bytes:
     return re.sub(pattern, rb'\1"' + placeholder.encode() + b'"', raw)
 
 
+def redact_text(text: str, document: Mapping[str, Any]) -> str:
+    """Replace this panel's own identifiers wherever they occur in free text.
+
+    The third face of the one redaction, for text that is neither a parsed
+    status nor a JSON body: a response header. The fields and placeholders are
+    :data:`REDACTED_FIELDS`, but the value to look for is read from the status
+    the panel just returned, because a header does not name its contents.
+
+    Substring matching, so it can only ever over-scrub — which at the wire is
+    the documented direction (:func:`redact_status_bytes`).
+    """
+    for path, placeholder in REDACTED_FIELDS.items():
+        value = resolve(document, path)
+        if isinstance(value, str) and value:
+            text = text.replace(value, placeholder)
+    return text
+
+
 def redact_status_bytes(raw: bytes) -> bytes:
     """Apply the same scrub to the raw bytes, by targeted substitution.
 

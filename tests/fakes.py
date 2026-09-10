@@ -16,7 +16,11 @@ import json
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
-from custom_components.heatit_wifi_panel.api import PanelStatus, parse_status
+from custom_components.heatit_wifi_panel.api import (
+    PanelStatus,
+    parse_status,
+    substitute_string_field,
+)
 from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.conftest import SYNTHESISED_DIR
 
@@ -59,6 +63,20 @@ def mutated(raw: bytes, changes: Mapping[str, object]) -> bytes:
     return json.dumps(document, ensure_ascii=False).encode("utf-8")
 
 
+def unscrubbed(raw: bytes) -> bytes:
+    """Put a real panel's four identifiers back into a committed fixture.
+
+    The inverse of the shared wire-level scrub, and done the same way: only the
+    quoted values move, so ``0.00`` stays ``0.00`` and the result is what the
+    panel *actually* sent, byte for byte. :func:`mutated` cannot be used for
+    this — it re-serialises through ``json.dumps`` — and a test that scrubs a
+    fixture that is already scrubbed proves only that nothing was mangled.
+    """
+    for path, real in UNSCRUBBED.items():
+        raw = substitute_string_field(raw, path.rsplit(".", 1)[-1], real)
+    return raw
+
+
 def synthesised(name: str) -> bytes:
     """Load a transcribed write-path response from ``fixtures/synthesised/``."""
     return (SYNTHESISED_DIR / name).read_bytes()
@@ -88,8 +106,9 @@ class FakeHeatitClient:
         self.headers = dict(headers or {})
         self.last_raw_body: bytes | None = None
         self.last_raw_headers: Mapping[str, str] | None = None
+        self.retries = False
+        """Set this to script reads whose status took the retry (§3.6)."""
         self.last_status_retried = False
-        """Never set by a read: assign it to script a status read that retried."""
         self.status_reads = 0
         self.writes: list[tuple[str, object]] = []
         self.resets: list[str] = []
@@ -109,9 +128,12 @@ class FakeHeatitClient:
         """Read the whole status, or raise the next scripted failure.
 
         The raw body and headers are retained the way the real client retains
-        them — set before the parse, and untouched by a read that failed.
+        them — set before the parse, and untouched by a read that failed — and
+        the retry flag is decided per read the way the real one decides it,
+        rather than staying wherever a test last put it.
         """
         self.status_reads += 1
+        self.last_status_retried = self.retries
         if self._failures:
             raise self._failures.popleft()
         self.last_raw_body = self.raw

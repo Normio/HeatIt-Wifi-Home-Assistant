@@ -23,12 +23,13 @@ from custom_components.heatit_wifi_panel import diagnostics
 from custom_components.heatit_wifi_panel.api import HeatitConnectionError
 from custom_components.heatit_wifi_panel.const import (
     CONF_POLL_INTERVAL,
+    DEFAULT_POLL_INTERVAL,
     DOMAIN,
     VERIFIED_FIRMWARES,
 )
 from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.conftest import REFERENCE_FIRMWARE
-from tests.fakes import ABSENT, UNSCRUBBED, FakeHeatitClient
+from tests.fakes import ABSENT, UNSCRUBBED, FakeHeatitClient, unscrubbed
 from tests.integration.conftest import setup_entry
 
 if TYPE_CHECKING:
@@ -69,6 +70,7 @@ async def test_the_download_carries_the_whole_picture(
 
     assert payload["entry_data"] == {CONF_HOST: "**REDACTED**"}
     assert payload["options"] == {}
+    assert payload["poll_interval_seconds"] == DEFAULT_POLL_INTERVAL
     assert payload["status"] == json.loads(reference_status_bytes)
     assert payload["firmware"] == REFERENCE_FIRMWARE
     assert payload["firmware_verified"] is True
@@ -89,7 +91,12 @@ async def test_the_options_are_the_poll_interval(
     hass_client: ClientSessionGenerator,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The one option key there is, at a value nothing defaults to."""
+    """The one option key there is, at a value nothing defaults to.
+
+    Both keys are here because an empty ``options`` is the common case — the
+    user who never opened the options flow — and the interval in force is what
+    a bug report needs either way.
+    """
     mock_config_entry.add_to_hass(hass)
     hass.config_entries.async_update_entry(
         mock_config_entry, options={CONF_POLL_INTERVAL: 45}
@@ -98,16 +105,27 @@ async def test_the_options_are_the_poll_interval(
     payload = await download(hass, hass_client, mock_config_entry)
 
     assert payload["options"] == {CONF_POLL_INTERVAL: 45}
+    assert payload["poll_interval_seconds"] == 45
 
 
-@pytest.mark.usefixtures("patched_client")
 async def test_no_identifier_of_the_users_network_survives(
     hass: HomeAssistant,
     hass_client: ClientSessionGenerator,
     patched_client: FakeHeatitClient,
+    reference_status_bytes: bytes,
 ) -> None:
-    """§9.2's ``diagnostics`` rule test: neither section carries one out."""
-    patched_client.set_status(UNSCRUBBED)
+    """§9.2's ``diagnostics`` rule test, over what a real panel would send.
+
+    The committed fixture carries the placeholders already, so scrubbing it
+    proves nothing; the four identifiers go back in at the **wire** level
+    first, which leaves every other byte where the panel put it. The raw
+    section must then come back byte-equal to the fixture.
+    """
+    patched_client.raw = unscrubbed(reference_status_bytes)
+    # A header that names nothing and carries an address anyway. No observed
+    # firmware sends one — which is exactly why the scrub cannot be skipped on
+    # the strength of the two headers this one does send.
+    patched_client.headers["Location"] = f"http://{UNSCRUBBED['Network.ipAddress']}/"
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Näytehuone 1",
@@ -120,11 +138,11 @@ async def test_no_identifier_of_the_users_network_survives(
     text = json.dumps(payload, ensure_ascii=False)
     assert not [real for real in UNSCRUBBED.values() if real in text]
     assert REAL_HOST not in text
-    # Both sections scrubbed, not one of them dropped.
+    # Every section scrubbed, not one of them dropped.
     assert payload["status"]["id"] == "FIXTUREFIXTUREFIXTUREX"
     assert payload["status"]["Network"]["SSID"] == "SSID-REDACTED"
-    assert '"SSID-REDACTED"' in payload["raw"]["body"]
-    assert '"02:00:00:00:00:01"' in payload["raw"]["body"]
+    assert payload["raw"]["body"].encode("utf-8") == reference_status_bytes
+    assert payload["raw"]["headers"]["Location"] == "http://10.0.0.2/"
     # ``name`` is a label, not an identifier, and it is what proves the
     # charset-less UTF-8 decode: logging and diagnostics keep it (§8.3).
     assert payload["status"]["name"] == "Näytehuone 1"
@@ -154,7 +172,7 @@ async def test_a_retried_poll_says_the_retry_was_used(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """The one dropped-packet tolerance there is, visible in the download."""
-    patched_client.last_status_retried = True
+    patched_client.retries = True
 
     payload = await download(hass, hass_client, mock_config_entry)
 

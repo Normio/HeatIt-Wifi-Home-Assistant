@@ -36,9 +36,9 @@ reboot of the panel, the router or the lease.
 ## Diagnostics
 
 The panel's device page offers **Download diagnostics**. The file holds the
-panel's status as the integration parsed it, the status response exactly as the
-panel sent it, the firmware and whether it is one of the versions above, and
-what the last poll did. The panel's `id`, MAC, WiFi SSID and IP address are
+panel's status as the integration parsed it, the same status as raw bytes
+exactly as the panel sent them, the firmware and whether it is one of the
+versions above, and what the last poll did. The panel's `id`, MAC, WiFi SSID and IP address are
 replaced with fixed placeholders on the way out, and so is the panel's address
 in your configuration, so the download can be attached to an issue as it is.
 The panel's name and room are kept: they are labels, not identifiers.

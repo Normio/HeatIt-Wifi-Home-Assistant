@@ -60,7 +60,11 @@ class PollRecord:
 
     outcome: str
     """``ok``, or the poll's own translation key — ``cannot_connect``,
-    ``missing_field``, ``invalid_response``, ``foreign_panel``."""
+    ``missing_field``, ``invalid_response``, ``foreign_panel``.
+
+    ``unknown`` covers what carries no key at all: a cancelled refresh, or a
+    failure that is a bug rather than a panel being a panel.
+    """
 
     duration_seconds: float
     """Wall-clock seconds for the whole poll, the status read's retry included."""
@@ -126,7 +130,7 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         try:
             status = await self._poll()
         except HomeAssistantError as err:
-            outcome = err.translation_key or type(err).__name__
+            outcome = err.translation_key or "unknown"
             raise
         else:
             outcome = "ok"

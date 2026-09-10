@@ -1864,3 +1864,19 @@ record itself — outcome, duration and that flag — is a frozen `PollRecord` t
 the way out of every poll, good or bad, so the download describes the poll that just happened rather
 than the last one that happened to succeed. Its `outcome` is the poll's own translation key
 (`cannot_connect`, `missing_field`, `invalid_response`, `foreign_panel`), or `ok`.
+
+**2026-09-10 — §7.3's raw *headers* are scrubbed by value, and the download names the poll interval** ([#46](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/46)).
+Two refinements the download itself forced. (1) §7.3 sends body *and headers* "through the same
+wire-level scrub", but that scrub is a substitution on `"key": "value"` JSON pairs and a header is
+neither JSON nor keyed by anything it carries — applied to one it does nothing. `redact_text` is the
+third face of the one redaction: same four fields, same placeholders, but the value to look for is
+read out of the status the panel just returned and replaced wherever it occurs in the header value.
+It can only over-scrub, which at the wire is the documented direction. The observed firmware sends
+`Content-Type` and `Content-Length` alone, which is exactly why this is not left to the observation:
+the section exists to carry what *this* firmware does that no fixture covers. `scripts/capture_fixtures.py`
+still writes headers verbatim — it captures from a panel the developer owns, into a file they read
+before committing. (2) §7.3's `entry_data` and `options` gloss reads "(host, poll interval)", but
+`ConfigEntry.options` is empty until the user opens the options flow, so a default download named no
+interval at all. `options` stays the stored options — the truth about the entry — and
+`poll_interval_seconds` beside it is the interval in force. Both, because a bug report needs the
+effective number and a reviewer needs to know whether the user ever chose it.
