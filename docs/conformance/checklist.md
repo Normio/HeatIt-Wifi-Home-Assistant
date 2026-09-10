@@ -35,8 +35,8 @@ Automated rows are run by `scripts/probe.py`, which selects checks by the ids in
 ```
 probe.py                 → read tier only, unattended, no approval
 probe.py --writes        → + benign writes, snapshotted and restore-verified
-probe.py --destructive   → + kWh reset, settings reset          (y/N)
-probe.py --thermal       → + heater-on sequences                (y/N, TTY required)
+probe.py --destructive   → + kWh reset, settings reset          (y/N, TTY required)
+probe.py --thermal       → + heater-on sequences                (typed confirmation, TTY required)
 ```
 
 `/api/reset/factory` is **structurally absent** from the probe: the path string appears nowhere in
@@ -87,7 +87,7 @@ as what v1 claimed, with its corrections appended and dated.
 | Q15 | The temperature limits bound **both** banks, `min < max` is enforced, and narrowing a limit clamps a stored setpoint | silent | write | verified fw 1.21 | [#8](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/8) | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) dynamic bounds |
 | Q16 | The temperature limits also constrain low temperature protection | silent | manual | open | [P-7](#p-7) | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) entity table |
 | Q17 | `loadLimit` above the reported `maxLoad` is rejected, not accepted-and-misbehaving | silent | write | open | — | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) load limit bounds |
-| Q18 | `state` reads `Idle` when the panel mode is Off | agrees | read | verified fw 1.21 | [#8](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/8) | [#8](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/8) `hvac_action` mapping |
+| Q18 | `state` reads `Idle` when the panel mode is Off | agrees | write | verified fw 1.21 | [#8](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/8) | [#8](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/8) `hvac_action` mapping |
 | Q19 | `state` reads `Heating` whenever the relay is closed, including while open window detection or low temperature protection is overriding | silent | manual | open | [P-4](#p-4), [P-7](#p-7) | [#8](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/8) `hvac_action` mapping |
 | Q20 | `currentPower` trails the relay by ~15 s and must never drive `hvac_action` | silent | thermal | verified fw 1.21 | [#8](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/8) | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) power sensor |
 | Q21 | A kWh reset lands the counter at exactly `0.00`, never a partial value | silent | destructive | verified fw 1.21 | [#18](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/18) | [#18](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/18) `total_increasing` and the 10 % dip rule |

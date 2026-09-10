@@ -23,16 +23,32 @@ ignore = [
   "ISC001", # implicit string concatenation on one line is what the formatter produces
 ]
 
+# Per-file ignores only under tests/ (§9.3): a test asserts, and its name is
+# its documentation.
 [tool.ruff.lint.per-file-ignores]
-# Tests assert, and a test's literal is its expected value, not a magic number.
-"tests/**" = ["S101", "PLR2004"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-# The scripts are standalone entry points, not a package; tests import them by
-# module name from here.
-pythonpath = ["scripts"]
+"tests/**" = [
+  "S101",    # assert is the test idiom
+  "D103",    # a test function's name is its docstring
+  "PLR2004", # the literal in a test is the expected value, not a magic number
+  "PLR0913", # a parametrised test takes one argument per column
+  "PLR0917", # as above
+]
 
 [tool.mypy]
 python_version = "3.14"
 strict = true
+# custom_components/ is a namespace package (Home Assistant never ships an
+# __init__.py there), and scripts/capture_fixtures.py imports the client by its
+# full dotted name. Without this, mypy sees api.py under two module names.
+explicit_package_bases = true
+# ...which makes the base directories explicit too, and scripts/ is one of them:
+# without this, scripts/probe.py becomes module ``scripts.probe`` and the
+# ``import probe`` in check_conformance.py and the tests stops resolving. The
+# pytest equivalent is ``pythonpath`` below.
+mypy_path = ["scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# scripts/ is deliberately not a package; the tests import its modules by name.
+pythonpath = ["scripts"]

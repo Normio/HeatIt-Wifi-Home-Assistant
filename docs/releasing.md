@@ -36,7 +36,7 @@ Every job runs against the tagged commit, and the publish job `needs` all of:
 | Job | What it is |
 |---|---|
 | Validate | `validate.yml` called whole: HACS Action and hassfest, no `ignore:` |
-| Test | `test.yml` called whole: `scripts/check.sh`, so ruff, mypy, the check scripts and the tests — and both pytest rows once #38 adds them. A job that is `continue-on-error` on pull requests must not be on a tag, or the gate would pass over its failure; `tests/scripts/test_release_gate.py` fails when one is |
+| Test | `test.yml` called whole: the `Lint` job and both pytest rows, so ruff, mypy, the check scripts and the tests. A job that is `continue-on-error` on pull requests must be off on a tag, or the gate would pass over its failure — `Tests (latest)` guards its own with `&& !startsWith(github.ref, 'refs/tags/')`, and `tests/scripts/test_release_gate.py` fails on any value that is not so guarded |
 | Lockstep | `scripts/check_release.py`: the tag names the manifest's version; the tagged commit is an ancestor of `main`; `LICENSE`, `hacs.json`, the manifest and `brand/icon.png` exist; `hacs.json` has `hide_default_branch: true` and an AwesomeVersion-parseable `homeassistant`; `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section |
 
 To rehearse the lockstep half before pushing, from the checkout holding the tag:
@@ -92,13 +92,17 @@ token tag deletion whatever `permissions:` it declares.
 
 **The `main` ruleset** ("Main", target `branch`): no deletion, no
 force-push, changes only through a pull request, and the blocking jobs of
-`test.yml`, `validate.yml` and `changelog.yml` required as status checks. On
-2026-09-09 those were `Checks`, `HACS Action`, `hassfest` and
-`Changelog entry`; when #38 splits `Checks` into `Lint`, `Tests (floor)` and
-`Tests (latest)`, the ruleset must follow by hand — `Lint` and
-`Tests (floor)` required, `Tests (latest)` not, since it is
-`continue-on-error`. This is the "blocks a merge" half of the linters and
-validators.
+`test.yml`, `validate.yml` and `changelog.yml` required as status checks.
+This is the "blocks a merge" half of the linters and validators.
+
+They must now be `Lint`, `Tests (floor)`, `HACS Action`, `hassfest` and
+`Changelog entry`. **This is an outstanding manual step.** The ruleset was
+written on 2026-09-09 naming `Checks`, the single job #38 has since split into
+`Lint`, `Tests (floor)` and `Tests (latest)`; until the owner renames it, every
+pull request stays blocked on a job that no longer runs, with every check
+green. `Tests (latest)` is deliberately *not* required — it is
+`continue-on-error` off a tag, a signal rather than a blocker (§8.7) — and no
+workflow token can edit a ruleset, so only the owner can do this.
 
 Check both with:
 
