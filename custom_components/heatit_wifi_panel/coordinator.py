@@ -11,20 +11,29 @@ The one exception is a *foreign panel*, which is ``ConfigEntryError``. Raised
 from the first refresh it is a permanent setup failure; raised from a scheduled
 poll ``DataUpdateCoordinator`` catches it, logs one error line and fails the
 poll — never escalating it, and never accepting the foreign status as data.
+
+Writing is here too, and for the same reason: a write is optimistic, and the
+poll is what settles it. :meth:`HeatitWifiPanelCoordinator.async_write_parameter`
+is the one write path every platform uses, so the *write echo*, the debounced
+refresh at :data:`POST_WRITE_REFRESH_DELAY` and the *silent undo* warning are
+written once rather than six times.
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, override
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.exceptions import ConfigEntryError
+from homeassistant.exceptions import ConfigEntryError, HomeAssistantError
+from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
     HeatitConnectionError,
     HeatitMissingFieldError,
+    HeatitParameterRejected,
     HeatitProtocolError,
     HeatitResponseError,
     PanelStatus,
@@ -34,6 +43,7 @@ from .const import (
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
     LOGGER,
+    POST_WRITE_REFRESH_DELAY,
     VERIFIED_FIRMWARES,
     foreign_panel_placeholders,
 )
@@ -76,6 +86,16 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
             config_entry=entry,
             name=entry.title,
             update_interval=poll_interval(entry),
+            # Core's own debouncer, retimed: every write asks for a refresh and
+            # a burst of them collapses into the one that judges them all.
+            # ``immediate=False`` is the whole point — refreshing *now* would
+            # read the panel before it has committed the write (Q31).
+            request_refresh_debouncer=Debouncer(
+                hass,
+                LOGGER,
+                cooldown=POST_WRITE_REFRESH_DELAY,
+                immediate=False,
+            ),
         )
         self.client = client
         self.observed_parameters: frozenset[str] = frozenset()
@@ -89,6 +109,74 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         """Those of :attr:`observed_parameters` the panel has stopped returning."""
         self._appeared_parameters: set[str] = set()
         self._presence_recorded = False
+        self._echoes: dict[str, object] = {}
+        """The *write echo* of each write awaiting its refresh, by wire name."""
+        self._undone_parameters: set[str] = set()
+        """Those a *silent undo* has already been warned about (§6.5)."""
+
+    def value_of(self, key: str) -> float | None:
+        """One parameter's value in user units, a pending *write echo* winning.
+
+        The echo is what the panel says it *applied*, so it is what an entity
+        shows until the refresh at :data:`POST_WRITE_REFRESH_DELAY` replaces it
+        with what the panel actually reports (§5.4).
+
+        ``None`` when this firmware does not return the parameter at all — the
+        entity is then unavailable rather than guessing. The view is numeric,
+        which covers every parameter behind a climate or number entity; a
+        boolean one reads as ``None`` here and wants its own accessor.
+        """
+        value = (
+            self._echoes[key]
+            if key in self._echoes
+            else PARAMETERS[key].read(self.data)
+        )
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            return None
+        return float(value)
+
+    async def async_write_parameter(self, key: str, *, value: float | bool) -> None:
+        """Write one parameter: the echo shows now, the refresh decides (§5.4).
+
+        ``value`` is in user-facing units, and keyword-only: a bare ``True``
+        at a call site says nothing about which switch it flips.
+
+        Every client failure becomes a ``HomeAssistantError`` carrying §6.4's
+        translation key, with the device's ``reason`` passed through verbatim;
+        a ``400`` is *not* a user error: Home Assistant's own layers and the
+        registry have both bounded the value already, so one that still reaches
+        the device means our bounds and the device's disagree.
+
+        The refresh is scheduled whether or not the write succeeded: the panel
+        commits within 300-600 ms, so a timeout on the *response* does not mean
+        the value did not stick. Availability is never touched here — the next
+        poll decides whether the panel is gone (§6.4).
+        """
+        try:
+            applied = await self.client.set_parameter(key, value)
+        except HeatitParameterRejected as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="parameter_rejected",
+                translation_placeholders={
+                    "parameter": err.parameter,
+                    "reason": err.reason,
+                },
+            ) from err
+        except HeatitConnectionError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="cannot_connect"
+            ) from err
+        except (HeatitProtocolError, HeatitResponseError) as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="unexpected_response",
+                translation_placeholders={"status": str(err)},
+            ) from err
+        finally:
+            await self.async_request_refresh()
+        self._echoes[key] = applied
+        self.async_update_listeners()
 
     @override
     async def _async_update_data(self) -> PanelStatus:
@@ -123,7 +211,35 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
             )
 
         self._note_presence(status)
+        self._judge_echoes(status)
         return status
+
+    def _judge_echoes(self, status: PanelStatus) -> None:
+        """Compare each pending *write echo* with what the panel now reports.
+
+        A mismatch is a *silent undo*: a write the panel acknowledged and then
+        did not apply. Client-side quantisation has already removed the snap
+        case, so what remains is a genuine refusal disguised as success — a
+        ``warning`` once per parameter per entry lifetime, ``debug`` after that
+        (§6.5, §7.2). A parameter that has *vanished* reads as ``None`` and is
+        not judged: :meth:`_note_presence` has already said so, and one absence
+        is not two anomalies.
+        """
+        for key, echoed in self._echoes.items():
+            applied = PARAMETERS[key].read(status)
+            if applied is None or applied == echoed:
+                continue
+            first = key not in self._undone_parameters
+            self._undone_parameters.add(key)
+            LOGGER.log(
+                logging.WARNING if first else logging.DEBUG,
+                "the panel acknowledged %s=%r and its status now reads %r; the "
+                "write was accepted and not applied",
+                key,
+                echoed,
+                applied,
+            )
+        self._echoes.clear()
 
     def _note_presence(self, status: PanelStatus) -> None:
         """Fix the observed parameters at setup, then log every transition.

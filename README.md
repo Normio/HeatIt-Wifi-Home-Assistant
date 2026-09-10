@@ -10,6 +10,20 @@ vendor app in the path once the panel is on WiFi.
 - Home Assistant **2026.3.1** or newer.
 - A Heatit WiFi Panel joined to the same network as Home Assistant.
 
+## Entities
+
+One panel is one device. Every entity below belongs to it, and each is named by
+Home Assistant from the device's name and its own.
+
+| Entity | Platform | What it is |
+|---|---|---|
+| Heatit WiFi Panel (`panel`) | climate | The thermostat: off and heat, the comfort and eco presets, the temperature the panel is regulating to, and whether the element is on right now. It carries the panel's own name, because it *is* the panel. |
+
+Eco is a **preset**, not a second target temperature, and the target follows
+whichever setpoint the panel is regulating to — so it changes when the preset
+does, and is blank while the panel is off. The reasoning, and what was weighed
+against it, is in [ADR-0004](docs/adr/0004-eco-as-a-climate-preset.md).
+
 ## Verified firmware
 
 The panel reports its own firmware version. A version listed here is one a real

@@ -33,6 +33,15 @@ STATUS_ATTEMPTS = 2
 POLL_BUDGET = STATUS_TIMEOUT_SECONDS * STATUS_ATTEMPTS
 """The longest a single status read may take, retry included: 10 s."""
 
+POST_WRITE_REFRESH_DELAY = 1.5
+"""Seconds between a write and the refresh that judges it.
+
+The *write echo* is shown at once and this refresh is the authority: a write
+reaches ``/api/status`` in 305-632 ms (Q31), so 1.5 s is roughly three times
+the longest lag observed, and the delay is a debounce — a burst of writes costs
+one refresh, not one each.
+"""
+
 MANUFACTURER = "Heatit"
 """``DeviceInfo.manufacturer``; the model comes from the device (§3.5)."""
 

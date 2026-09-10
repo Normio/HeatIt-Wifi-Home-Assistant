@@ -78,10 +78,15 @@ class FakeHeatitClient:
         self.echoes: dict[str, object] = {}
         """Force a *write echo* for one parameter — the *silent undo* case."""
         self._failures: deque[Exception] = deque()
+        self._refusals: deque[Exception] = deque()
 
     def fail(self, error: Exception, times: int = 1) -> None:
         """Queue ``error`` for the next ``times`` status reads."""
         self._failures.extend([error] * times)
+
+    def refuse(self, error: Exception, times: int = 1) -> None:
+        """Queue ``error`` for the next ``times`` parameter writes."""
+        self._refusals.extend([error] * times)
 
     def set_status(self, changes: Mapping[str, object]) -> None:
         """Derive the status later reads return, by dotted path (:func:`mutated`)."""
@@ -96,6 +101,8 @@ class FakeHeatitClient:
 
     async def set_parameter(self, key: str, value: object) -> object:
         """Record the write and echo what the device would have applied."""
+        if self._refusals:
+            raise self._refusals.popleft()
         descriptor = PARAMETERS[key]
         wire_value = descriptor.to_wire(value)
         self.writes.append((key, descriptor.serialise(wire_value)))

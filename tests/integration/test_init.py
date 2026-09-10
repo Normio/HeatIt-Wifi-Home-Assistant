@@ -14,7 +14,6 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from custom_components.heatit_wifi_panel.api import (
@@ -69,11 +68,14 @@ async def test_setup_loads_the_entry_and_polls_once(
 
 
 @pytest.mark.usefixtures("patched_client")
-async def test_setup_registers_one_device_and_no_entities(
+async def test_setup_registers_one_device(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The device stands on its own; the platforms arrive with their tickets."""
+    """The device stands on its own, registered here rather than by an entity.
+
+    Which entities hang off it is ``tests/integration/test_entity.py``'s table.
+    """
     assert await setup_entry(hass, mock_config_entry)
 
     device = panel_device(hass, mock_config_entry)
@@ -85,11 +87,6 @@ async def test_setup_registers_one_device_and_no_entities(
     assert device.sw_version == "1.21"
     # The panel serves no web UI, so there is nothing to link to (§2.2).
     assert device.configuration_url is None
-
-    entities = er.async_entries_for_config_entry(
-        er.async_get(hass), mock_config_entry.entry_id
-    )
-    assert entities == []
 
 
 @pytest.mark.usefixtures("patched_client")

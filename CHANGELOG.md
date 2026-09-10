@@ -52,8 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `async_setup_entry` / `async_unload_entry`, and the device: identifiers from
   the *device id*, the MAC in `connections`, manufacturer, model, name,
   `sw_version`, the *assigned room* as an area suggestion, and no
-  `configuration_url`. `PLATFORMS` is empty until the platform tickets fill it,
-  so a panel added now is one device with no entities.
+  `configuration_url`.
 - `translations/en.json`, with the config, options and exception strings.
 - A spec amendment (§15) for the five contract corrections this work forced:
   `OptionsFlowWithReload` in place of the update listener, the device
@@ -112,6 +111,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused, that section may never offer a manual copy into `custom_components/`,
   and it must name HACS's Custom repositories dialog below `1.0.0` and must not
   name it from `1.0.0` on (§11.3).
+- **The climate entity**: the panel as a thermostat. Off and Heat, comfort and
+  eco as presets, a target temperature that follows the *live setpoint* and is
+  blank while the panel is off, temperature limits read from the device with no
+  client-side clamping, and an `hvac_action` taken from the *relay state* and
+  never from power. Turning on always lands in Heating; Heat while in Eco does
+  nothing; a preset chosen while off turns the panel on in that mode; a plain
+  `climate.set_temperature` while off raises rather than guessing a bank.
+- `entity.py`, the base every platform builds on: the device by identifiers,
+  the `{id}-{key}` unique id, `has_entity_name`, and availability as the poll
+  succeeding **and** the entity's own read path resolving.
+- The optimistic update, in the coordinator and so shared by every platform to
+  come: a write shows the panel's *write echo* at once and schedules one
+  debounced refresh 1.5 s later, which is the authority. A write the panel
+  acknowledged and did not apply — a *silent undo* — warns once per parameter
+  per entry lifetime. Write failures carry spec §6.4's translation keys with
+  the device's `reason` verbatim.
+- `icons.json`, and the entity strings in `translations/en.json`.
 
 ### Changed
 
