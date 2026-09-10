@@ -53,10 +53,18 @@ HACS for *Heatit WiFi Panel* and download — in the same PR that opens the
 repository already in the default store, so leaving the old text in place sends
 every new user into an error.
 
-`scripts/check_release.py` holds both halves: a tag with no `## Installation`
-section fails, a `0.x` tag whose section does not name the **Custom
-repositories** dialog fails, and a `1.0.0`-or-later tag whose section still
-names it fails.
+Both halves of "not before, not later" are enforced rather than remembered.
+
+`tests/test_readme.py` holds **not before**, offline and on every pull request:
+the README may carry an `## Installation` section only once `CHANGELOG.md`
+holds a released version section. The release PR writes both, in the order
+above, so the two arrive together or neither has.
+
+`scripts/check_release.py` holds **not later**, on the tag: a tag with no
+`## Installation` section fails; a section naming `custom_components/` fails at
+any version, because that is the manual-copy route; a `0.x` tag whose section
+does not name the **Custom repositories** dialog fails; and a `1.0.0`-or-later
+tag whose section still names it fails.
 
 ## The gate
 

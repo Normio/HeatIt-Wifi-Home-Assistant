@@ -1760,3 +1760,35 @@ caller and `github.ref` is the pushed tag. `tests/scripts/test_release_gate.py` 
 `continue-on-error` carrying that guard as a top-level `&&` conjunct and rejects everything else,
 including a bare literal and any expression containing `||`. The required status checks are
 unchanged: `Tests (latest)` is still not one of them.
+
+**2026-09-10 — the README's contract is wider than §11.3, and CI holds all of it** ([#48](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/48)).
+§11.3 names four README facts and §8.5 asserts one of them, *three-way firmware consistency*. Meeting
+the HACS default checklist's "substantive docs: setup, entities, services, limitations — not two
+lines" needed three more, and each is asserted rather than trusted, in `tests/test_readme.py`:
+
+- an **`## Entities`** table listing exactly the entities the platform modules declare — read from
+  their entity descriptions and from the class-level `_attr_translation_key` the climate entity names
+  itself with (§5.2 makes that string the unique-id suffix too). **A platform ships its README rows in
+  the same pull request as its module**, as a new firmware ships its table row;
+  [#41](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/41)–[#47](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/47)
+  each carry theirs. While no platform ships the section is absent, which is why this ticket's README
+  has none;
+- the stated Home Assistant floor equals `hacs.json`'s `homeassistant`, the version HACS refuses a
+  download below;
+- §11.3's disclaimer ban and [ADR-0001](../adr/0001-no-fork-of-heatit-wifi6.md)'s WiFi6 signpost are
+  scanned for rather than left to a reviewer's eye, the signpost checked for the prior-art credit and
+  licence notice the ADR refused.
+
+This is deliberately more than §8.6 licenses as coverage: a README fact with a machine-readable owner
+elsewhere in the tree is a *third copy*, and the register's own discipline — all copies of a fact or
+none — applies to it. Facts with no such owner (the prose, the network guidance) stay unasserted.
+
+**§11.3's "install docs are written in the `v0.1.0` release PR, not before" gains both halves.**
+Offline, the README may carry an `## Installation` section only once `CHANGELOG.md` holds a released
+version section: the release pull request writes both, so before it there is neither, and §11.1's
+rule that the custom-repository URL is never shared before a release exists is enforced rather than
+remembered. On a tag, `scripts/check_release.py` refuses a release whose README has no such section,
+one below `1.0.0` that does not name HACS's *Custom repositories* dialog, one from `1.0.0` on that
+still does, and one at **any** version offering a manual copy into `custom_components/`. `README.md`
+joins §10.2's required files, which HACS's own `information` check already assumed.
+`docs/releasing.md` carries the runbook half, on the release pull request's checklist.

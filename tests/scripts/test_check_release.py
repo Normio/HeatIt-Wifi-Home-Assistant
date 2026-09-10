@@ -205,10 +205,31 @@ def test_a_release_readme_must_carry_an_install_section(repo: Path) -> None:
 
 
 def test_a_0_x_release_installs_from_a_custom_repository(repo: Path) -> None:
-    """A manual-copy route would bypass the floor gate and never see a release."""
+    """Before the default-store listing that dialog is the only route there is."""
     write(repo, "README.md", DEFAULT_STORE_README)
     found = problems(repo)
-    assert any("Custom repositories" in p and "floor gate" in p for p in found)
+    assert any("Custom repositories" in p and "only route" in p for p in found)
+
+
+def test_the_install_heading_is_installation_and_nothing_else(repo: Path) -> None:
+    """Every problem line and the runbook name one heading; so does the regex."""
+    write(repo, "README.md", README.replace("## Installation", "## Installing"))
+    found = problems(repo)
+    assert any("no '## Installation' section" in p for p in found)
+
+
+def test_the_install_section_offers_no_manual_copy_route(repo: Path) -> None:
+    """A copy into custom_components/ bypasses the floor gate, at every version."""
+    write(
+        repo,
+        "README.md",
+        README.replace(
+            "the category *Integration*.",
+            "the category *Integration*. Or copy custom_components/x into config.",
+        ),
+    )
+    found = problems(repo)
+    assert any("manual copy" in p for p in found)
 
 
 def test_v1_0_0_drops_the_custom_repository_route(repo: Path) -> None:

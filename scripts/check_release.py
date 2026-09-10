@@ -39,15 +39,24 @@ HACS_JSON = Path("hacs.json")
 CHANGELOG = Path("CHANGELOG.md")
 README = Path("README.md")
 
-#: The README's install section, however it is titled. §11.3 defers writing it
-#: to the ``v0.1.0`` release pull request; asserting it here is what makes "not
-#: before" also mean "not later", since v0.1.0 is the first tag there can be.
-INSTALL_HEADING = re.compile(
-    r"^## Install[^\n]*$(?P<body>.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL
+#: The README's install section. §11.3 defers writing it to the ``v0.1.0``
+#: release pull request; asserting it here is the "not later" half, and
+#: ``tests/test_readme.py`` holds the "not before" half offline. The heading is
+#: exactly the one ``docs/releasing.md`` and every problem line below name, so
+#: a section titled anything else reads as absent rather than passing quietly.
+INSTALL_SECTION = re.compile(
+    r"^## Installation\s*$(?P<body>.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL
 )
 
 #: HACS's own name for the dialog the custom-repository route goes through.
 CUSTOM_REPOSITORY = "Custom repositories"
+
+#: Where a manual copy would land. §11.3 offers that route at no version: it
+#: bypasses the floor gate and installs a tree that never saw a release.
+MANUAL_COPY = "custom_components"
+
+#: The release that turns the custom-repository route into the wrong advice.
+DEFAULT_STORE_LISTING = AwesomeVersion("1.0.0")
 
 #: The files a release cannot exist without: the OSI-licence check, both
 #: documents HACS reads, the README HACS's ``information`` check renders, and
@@ -162,17 +171,17 @@ def check_readme(root: Path, version: str) -> list[str]:
     """Assert the README installs the way this version is actually installed.
 
     Before the default-store listing the only route is HACS's custom-repository
-    dialog: a manual copy into ``custom_components/`` bypasses the
-    ``homeassistant`` floor gate and never sees a release at all. From
-    ``1.0.0`` the route inverts, because HACS refuses a custom-repository entry
-    for a repository already in the default store, and a README still telling
-    users to add one sends them into an error (§11.3).
+    dialog, and from ``1.0.0`` the route inverts, because HACS refuses a
+    custom-repository entry for a repository already in the default store and a
+    README still telling users to add one sends them into an error. A manual
+    copy into ``custom_components/`` is offered at neither: it bypasses the
+    ``homeassistant`` floor gate and never sees a release at all (§11.3).
     """
     path = root / README
     if not path.is_file():
         return []  # reported by check_required_files
 
-    match = INSTALL_HEADING.search(path.read_text(encoding="utf-8"))
+    match = INSTALL_SECTION.search(path.read_text(encoding="utf-8"))
     if match is None:
         return [
             (
@@ -182,28 +191,32 @@ def check_readme(root: Path, version: str) -> list[str]:
             )
         ]
 
+    problems = []
+    if MANUAL_COPY in match["body"]:
+        problems.append(
+            f"{README}: the install section names {MANUAL_COPY}/, so it "
+            f"offers a manual copy — that route bypasses the floor gate "
+            f"hacs.json declares and installs a tree that never saw a "
+            f"release, and §11.3 offers it at no version"
+        )
+
     names_dialog = CUSTOM_REPOSITORY.lower() in match["body"].lower()
-    before_the_listing = version.split(".", 1)[0] == "0"
+    before_the_listing = AwesomeVersion(version) < DEFAULT_STORE_LISTING
     if before_the_listing and not names_dialog:
-        return [
-            (
-                f"{README}: the install section does not name HACS's "
-                f"'{CUSTOM_REPOSITORY}' dialog — until the default-store "
-                f"listing that is the only route, and a manual copy would "
-                f"bypass the floor gate hacs.json declares"
-            )
-        ]
+        problems.append(
+            f"{README}: the install section does not name HACS's "
+            f"'{CUSTOM_REPOSITORY}' dialog — until the default-store "
+            f"listing that is the only route there is"
+        )
     if not before_the_listing and names_dialog:
-        return [
-            (
-                f"{README}: the install section still names HACS's "
-                f"'{CUSTOM_REPOSITORY}' dialog — HACS refuses a "
-                f"custom-repository entry for a repository already in the "
-                f"default store, so this section becomes plain default-store "
-                f"instructions at 1.0.0"
-            )
-        ]
-    return []
+        problems.append(
+            f"{README}: the install section still names HACS's "
+            f"'{CUSTOM_REPOSITORY}' dialog — HACS refuses a "
+            f"custom-repository entry for a repository already in the "
+            f"default store, so this section becomes plain default-store "
+            f"instructions at 1.0.0"
+        )
+    return problems
 
 
 def check_ancestry(root: Path, tag: str, main_ref: str) -> list[str]:

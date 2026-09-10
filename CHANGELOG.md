@@ -70,16 +70,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   switched off on a tag, so a failing row can never be passed over.
 - `docs/releasing.md`, the release procedure and the repository settings the
   release depends on.
-- The README, and `tests/test_readme.py` holding it to the tree: the
+- `tests/test_readme.py`, holding the README to the tree it describes: the
   `## Verified firmware` table is asserted equal to the observed fixture
   directories and to `VERIFIED_FIRMWARES`, the `## Entities` table equal to the
-  entities the platform modules declare, and the Home Assistant floor equal to
-  `hacs.json`'s. A platform now ships its README rows in the same pull request
-  as its module.
+  entities the platform modules declare, the Home Assistant floor equal to
+  `hacs.json`'s, and the install section present exactly when `CHANGELOG.md`
+  holds a released version. **A platform now ships its README rows in the same
+  pull request as its module.**
 - `scripts/check_release.py` gains the README: `README.md` joins the files a
   release cannot exist without, a tag with no `## Installation` section is
-  refused, and the section must name HACS's Custom repositories dialog below
-  `1.0.0` and must not name it from `1.0.0` on (§11.3).
+  refused, that section may never offer a manual copy into `custom_components/`,
+  and it must name HACS's Custom repositories dialog below `1.0.0` and must not
+  name it from `1.0.0` on (§11.3).
 
 ### Changed
 
