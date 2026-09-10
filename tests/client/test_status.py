@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 import pytest
+from yarl import URL
 
 from custom_components.heatit_wifi_panel.api import (
     HeatitClient,
@@ -351,7 +352,7 @@ async def test_get_status_uses_the_five_second_budget_per_attempt(
 
     await client.get_status()
 
-    [call] = mocked.requests[("GET", aiohttp.client.URL(STATUS_URL))]
+    [call] = mocked.requests[("GET", URL(STATUS_URL))]
     assert call.kwargs["timeout"] == aiohttp.ClientTimeout(total=5, connect=3)
 
 
@@ -383,7 +384,7 @@ async def test_get_status_gives_up_after_two_attempts(
     with pytest.raises(HeatitConnectionError):
         await client.get_status()
 
-    assert len(mocked.requests[("GET", aiohttp.client.URL(STATUS_URL))]) == 2
+    assert len(mocked.requests[("GET", URL(STATUS_URL))]) == 2
 
 
 async def test_a_non_200_status_read_is_not_retried(
@@ -395,7 +396,7 @@ async def test_a_non_200_status_read_is_not_retried(
     with pytest.raises(HeatitResponseError):
         await client.get_status()
 
-    assert len(mocked.requests[("GET", aiohttp.client.URL(STATUS_URL))]) == 1
+    assert len(mocked.requests[("GET", URL(STATUS_URL))]) == 1
 
 
 # --- one request in flight per panel ----------------------------------------

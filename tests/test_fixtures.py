@@ -47,8 +47,10 @@ def test_the_shared_redaction_scrubs_exactly_four_fields() -> None:
 def test_fixtures_are_scrubbed(directory: Path) -> None:
     document = json.loads((directory / "status.json").read_bytes().decode("utf-8"))
     assert {path: resolve(document, path) for path in PLACEHOLDERS} == PLACEHOLDERS
-    assert resolve(document, "id") != resolve(document, "id").lower()  # type: ignore[union-attr]
-    assert len(resolve(document, "id")) == 22  # type: ignore[arg-type]
+    device_id = resolve(document, "id")
+    assert isinstance(device_id, str)
+    assert device_id != device_id.lower()
+    assert len(device_id) == 22
 
 
 @pytest.mark.parametrize("directory", OBSERVED, ids=OBSERVED_IDS)

@@ -35,9 +35,10 @@ directory, and `VERIFIED_FIRMWARES` in `const.py` must grow with it.
 ## Before a push
 
 Run `scripts/check.sh`. It is the one shared entry point — ruff,
-`ruff format --check`, the repository-layout check, mypy strict and pytest —
-and `.github/workflows/test.yml` calls the same file, so local and CI cannot
-drift. `scripts/check.sh lint` and `scripts/check.sh test` run either half.
+`ruff format --check`, the repository-layout check, the conformance-register
+check, mypy strict and pytest — and `.github/workflows/test.yml` calls the same
+file, so local and CI cannot drift. `scripts/check.sh lint` and
+`scripts/check.sh test` run either half.
 There are deliberately no git hooks and no pre-commit framework.
 
 Install what it needs with `pip install -r requirements_test.txt`.

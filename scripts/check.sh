@@ -18,13 +18,17 @@ run_lint() {
   ruff check .
   ruff format --check .
   python3 scripts/check_layout.py
+  # Stdlib only, like the layout check, so it belongs to the row-independent
+  # half rather than running once per Home Assistant row.
+  python3 scripts/check_conformance.py
 }
 
 run_tests() {
-  mypy custom_components scripts
+  mypy custom_components scripts tests
   # Coverage is measured and reported, not gated (§8.7). The one gate — 100 %
   # line coverage of config_flow.py — arrives with the config flow itself.
   python3 -m pytest \
+    --quiet \
     --cov=custom_components/heatit_wifi_panel \
     --cov-report=term-missing
 }

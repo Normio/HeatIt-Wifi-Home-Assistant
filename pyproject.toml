@@ -41,7 +41,14 @@ strict = true
 # __init__.py there), and scripts/capture_fixtures.py imports the client by its
 # full dotted name. Without this, mypy sees api.py under two module names.
 explicit_package_bases = true
+# ...which makes the base directories explicit too, and scripts/ is one of them:
+# without this, scripts/probe.py becomes module ``scripts.probe`` and the
+# ``import probe`` in check_conformance.py and the tests stops resolving. The
+# pytest equivalent is ``pythonpath`` below.
+mypy_path = ["scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# scripts/ is deliberately not a package; the tests import its modules by name.
+pythonpath = ["scripts"]
