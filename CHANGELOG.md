@@ -26,10 +26,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-interactive stdin (a spec amendment records why).
 - `scripts/check_conformance.py`, the CI gate over the conformance register:
   the six drift conditions of §12.4, including that the register's automated
-  ids are exactly the ids `probe.py` registers. `VERIFIED_FIRMWARES` lands in
-  `const.py` for it to read.
+  ids are exactly the ids `probe.py` registers.
 - `tests/test_probe_safety.py` and `tests/test_check_conformance.py`; pytest
   joins `scripts/check.sh`.
+- `api.py`, the device client: `get_status`, `set_parameter`, `reset_kwh`
+  and `reset_settings` over the panel's local HTTP API, one request in flight
+  per panel, the status read retried once and nothing else ever retried, and
+  the exception taxonomy of spec §3.2. Bytes are decoded as UTF-8 explicitly;
+  the verdict is HTTP 200 and a `status` matched after stripping; the device's
+  `reason` is surfaced verbatim and never parsed.
+- `registry.py`, the thirteen observed parameters with their serialisers,
+  steps, bounds, read paths, scales and presence flags. Off-step and
+  out-of-range values are rejected locally, before any request exists.
+- One redaction function scrubbing exactly `id`, `Network.mac`,
+  `Network.SSID` and `Network.ipAddress`, at the wire level and on parsed data.
+- `scripts/capture_fixtures.py`, the read-only fixture capture with its
+  separate live-values block, and the first observed fixture,
+  `tests/fixtures/observed/fw-1.21/`, captured from a real panel.
+- `VERIFIED_FIRMWARES` in `const.py`, read by `scripts/check_conformance.py`
+  and asserted equal to the observed fixture directories.
+- The offline test suite's first tier: the client over `aioresponses`, the
+  registry, fixture hygiene and the capture script's read-only guarantee.
+- `test.yml` splits into a `Lint` job and a two-row `Tests` matrix (floor
+  blocking, latest on `continue-on-error` and a monthly cron); `check.sh`
+  gains `lint` and `test` stages so CI still runs the one shared file.
 
 - The first observed write-path fixtures at firmware 1.21 under
   `tests/fixtures/observed/fw-1.21/`: three write echoes (one the lying
@@ -38,5 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `mocked` fixture supplies aiohttp 3.14's required `stream_writer` to the
+  responses aioresponses builds, when the running aiohttp has that parameter.
+  aioresponses 0.7.9, its newest release, does not pass it, which reddened the
+  latest row on a test-only dependency's lag rather than on anything Home
+  Assistant changed under us — the one thing that row exists to report.
 - Register row Q18 moves from the `read` to the `write` tier: its evidence
   required writing `panelMode=0`, which no read-tier check may do.

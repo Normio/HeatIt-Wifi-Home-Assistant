@@ -1705,3 +1705,25 @@ in the same PR: its evidence required writing `panelMode=0`, which no read-tier 
 §9.3 says both linters "block a merge" and §10.3 lists what a workflow cannot apply, but branch
 protection was named in neither. `Checks`, `HACS Action`, `hassfest` and `Changelog entry` must be
 marked required on `main` by the owner; nothing in the repository can assert that they are.
+
+**2026-09-09 — the client ticket refines §3.2, §8.5 and §8.7** ([#38](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/38)).
+Three refinements met under fire. (1) §2.4's "quantise" and §8.5's "an off-step value raises
+locally" are reconciled as: a value within float noise of a grid point *is* that grid point
+(``0.1 * 3`` is ``0.3``), and anything further off the grid raises a local ``ValueError`` with
+no request emitted — the client never rounds a user's value into a different one. (2) §3.2's
+taxonomy gains ``HeatitMissingFieldError``, a subclass of ``HeatitProtocolError`` carrying the
+dotted path of the absent *required core* field, because §6.3's ``missing_field`` translation
+key needs the path and the coordinator must not re-parse. ``HeatitParameterRejected`` is raised
+for a ``400`` **and** for a ``200`` whose envelope is not success: a refusal is a refusal, and
+both carry ``reason`` verbatim; the same ``failed`` envelope on a reset is a
+``HeatitResponseError`` with ``status_code`` 200 and the ``reason``. (3) §8.7's matrix lands with the client rather than with the
+integration tests, so `test.yml`'s single `Checks` job becomes `Lint`, `Tests (floor)` and
+`Tests (latest)`; the required status checks named in the amendment of PR #49 are now `Lint`,
+`Tests (floor)`, `HACS Action`, `hassfest` and `Changelog entry`. `scripts/check.sh` takes a
+`lint` or `test` stage so CI still runs the one shared file; the monthly cron runs both rows
+rather than the latest row alone, since the floor row is free and confirms the pin still
+installs; and §8.7's `config_flow.py` coverage gate joins `check.sh` with the config flow
+([#40](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/40)), there being no
+`config_flow.py` to cover yet. The shared redaction of §7.1 lives
+in `api.py` beside the parser it scrubs for, and the fixture-only fifth placeholder for `name`
+(§8.3) is applied by `scripts/capture_fixtures.py` alone — logging and diagnostics keep `name`.

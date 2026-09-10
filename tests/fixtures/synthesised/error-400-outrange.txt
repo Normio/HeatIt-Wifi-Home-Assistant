@@ -1,0 +1,1 @@
+{"status":"failed","reason":"heatingSetpoint outrange of temperature limit(min or max)"}
