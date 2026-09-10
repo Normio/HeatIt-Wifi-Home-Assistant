@@ -16,7 +16,10 @@ permanent because HACS compares tag strings.
    - in `CHANGELOG.md`, rename `## [Unreleased]` to `## [0.1.0] - YYYY-MM-DD`
      and rewrite its entries into final form, then open a fresh, empty
      `## [Unreleased]` above it. That section's body becomes the release notes,
-     verbatim.
+     verbatim;
+   - write or rewrite the README's `## Installation` section — see below. The
+     lockstep check refuses a tag whose README does not install the way that
+     version is installed, so this is not a step that can be forgotten.
 2. **The tag**, pushed by the owner from the merged commit on `main`:
 
    ```sh
@@ -29,6 +32,32 @@ permanent because HACS compares tag strings.
    green, the publish job creates the release with the changelog section as
    its body. When any of them is red, no release exists and the tag stays.
 
+## The README's install section
+
+Spec §11.3 puts the install docs in the **`v0.1.0` release PR and not one
+commit earlier**, because §11.1 forbids sharing the custom-repository URL
+before a release exists: HACS's `can_download` guards the `homeassistant` floor
+on `if self.data.releases`, so a repository with no releases has no floor gate
+at all and would offer an incompatible download to users on old installs.
+Install instructions published before the first release are that URL, shared.
+
+**`v0.1.0` through `v0.x.y` — the custom-repository route, and only it.** A My
+Home Assistant redirect link, then the manual steps: HACS → **Custom
+repositories** → this repository's URL, category *Integration*. No manual-copy
+route is offered, ever: a copy into `custom_components/` bypasses the floor
+gate and never sees a release.
+
+**`v1.0.0` rewrites the section** to plain default-store instructions — search
+HACS for *Heatit WiFi Panel* and download — in the same PR that opens the
+`hacs/default` submission. HACS refuses a custom-repository entry for a
+repository already in the default store, so leaving the old text in place sends
+every new user into an error.
+
+`scripts/check_release.py` holds both halves: a tag with no `## Installation`
+section fails, a `0.x` tag whose section does not name the **Custom
+repositories** dialog fails, and a `1.0.0`-or-later tag whose section still
+names it fails.
+
 ## The gate
 
 Every job runs against the tagged commit, and the publish job `needs` all of:
@@ -37,7 +66,7 @@ Every job runs against the tagged commit, and the publish job `needs` all of:
 |---|---|
 | Validate | `validate.yml` called whole: HACS Action and hassfest, no `ignore:` |
 | Test | `test.yml` called whole: the `Lint` job and both pytest rows, so ruff, mypy, the check scripts and the tests. A job that is `continue-on-error` on pull requests must be off on a tag, or the gate would pass over its failure — `Tests (latest)` guards its own with `&& !startsWith(github.ref, 'refs/tags/')`, and `tests/scripts/test_release_gate.py` fails on any value that is not so guarded |
-| Lockstep | `scripts/check_release.py`: the tag names the manifest's version; the tagged commit is an ancestor of `main`; `LICENSE`, `hacs.json`, the manifest and `brand/icon.png` exist; `hacs.json` has `hide_default_branch: true` and an AwesomeVersion-parseable `homeassistant`; `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section |
+| Lockstep | `scripts/check_release.py`: the tag names the manifest's version; the tagged commit is an ancestor of `main`; `LICENSE`, `hacs.json`, the manifest, `README.md` and `brand/icon.png` exist; `hacs.json` has `hide_default_branch: true` and an AwesomeVersion-parseable `homeassistant`; `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section; the README's install section matches the version being released |
 
 To rehearse the lockstep half before pushing, from the checkout holding the tag:
 

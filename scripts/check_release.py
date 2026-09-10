@@ -5,9 +5,9 @@ Home Assistant reads the manifest and never the tag. Nothing upstream binds the
 two, so this script does, and it also asserts everything else a release must
 not exist without: the tagged commit is on ``main`` (a tag pushed from a side
 branch must never become a release), the files HACS and the licence check
-depend on are present, ``hacs.json`` keeps the floor gate on, and
+depend on are present, ``hacs.json`` keeps the floor gate on,
 ``CHANGELOG.md`` carries a non-empty section for the version — which becomes
-the release notes.
+the release notes — and the README installs the way this version is installed.
 
 Run by ``.github/workflows/release.yml`` against the tagged checkout::
 
@@ -37,13 +37,26 @@ TAG_PATTERN = re.compile(r"^v(\d+\.\d+\.\d+)$")
 MANIFEST = Path("custom_components/heatit_wifi_panel/manifest.json")
 HACS_JSON = Path("hacs.json")
 CHANGELOG = Path("CHANGELOG.md")
+README = Path("README.md")
+
+#: The README's install section, however it is titled. §11.3 defers writing it
+#: to the ``v0.1.0`` release pull request; asserting it here is what makes "not
+#: before" also mean "not later", since v0.1.0 is the first tag there can be.
+INSTALL_HEADING = re.compile(
+    r"^## Install[^\n]*$(?P<body>.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL
+)
+
+#: HACS's own name for the dialog the custom-repository route goes through.
+CUSTOM_REPOSITORY = "Custom repositories"
 
 #: The files a release cannot exist without: the OSI-licence check, both
-#: documents HACS reads, and the icon the brand renders from.
+#: documents HACS reads, the README HACS's ``information`` check renders, and
+#: the icon the brand renders from.
 REQUIRED_FILES = (
     Path("LICENSE"),
     HACS_JSON,
     MANIFEST,
+    README,
     Path("custom_components/heatit_wifi_panel/brand/icon.png"),
 )
 
@@ -145,6 +158,54 @@ def check_hacs_json(root: Path) -> list[str]:
     return problems
 
 
+def check_readme(root: Path, version: str) -> list[str]:
+    """Assert the README installs the way this version is actually installed.
+
+    Before the default-store listing the only route is HACS's custom-repository
+    dialog: a manual copy into ``custom_components/`` bypasses the
+    ``homeassistant`` floor gate and never sees a release at all. From
+    ``1.0.0`` the route inverts, because HACS refuses a custom-repository entry
+    for a repository already in the default store, and a README still telling
+    users to add one sends them into an error (§11.3).
+    """
+    path = root / README
+    if not path.is_file():
+        return []  # reported by check_required_files
+
+    match = INSTALL_HEADING.search(path.read_text(encoding="utf-8"))
+    if match is None:
+        return [
+            (
+                f"{README}: no '## Installation' section — a release is the "
+                f"moment the install route becomes real, and v0.1.0 is where "
+                f"it is written"
+            )
+        ]
+
+    names_dialog = CUSTOM_REPOSITORY.lower() in match["body"].lower()
+    before_the_listing = version.split(".", 1)[0] == "0"
+    if before_the_listing and not names_dialog:
+        return [
+            (
+                f"{README}: the install section does not name HACS's "
+                f"'{CUSTOM_REPOSITORY}' dialog — until the default-store "
+                f"listing that is the only route, and a manual copy would "
+                f"bypass the floor gate hacs.json declares"
+            )
+        ]
+    if not before_the_listing and names_dialog:
+        return [
+            (
+                f"{README}: the install section still names HACS's "
+                f"'{CUSTOM_REPOSITORY}' dialog — HACS refuses a "
+                f"custom-repository entry for a repository already in the "
+                f"default store, so this section becomes plain default-store "
+                f"instructions at 1.0.0"
+            )
+        ]
+    return []
+
+
 def check_ancestry(root: Path, tag: str, main_ref: str) -> list[str]:
     """Assert the tag exists and its commit is reachable from ``main``."""
     tagged = git(
@@ -193,6 +254,7 @@ def check_release(root: Path, tag: str, main_ref: str) -> ReleaseCheck:
             *check_manifest_version(root, version),
             *check_required_files(root),
             *check_hacs_json(root),
+            *check_readme(root, version),
             *changelog_problems,
         ]
     )
