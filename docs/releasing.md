@@ -95,14 +95,15 @@ force-push, changes only through a pull request, and the blocking jobs of
 `test.yml`, `validate.yml` and `changelog.yml` required as status checks.
 This is the "blocks a merge" half of the linters and validators.
 
-They must now be `Lint`, `Tests (floor)`, `HACS Action`, `hassfest` and
-`Changelog entry`. **This is an outstanding manual step.** The ruleset was
-written on 2026-09-09 naming `Checks`, the single job #38 has since split into
-`Lint`, `Tests (floor)` and `Tests (latest)`; until the owner renames it, every
-pull request stays blocked on a job that no longer runs, with every check
-green. `Tests (latest)` is deliberately *not* required — it is
-`continue-on-error` off a tag, a signal rather than a blocker (§8.7) — and no
-workflow token can edit a ruleset, so only the owner can do this.
+As of 2026-09-10 they are `Lint`, `Tests (floor)`, `HACS Action`, `hassfest`
+and `Changelog entry`, verified through the API. The ruleset was first written
+naming `Checks`, the single job #38 split into `Lint`, `Tests (floor)` and
+`Tests (latest)`; the owner has since renamed it by hand, which is the only way
+— no workflow token can edit a ruleset. `Tests (latest)` is deliberately *not*
+required: it is `continue-on-error` off a tag, a signal rather than a blocker
+(§8.7). **Any future rename of a blocking job needs the same manual step**, and
+until it is made every pull request blocks on a job that no longer runs, with
+every check green.
 
 Check both with:
 
