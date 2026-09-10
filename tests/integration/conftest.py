@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST
+from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.heatit_wifi_panel.const import DOMAIN
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.device_registry import DeviceEntry
 
 REFERENCE_DEVICE_ID = "FIXTUREFIXTUREFIXTUREX"
 """The reference capture's scrubbed ``id``: 22 chars, mixed case, as a real one."""
@@ -65,6 +67,19 @@ def mock_config_entry() -> MockConfigEntry:
         unique_id=REFERENCE_DEVICE_ID,
         data={CONF_HOST: REFERENCE_HOST},
     )
+
+
+def panel_device(hass: HomeAssistant, entry: MockConfigEntry) -> DeviceEntry:
+    """Return the one device the entry owns.
+
+    Looked up by config entry rather than by identifiers: one entry is one
+    device (§4.7), and ``async_get_device`` is deprecated from Home Assistant
+    2026.9 — it raises for a test caller, which is how the ``latest`` row of
+    §8.7's matrix earns its keep. Callers assert the identifiers themselves.
+    """
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert len(devices) == 1
+    return devices[0]
 
 
 async def setup_entry(hass: HomeAssistant, entry: MockConfigEntry) -> bool:

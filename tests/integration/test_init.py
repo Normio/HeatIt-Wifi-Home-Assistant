@@ -28,7 +28,11 @@ from custom_components.heatit_wifi_panel.const import (
     MANUFACTURER,
 )
 from tests.fakes import ABSENT, FakeHeatitClient
-from tests.integration.conftest import REFERENCE_DEVICE_ID, setup_entry
+from tests.integration.conftest import (
+    REFERENCE_DEVICE_ID,
+    panel_device,
+    setup_entry,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -70,10 +74,8 @@ async def test_setup_registers_one_device_and_no_entities(
     """The device stands on its own; the platforms arrive with their tickets."""
     assert await setup_entry(hass, mock_config_entry)
 
-    device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
-    )
-    assert device is not None
+    device = panel_device(hass, mock_config_entry)
+    assert device.identifiers == {(DOMAIN, REFERENCE_DEVICE_ID)}
     assert device.connections == {(dr.CONNECTION_NETWORK_MAC, "02:00:00:00:00:01")}
     assert device.manufacturer == MANUFACTURER
     assert device.model == "Heatit WiFi Panel Heater"
@@ -96,10 +98,7 @@ async def test_the_assigned_room_becomes_an_area_suggestion(
     """A suggestion only: Home Assistant's own area wins from then on (§4.4)."""
     assert await setup_entry(hass, mock_config_entry)
 
-    device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
-    )
-    assert device is not None
+    device = panel_device(hass, mock_config_entry)
     assert device.area_id is not None
     area = ar.async_get(hass).async_get_area(device.area_id)
     assert area is not None
@@ -116,10 +115,7 @@ async def test_the_mac_is_normalised_by_core(
 
     assert await setup_entry(hass, mock_config_entry)
 
-    device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
-    )
-    assert device is not None
+    device = panel_device(hass, mock_config_entry)
     assert device.connections == {(dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff")}
 
 
@@ -133,10 +129,7 @@ async def test_an_absent_mac_costs_only_the_connection(
 
     assert await setup_entry(hass, mock_config_entry)
 
-    device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
-    )
-    assert device is not None
+    device = panel_device(hass, mock_config_entry)
     assert device.connections == set()
 
 
@@ -152,10 +145,7 @@ async def test_the_name_and_the_room_are_read_once_at_creation(
     touched it", and following the app would silently destroy the first.
     """
     assert await setup_entry(hass, mock_config_entry)
-    original_area = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
-    )
-    assert original_area is not None
+    original_area = panel_device(hass, mock_config_entry)
     patched_client.set_status({"name": "Renamed in the app", "room": "Hallway"})
 
     coordinator = mock_config_entry.runtime_data
@@ -163,10 +153,7 @@ async def test_the_name_and_the_room_are_read_once_at_creation(
     await hass.async_block_till_done()
     assert await hass.config_entries.async_reload(mock_config_entry.entry_id)
 
-    device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
-    )
-    assert device is not None
+    device = panel_device(hass, mock_config_entry)
     assert device.name == "Näytehuone 1"
     assert device.area_id == original_area.area_id
     assert mock_config_entry.title == "Näytehuone 1"
@@ -183,10 +170,7 @@ async def test_the_firmware_and_model_are_refreshed_on_a_reload(
 
     assert await hass.config_entries.async_reload(mock_config_entry.entry_id)
 
-    device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, REFERENCE_DEVICE_ID)}
-    )
-    assert device is not None
+    device = panel_device(hass, mock_config_entry)
     assert device.sw_version == "1.22"
 
 

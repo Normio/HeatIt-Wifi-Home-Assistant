@@ -75,11 +75,15 @@ def _async_register_device(
     change picked up on reload.
     """
     device_registry = dr.async_get(hass)
-    identifiers = {(DOMAIN, status.device_id)}
-    creating = device_registry.async_get_device(identifiers=identifiers) is None
+    # Asked of the entry, not of the identifiers: one entry is one device
+    # (§4.7), so "does this entry already own one?" is the question, and it is
+    # the question that keeps working — ``async_get_device`` is deprecated from
+    # Home Assistant 2026.9 because identifiers stopped being unique across
+    # entries, and it breaks in 2027.8.
+    creating = not dr.async_entries_for_config_entry(device_registry, entry.entry_id)
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers=identifiers,
+        identifiers={(DOMAIN, status.device_id)},
         connections=(
             {(dr.CONNECTION_NETWORK_MAC, status.mac)} if status.mac else set()
         ),
