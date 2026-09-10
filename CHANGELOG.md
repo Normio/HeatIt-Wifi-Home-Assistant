@@ -48,13 +48,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The offline test suite's first tier: the client over `aioresponses`, the
   registry, fixture hygiene and the capture script's read-only guarantee.
 - `test.yml` splits into a `Lint` job and a two-row `Tests` matrix (floor
-  blocking, latest on `continue-on-error` and a monthly cron); `check.sh`
-  gains `lint` and `test` stages so CI still runs the one shared file.
+  blocking, latest on `continue-on-error` — except on a tag, where the release
+  gate calls this workflow and §10.2 makes both rows block — and a monthly
+  cron); `check.sh` gains `lint` and `test` stages so CI still runs the one
+  shared file.
 
 - The first observed write-path fixtures at firmware 1.21 under
   `tests/fixtures/observed/fw-1.21/`: three write echoes (one the lying
   `sensorMode` echo), a 400, the `text/html` 404 and the HTTP/1.0 505, each as
   raw bytes with its headers beside it, captured by `probe.py --writes`.
+
+- `release.yml`: pushing a `vX.Y.Z` tag runs the validators, `test.yml` and
+  `scripts/check_release.py` against the tagged commit, and only when all of
+  them pass creates the GitHub release with the changelog section as its
+  body. A failed gate leaves the bare tag and deletes nothing.
+- `scripts/check_release.py`, the lockstep check: tag equals manifest
+  version, the tagged commit is on `main`, the files a release needs exist,
+  `hacs.json` keeps its floor gate, and the changelog section is non-empty.
+- `tests/scripts/`, holding the lockstep check's own tests. One of them
+  asserts that every `continue-on-error` in the workflows the gate calls is
+  switched off on a tag, so a failing row can never be passed over.
+- `docs/releasing.md`, the release procedure and the repository settings the
+  release depends on.
 
 ### Changed
 

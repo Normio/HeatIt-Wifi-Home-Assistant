@@ -10,3 +10,9 @@ aioresponses==0.7.9
 # Both gates are pinned exactly: a gate must not go red on its own.
 mypy==2.3.1
 ruff==0.16.6
+
+# The parser HACS reads hacs.json's homeassistant floor with, used by
+# scripts/check_release.py to assert the key parses. Pinned to the version the
+# floor row's Home Assistant constrains, so pip refuses the install the day the
+# two disagree rather than one of them drifting quietly.
+awesomeversion==25.8.0

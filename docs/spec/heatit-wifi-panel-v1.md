@@ -1727,3 +1727,36 @@ installs; and §8.7's `config_flow.py` coverage gate joins `check.sh` with the c
 `config_flow.py` to cover yet. The shared redaction of §7.1 lives
 in `api.py` beside the parser it scrubs for, and the fixture-only fifth placeholder for `name`
 (§8.3) is applied by `scripts/capture_fixtures.py` alone — logging and diagnostics keep `name`.
+
+**2026-09-09 — the lockstep script is `scripts/check_release.py`, and joins §3.1** ([#39](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/39), PR #50).
+§10.2 describes the gate's third member without naming it. It is `scripts/check_release.py`, run by
+`release.yml` alone — it needs a pushed tag, so it is the one script §9.4's entry point does not
+run — and it writes the changelog section the publish job uses as the release body. Its tests live
+under `tests/scripts/`, a directory §8.7's layout did not list; `pytest` and mypy strict over
+`tests/` arrived with [#38](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/38) and
+cover them unchanged.
+
+**2026-09-09 — the gate calls `test.yml` whole, so §8.7's rows join it when they land** ([#39](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/39), PR #50).
+§10.2 says the publish job needs "both pytest rows from §8.7, exposed via `workflow_call`". The rows
+did not exist when this was written ([#38](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/38)
+added them), so `release.yml` calls `test.yml` and `validate.yml` as reusable workflows rather than
+naming jobs: whatever either file holds is what a release must pass, and #38 indeed changed nothing
+in `release.yml`.
+
+**2026-09-09 — §10.3's settings are applied, and `docs/releasing.md` records them** ([#39](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/39), PR #50).
+§10.3 says the description, topics and the `v*` tag ruleset "are still unapplied". As of this date
+all three, and the `main` ruleset with the required status checks from the amendment above, are
+applied and were verified through the API. `docs/releasing.md` holds the procedure, the gate, the
+commands and the ruleset shapes, so the owner can check or restore them; §11.2's gate item 5 reads
+from there.
+
+**2026-09-10 — §8.7's `latest` row blocks a release, though it still never blocks a merge** ([#38](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/38), [#39](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/39), PR #50).
+§8.7 makes the `latest` row a signal rather than a blocker; §10.2 makes **both** pytest rows part of
+the release gate. Merging #38 and #39 put those in direct contact, because a `continue-on-error` job
+in a called workflow fails without failing its caller. Both hold, split by ref: `test.yml`'s row
+carries `continue-on-error: ${{ matrix.row == 'latest' && !startsWith(github.ref, 'refs/tags/') }}`,
+advisory on pull requests and the monthly cron, blocking on a tag — where `release.yml` is the
+caller and `github.ref` is the pushed tag. `tests/scripts/test_release_gate.py` therefore accepts any
+`continue-on-error` carrying that guard as a top-level `&&` conjunct and rejects everything else,
+including a bare literal and any expression containing `||`. The required status checks are
+unchanged: `Tests (latest)` is still not one of them.

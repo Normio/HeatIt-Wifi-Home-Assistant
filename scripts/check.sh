@@ -10,6 +10,9 @@
 #   scripts/check.sh        everything, in order — what a developer runs
 #   scripts/check.sh lint   ruff, ruff format --check, the layout check
 #   scripts/check.sh test   mypy strict and pytest, against the installed HA
+#
+# scripts/check_release.py is not run here: it needs a pushed tag, and only
+# .github/workflows/release.yml has one. Its tests run with the rest.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
