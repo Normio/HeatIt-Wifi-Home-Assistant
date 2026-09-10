@@ -5,8 +5,6 @@ panel's own HTTP API on your local network. Home Assistant reads the panel's
 status and writes its settings directly: no cloud service, no account, and no
 vendor app in the path once the panel is on WiFi.
 
-> **Heatit WiFi6 thermostat owner?** This integration is for the WiFi Panel wall heater; your device is served by [`heatit_wifi6`](https://github.com/mattik-gh/heatit_wifi6).
-
 ## Requirements
 
 - Home Assistant **2026.3.1** or newer.

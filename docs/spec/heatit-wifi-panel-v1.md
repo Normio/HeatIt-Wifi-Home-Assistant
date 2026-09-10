@@ -1792,3 +1792,17 @@ one below `1.0.0` that does not name HACS's *Custom repositories* dialog, one fr
 still does, and one at **any** version offering a manual copy into `custom_components/`. `README.md`
 joins §10.2's required files, which HACS's own `information` check already assumed.
 `docs/releasing.md` carries the runbook half, on the release pull request's checklist.
+
+**2026-09-10 — §11.3's WiFi6 signpost is withdrawn** ([#48](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/48)).
+§11.3 requires "a **one-line signpost** for owners of the Heatit **WiFi6 thermostat** … so HACS users
+searching \"heatit\" pick the right one", and [ADR-0001](../adr/0001-no-fork-of-heatit-wifi6.md)
+lists carrying it among that decision's consequences. The owner has withdrawn it: **the README names
+no other device.** The assertion that enforced its shape — one line, naming the WiFi Panel, carrying
+none of the credit or licence words the ADR refused — goes with it, and ADR-0001's consequence is
+struck through rather than deleted, so the reversal is legible next to what it reverses.
+
+Nothing else in that decision moves. The signpost was a *routing aid, not an acknowledgement*, and
+dropping it is not an acknowledgement either; coexistence with the other integration was settled by
+the distinct domain `heatit_wifi_panel` and never by this line. The prior-art audit, the handoff
+brief and the register rows that cite the other device as **evidence** are records of what was
+investigated rather than claims this integration makes, and stand unchanged.

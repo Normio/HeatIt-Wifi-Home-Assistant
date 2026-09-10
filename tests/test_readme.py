@@ -7,10 +7,9 @@ them is asserted against the artifact that owns it, so the README cannot
 describe an integration that is not the one in the tree: all copies of a fact
 or none.
 
-Two further assertions guard promises made elsewhere and payable only here —
-the WiFi6 signpost that [ADR-0001](../docs/adr/0001-no-fork-of-heatit-wifi6.md)
-undertook to carry, and the static DHCP reservation of §4.5 — and one guards
-the rule that sank a real ``hacs/default`` submission: no disclaimers.
+One further assertion guards a promise made elsewhere and payable only here,
+the static DHCP reservation of §4.5, and one guards the rule that sank a real
+``hacs/default`` submission: no disclaimers.
 """
 
 import importlib
@@ -73,10 +72,6 @@ ENTITY_CELL = re.compile(r"^(?P<name>.+?)\s*\(`(?P<key>[a-z0-9_]+)`\)$")
 #: A released changelog section, ``## [0.1.0] - 2026-09-09``. Its arrival is
 #: the release pull request, and so the moment the install section may exist.
 RELEASED_VERSION = re.compile(r"^## \[\d+\.\d+\.\d+\]", re.MULTILINE)
-
-#: Words that would turn ADR-0001's routing aid into the acknowledgement it
-#: refused. The signpost names the two devices and stops there.
-CREDIT_WORDS = ("licen", "thanks", "credit", "based on", "derived", "fork")
 
 
 def section(title: str) -> str | None:
@@ -230,28 +225,6 @@ def test_the_home_assistant_floor_matches_hacs_json() -> None:
     assert floor in README.read_text(encoding="utf-8"), (
         f"README: the Home Assistant floor reads {floor}, as hacs.json declares "
         f"it — HACS refuses the download below that version"
-    )
-
-
-def test_the_readme_signposts_wifi6_thermostat_owners() -> None:
-    lines = [
-        line
-        for line in README.read_text(encoding="utf-8").splitlines()
-        if "WiFi6" in line
-    ]
-    assert len(lines) == 1, (
-        "README: ADR-0001 undertook exactly one line telling Heatit WiFi6 "
-        "thermostat owners this integration is for the WiFi Panel wall heater"
-    )
-    assert "WiFi Panel" in lines[0], (
-        "README: the signpost names the device this integration is for, or it "
-        "routes nobody anywhere"
-    )
-    credit = [word for word in CREDIT_WORDS if word in lines[0].lower()]
-    assert not credit, (
-        f"README: the signpost carries {credit}. ADR-0001 is explicit that it "
-        f"is a routing aid and that no prior-art credit or licence notice "
-        f"accompanies it"
     )
 
 
