@@ -31,6 +31,29 @@ CHANGELOG = """\
 [0.1.0]: https://example.invalid/releases/tag/v0.1.0
 """
 
+#: A 0.x README: the custom-repository route, and nothing else.
+README = """\
+# x
+
+## Installation
+
+Open HACS, then **Custom repositories**, and add this repository's URL with
+the category *Integration*.
+
+## Verified firmware
+"""
+
+#: What v1.0.0 rewrites it to, once the repository is in the default store.
+DEFAULT_STORE_README = """\
+# x
+
+## Installation
+
+Open HACS, search for *Heatit WiFi Panel*, and download it.
+
+## Verified firmware
+"""
+
 
 def git(root: Path, *args: str) -> str:
     """Run git in the throwaway repository with a fixed identity."""
@@ -85,6 +108,7 @@ def repo(tmp_path: Path) -> Path:
     )
     write(root, "custom_components/heatit_wifi_panel/brand/icon.png", b"png")
     write(root, "CHANGELOG.md", CHANGELOG)
+    write(root, "README.md", README)
     git(root, "add", "--all")
     git(root, "commit", "--quiet", "--message", "release")
     git(root, "tag", TAG)
@@ -149,12 +173,77 @@ def test_main_ref_must_resolve(repo: Path) -> None:
         "hacs.json",
         "custom_components/heatit_wifi_panel/manifest.json",
         "custom_components/heatit_wifi_panel/brand/icon.png",
+        "README.md",
     ],
 )
 def test_required_files_must_exist(repo: Path, name: str) -> None:
     """Each file the release depends on is asserted present, by name."""
     (repo / name).unlink()
     assert f"{name}: missing" in problems(repo)
+
+
+def retag(root: Path, version: str) -> str:
+    """Bump the manifest and the changelog to ``version`` and tag the result."""
+    write(
+        root,
+        "custom_components/heatit_wifi_panel/manifest.json",
+        json.dumps({"domain": "heatit_wifi_panel", "version": version}),
+    )
+    write(root, "CHANGELOG.md", CHANGELOG.replace(VERSION, version))
+    git(root, "add", "--all")
+    git(root, "commit", "--quiet", "--message", version)
+    tag = f"v{version}"
+    git(root, "tag", tag)
+    return tag
+
+
+def test_a_release_readme_must_carry_an_install_section(repo: Path) -> None:
+    """§11.3 defers the install docs to v0.1.0; the gate stops them slipping past."""
+    write(repo, "README.md", "# x\n")
+    found = problems(repo)
+    assert any("no '## Installation' section" in p for p in found)
+
+
+def test_a_0_x_release_installs_from_a_custom_repository(repo: Path) -> None:
+    """Before the default-store listing that dialog is the only route there is."""
+    write(repo, "README.md", DEFAULT_STORE_README)
+    found = problems(repo)
+    assert any("Custom repositories" in p and "only route" in p for p in found)
+
+
+def test_the_install_heading_is_installation_and_nothing_else(repo: Path) -> None:
+    """Every problem line and the runbook name one heading; so does the regex."""
+    write(repo, "README.md", README.replace("## Installation", "## Installing"))
+    found = problems(repo)
+    assert any("no '## Installation' section" in p for p in found)
+
+
+def test_the_install_section_offers_no_manual_copy_route(repo: Path) -> None:
+    """A copy into custom_components/ bypasses the floor gate, at every version."""
+    write(
+        repo,
+        "README.md",
+        README.replace(
+            "the category *Integration*.",
+            "the category *Integration*. Or copy custom_components/x into config.",
+        ),
+    )
+    found = problems(repo)
+    assert any("manual copy" in p for p in found)
+
+
+def test_v1_0_0_drops_the_custom_repository_route(repo: Path) -> None:
+    """HACS refuses a custom-repository entry for a repository already in the store."""
+    tag = retag(repo, "1.0.0")
+    found = problems(repo, tag)
+    assert any("default store" in p for p in found)
+
+
+def test_v1_0_0_passes_on_default_store_instructions(repo: Path) -> None:
+    """The rewrite §11.3 requires is the one the gate accepts."""
+    write(repo, "README.md", DEFAULT_STORE_README)
+    tag = retag(repo, "1.0.0")
+    assert problems(repo, tag) == []
 
 
 def test_hacs_json_must_hide_the_default_branch(repo: Path) -> None:

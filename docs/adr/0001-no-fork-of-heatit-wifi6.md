@@ -9,6 +9,6 @@ The originating brief proposed forking `mattik-gh/heatit_wifi6`, a HACS integrat
 ## Consequences
 
 - The spec never names `heatit_wifi6`. Device behaviours the audit surfaced (a wrong `Content-Type` on JSON responses, several Heatit devices timing out when polled together at Home Assistant restart) stand as claims about the device, verified against our own panel by the conformance checklist and sourced to the panel once verified.
-- The README carries a one-line signpost telling WiFi6 thermostat owners this integration is not for their device. That is a routing aid, not credit.
+- ~~The README carries a one-line signpost telling WiFi6 thermostat owners this integration is not for their device. That is a routing aid, not credit.~~ **Withdrawn 2026-09-10** ([#48](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/48)): the README names no other device at all. The reasoning above is unchanged — the signpost was never credit, and nothing about it being dropped is one either — but a routing aid the owner does not want is not one this decision can keep imposing. Coexistence is unaffected: it rests on the distinct domain, below, and never rested on the signpost.
 - The handoff brief keeps its fork recommendation verbatim as the historical record, under a banner saying it is superseded and the fork was rejected.
 - Coexistence with `heatit_wifi6` on the same Home Assistant is settled by the distinct domain `heatit_wifi_panel` and display name; nothing in code guards it.
