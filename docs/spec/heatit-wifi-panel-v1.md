@@ -1693,6 +1693,14 @@ there is nothing to matrix over, so one job runs the whole script.
 [#38](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/38) adds the two rows and splits
 ruff back out, so it does not run once per row.
 
+**2026-09-09 — `--destructive` also requires a terminal** ([#37](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/37)).
+§12.2 reserves the `isatty()` requirement for `--thermal`, but a settings reset lands the panel at
+its documented defaults — comfort 21 °C in Heating mode — for the seconds until the restore, so on a
+cold day `yes | probe.py --destructive` from a cron would close the relay. Both hazardous tiers now
+refuse a non-interactive stdin; the y/N prompt stays for `--destructive` and the typed confirmation
+naming the check for `--thermal`. Register row Q18 also moves from the `read` to the `write` tier
+in the same PR: its evidence required writing `panelMode=0`, which no read-tier check may do.
+
 **2026-09-09 — required status checks join §10.3's human-applied list** ([#36](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/36), PR #49).
 §9.3 says both linters "block a merge" and §10.3 lists what a workflow cannot apply, but branch
 protection was named in neither. `Checks`, `HACS Action`, `hassfest` and `Changelog entry` must be

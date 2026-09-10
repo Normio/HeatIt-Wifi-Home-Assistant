@@ -30,7 +30,8 @@ never commit one.
 ## Before a push
 
 Run `scripts/check.sh`. It is the one shared entry point — ruff,
-`ruff format --check`, mypy strict and the repository-layout check — and
+`ruff format --check`, mypy strict, pytest, the repository-layout check and
+the conformance-register check — and
 `.github/workflows/test.yml` calls the same file, so local and CI cannot drift.
 There are deliberately no git hooks and no pre-commit framework.
 

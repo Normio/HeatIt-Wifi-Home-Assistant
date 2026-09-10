@@ -26,3 +26,15 @@ ignore = [
 [tool.mypy]
 python_version = "3.14"
 strict = true
+
+[tool.ruff.lint.per-file-ignores]
+# The only per-file ignores, and only under tests/ (§9.3).
+"tests/**" = [
+  "S101",    # assert is how pytest asserts
+  "PLR2004", # a literal in a test is the expected value, not a magic number
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# scripts/ is deliberately not a package; the tests import its modules by name.
+pythonpath = ["scripts"]
