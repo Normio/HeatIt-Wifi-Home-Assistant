@@ -45,6 +45,16 @@ Install what it needs with `pip install -r requirements_test.txt`.
 
 ## Changelog
 
-Every pull request writes its entry under `## [Unreleased]` in `CHANGELOG.md`.
-A pull-request check fails when `CHANGELOG.md` is untouched, unless the pull
-request carries the `skip-changelog` label (docs-only or CI-only changes).
+`CHANGELOG.md` records changes to the **shipped integration and the tooling
+around it** — behaviour, entities, configuration, scripts, workflows. Write the
+entry under `## [Unreleased]`.
+
+A documentation-only change earns no entry. A conformance-register row flipping
+to `verified`, a research note, a spec amendment, a README, this file: each is
+already its own record, and restating it in the changelog only means two places
+to keep true. Label such a pull request `skip-changelog`, which is what the
+pull-request check looks for; CI-only changes take the same label.
+
+The test: would a reader of the changelog have to go and *do* something
+differently? If the answer is only "read the document that changed", it does not
+belong here.
