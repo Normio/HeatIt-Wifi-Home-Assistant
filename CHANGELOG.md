@@ -53,5 +53,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `mocked` fixture supplies aiohttp 3.14's required `stream_writer` to the
+  responses aioresponses builds, when the running aiohttp has that parameter.
+  aioresponses 0.7.9, its newest release, does not pass it, which reddened the
+  latest row on a test-only dependency's lag rather than on anything Home
+  Assistant changed under us — the one thing that row exists to report.
 - Register row Q18 moves from the `read` to the `write` tier: its evidence
   required writing `panelMode=0`, which no read-tier check may do.
