@@ -78,6 +78,29 @@ class _PendingEcho:
     """
 
 
+@dataclass(frozen=True, slots=True)
+class PollRecord:
+    """What the last poll did, for the diagnostics download alone (§7.3).
+
+    Nothing branches on it and no entity reads it: it exists so that a user
+    who reports "it goes unavailable sometimes" attaches the answer.
+    """
+
+    outcome: str
+    """``ok``, or the poll's own translation key — ``cannot_connect``,
+    ``missing_field``, ``invalid_response``, ``foreign_panel``.
+
+    ``unknown`` covers what carries no key at all: a cancelled refresh, or a
+    failure that is a bug rather than a panel being a panel.
+    """
+
+    duration_seconds: float
+    """Wall-clock seconds for the whole poll, the status read's retry included."""
+
+    retried: bool
+    """Whether that status read used its one retry (§3.6)."""
+
+
 def poll_interval(entry: ConfigEntry) -> timedelta:
     """Read the *poll interval* from the entry's options, in seconds.
 
@@ -127,6 +150,8 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         """
         self.vanished_parameters: set[str] = set()
         """Those of :attr:`observed_parameters` the panel has stopped returning."""
+        self.last_poll: PollRecord | None = None
+        """The last poll, good or bad; ``None`` until the first one returns."""
         self._appeared_parameters: set[str] = set()
         self._presence_recorded = False
         self._echoes: dict[str, _PendingEcho] = {}
@@ -213,6 +238,30 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
 
     @override
     async def _async_update_data(self) -> PanelStatus:
+        """Time one poll and record what it did, then let it stand or fail.
+
+        The record is written on the way out of either path, so the download
+        of §7.3 describes the poll that actually just happened rather than the
+        last one that happened to succeed.
+        """
+        started = monotonic()
+        outcome = "unknown"
+        try:
+            status = await self._poll()
+        except HomeAssistantError as err:
+            outcome = err.translation_key or "unknown"
+            raise
+        else:
+            outcome = "ok"
+            return status
+        finally:
+            self.last_poll = PollRecord(
+                outcome=outcome,
+                duration_seconds=round(monotonic() - started, 3),
+                retried=self.client.last_status_retried,
+            )
+
+    async def _poll(self) -> PanelStatus:
         """Read one status, or fail the poll. There is no third outcome."""
         try:
             status = await self.client.get_status()

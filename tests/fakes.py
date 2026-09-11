@@ -16,7 +16,11 @@ import json
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
-from custom_components.heatit_wifi_panel.api import PanelStatus, parse_status
+from custom_components.heatit_wifi_panel.api import (
+    PanelStatus,
+    parse_status,
+    substitute_string_field,
+)
 from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.conftest import SYNTHESISED_DIR
 
@@ -25,6 +29,29 @@ if TYPE_CHECKING:
 
 ABSENT = object()
 """Set a path to this to drop it from the synthesised status."""
+
+UNSCRUBBED: dict[str, str] = {
+    "id": "AbCdEfGhIjKlMnOpQrStUv",
+    "Network.mac": "E4:B3:23:AA:BB:CC",
+    "Network.SSID": "Example IoT 2.4",
+    "Network.ipAddress": "192.0.2.40",
+}
+"""The four scrubbed fields in the *shape* a real panel answers them in.
+
+Every committed fixture carries the placeholders, so a test of the redaction
+has to put something unscrubbed back first (§7.1). Shared by the client's scrub
+tests and the diagnostics rule test, which mean the same panel.
+
+**Every value here is invented, and must stay invented.** Shape is all these
+tests need: 22 mixed-case alphanumerics, a MAC uppercase with colons, an SSID
+with a space in it, a dotted address. The OUI is Espressif's because that is a
+fact about the hardware (§2.3) and costs nothing to keep; the rest of the MAC
+is not a device's. The address is RFC 5737 TEST-NET-1, which is reserved for
+documentation and routes nowhere. AGENTS.md says never hardcode a panel's
+address and never commit one — the real one lives in `.local/device.json`,
+which is gitignored for exactly this reason, and a test that needs a plausible
+address has no business reading it.
+"""
 
 
 def mutated(raw: bytes, changes: Mapping[str, object]) -> bytes:
@@ -44,6 +71,20 @@ def mutated(raw: bytes, changes: Mapping[str, object]) -> bytes:
         else:
             node[key] = value
     return json.dumps(document, ensure_ascii=False).encode("utf-8")
+
+
+def unscrubbed(raw: bytes) -> bytes:
+    """Put a real panel's four identifiers back into a committed fixture.
+
+    The inverse of the shared wire-level scrub, and done the same way: only the
+    quoted values move, so ``0.00`` stays ``0.00`` and the result is what the
+    panel *actually* sent, byte for byte. :func:`mutated` cannot be used for
+    this — it re-serialises through ``json.dumps`` — and a test that scrubs a
+    fixture that is already scrubbed proves only that nothing was mangled.
+    """
+    for path, real in UNSCRUBBED.items():
+        raw = substitute_string_field(raw, path.rsplit(".", 1)[-1], real)
+    return raw
 
 
 def synthesised(name: str) -> bytes:
@@ -69,9 +110,15 @@ class FakeHeatitClient:
     a later poll returns.
     """
 
-    def __init__(self, raw: bytes) -> None:
+    def __init__(self, raw: bytes, headers: Mapping[str, str] | None = None) -> None:
         """Answer reads from ``raw`` until a test says otherwise."""
         self.raw = raw
+        self.headers = dict(headers or {})
+        self.last_raw_body: bytes | None = None
+        self.last_raw_headers: Mapping[str, str] | None = None
+        self.retries = False
+        """Set this to script reads whose status took the retry (§3.6)."""
+        self.last_status_retried = False
         self.status_reads = 0
         self.writes: list[tuple[str, object]] = []
         self.resets: list[str] = []
@@ -93,10 +140,19 @@ class FakeHeatitClient:
         self.raw = mutated(self.raw, changes)
 
     async def get_status(self) -> PanelStatus:
-        """Read the whole status, or raise the next scripted failure."""
+        """Read the whole status, or raise the next scripted failure.
+
+        The raw body and headers are retained the way the real client retains
+        them — set before the parse, and untouched by a read that failed — and
+        the retry flag is decided per read the way the real one decides it,
+        rather than staying wherever a test last put it.
+        """
         self.status_reads += 1
+        self.last_status_retried = self.retries
         if self._failures:
             raise self._failures.popleft()
+        self.last_raw_body = self.raw
+        self.last_raw_headers = self.headers
         return parse_status(self.raw)
 
     async def set_parameter(self, key: str, value: object) -> object:

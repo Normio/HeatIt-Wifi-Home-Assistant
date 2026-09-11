@@ -106,6 +106,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `hacs.json`'s, and the install section present exactly when `CHANGELOG.md`
   holds a released version. **A platform now ships its README rows in the same
   pull request as its module.**
+- `diagnostics.py`, the config-entry diagnostics download of spec §7.3 — there
+  is no device download, one entry being one device. It carries the entry's
+  data with the host redacted, its options and the *poll interval* in force,
+  the parsed status, the firmware and whether it is verified, the *observed
+  parameters* and those that have vanished, what the last poll did — outcome,
+  duration, whether the status read's retry fired — and `raw`: the last status
+  body and headers exactly as the panel sent them. The body goes through the
+  wire-level scrub `scripts/capture_fixtures.py` writes fixtures with, and a
+  header value through the same four fields matched as text, a header naming
+  nothing that could be found by key. A download from an unverified panel is
+  therefore a fixture candidate: the panel's own bytes, one `name`
+  substitution short of a committed capture. The README's new `## Diagnostics`
+  section says as much to the user.
 - `scripts/check_release.py` gains the README: `README.md` joins the files a
   release cannot exist without, a tag with no `## Installation` section is
   refused, that section may never offer a manual copy into `custom_components/`,
