@@ -38,11 +38,25 @@ Home Assistant from the device's name and its own.
 | Entity | Platform | What it is |
 |---|---|---|
 | Heatit WiFi Panel (`panel`) | climate | The thermostat: off and heat, the comfort and eco presets, the temperature the panel is regulating to, and whether the element is on right now. It carries the panel's own name, because it *is* the panel. |
+| Temperature (`temperature`) | sensor | The room temperature the panel measures, kept as its own history. The thermostat shows the same reading. |
+| Power (`power`) | sensor | What the panel is drawing at this moment, in watts — the reading itself, not an average over the heating cycle. |
+| Energy (`energy`) | sensor | What the panel has consumed since its counter was last zeroed, in kWh. It can be added to the Energy dashboard. |
+| Signal strength (`signal_strength`) | sensor | The panel's own WiFi signal, in dBm. A diagnostic, and **turned off until you turn it on** from the device page: it moves with every poll and most homes never need it. |
+| Open window time remaining (`open_window_time_remaining`) | sensor | How much longer the panel will hold its setpoint down for an open window it has detected. `0` whenever it has detected none. |
+| Open window detected (`open_window_detected`) | binary_sensor | Whether the panel is inferring an open window from a drop in room temperature. On or off rather than open or closed: the panel watches the temperature, not a window. |
 
 Eco is a **preset**, not a second target temperature, and the target follows
 whichever setpoint the panel is regulating to — so it changes when the preset
 does, and is blank while the panel is off. The reasoning, and what was weighed
 against it, is in [ADR-0004](docs/adr/0004-eco-as-a-climate-preset.md).
+
+The panel publishes its energy counter in steps of roughly 0.04 kWh rather than
+continuously, so the Energy sensor sits flat for minutes and then jumps. That is
+the panel reporting, not Home Assistant waiting. Zeroing the counter — from the
+MyHeatit app, or from the panel — costs Home Assistant at most one of those
+steps, the energy banked since the last one having never been published;
+everything already recorded stays, because the sensor counts up and the panel
+zeroes to exactly nothing.
 
 ## Verified firmware
 

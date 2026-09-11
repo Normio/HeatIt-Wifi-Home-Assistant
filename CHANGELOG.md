@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The panel's readings, as five **sensors** and one **binary sensor**: room
+  temperature, the power it is drawing, the energy it has consumed — ready for
+  the Energy dashboard — the countdown on a detected open window, and whether
+  it is detecting one. WiFi signal strength joins them as a diagnostic, off
+  until you turn it on.
+
 ### Changed
 
 - The room a panel is assigned to in the MyHeatit app now only **picks between

@@ -7,6 +7,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.heatit_wifi_panel.const import DOMAIN
@@ -77,6 +78,22 @@ def mock_config_entry() -> MockConfigEntry:
         unique_id=REFERENCE_DEVICE_ID,
         data={CONF_HOST: REFERENCE_HOST},
     )
+
+
+def entity_id(hass: HomeAssistant, platform: str, key: str) -> str:
+    """Return one entity's id, asked of the registry rather than spelled out.
+
+    The id core generates is core's business and moves between releases: Home
+    Assistant 2026.9 began prefixing it with the device's area, turning
+    ``climate.naytehuone_1`` into ``climate.bedroom_naytehuone_1`` under this
+    very fixture. The unique id is ours and does not move, so it is what an
+    entity is found by — ``{device id}-{key}``, §5.2's own two halves.
+    """
+    found = er.async_get(hass).async_get_entity_id(
+        platform, DOMAIN, f"{REFERENCE_DEVICE_ID}-{key}"
+    )
+    assert found is not None
+    return found
 
 
 def panel_device(hass: HomeAssistant, entry: MockConfigEntry) -> DeviceEntry:
