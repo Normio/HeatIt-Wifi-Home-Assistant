@@ -33,7 +33,7 @@ releases.
   panel on in that mode. Temperature limits come from the device and are
   reported as they are. Whether the element is on comes from the panel's relay
   rather than from its reported power, which trails the relay by about 15
-  seconds. Recorded as [ADR-0004](docs/adr/0004-eco-as-a-climate-preset.md).
+  seconds. Recorded as [ADR-0004](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/blob/main/docs/adr/0004-eco-as-a-climate-preset.md).
 - **Setup through a config flow**, host only: Home Assistant reads the panel's
   status once to learn which unit answers there. Panels already known to the
   router are offered by DHCP discovery. Reconfigure moves an existing panel to
@@ -78,6 +78,6 @@ releases.
 
 - Firmware **1.21**, on a 600 W wall panel. The claims the integration depends
   on are recorded row by row in the
-  [conformance register](docs/conformance/checklist.md), each with the firmware
+  [conformance register](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/blob/main/docs/conformance/checklist.md), each with the firmware
   it was verified at. A panel on any other version is unverified, not
   unsupported: it is added and driven exactly the same way.
