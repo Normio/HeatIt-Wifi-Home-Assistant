@@ -100,7 +100,14 @@ same way.
 
 | Firmware | Verified on |
 |---|---|
-| 1.21 | 600 W wall panel (`maxLoad` 6) |
+| 1.21 | 600 W wall panel (`maxLoad` 6) and 1000 W wall panel (`maxLoad` 10) |
+
+Two units, one firmware: both answered every automated check in the register
+that could run, and they disagreed on nothing. The captured responses in the
+test suite are the 600 W unit's — a capture is filed by firmware, and both
+panels report 1.21 — so the 1000 W unit is recorded in the register rather than
+as a second set of fixtures. The only thing that differs between them is the
+rated load, which the panel reports and the load limit follows.
 
 ## Network
 
