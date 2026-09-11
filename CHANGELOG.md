@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `scripts/probe.py` no longer overwrites an observed fixture that is already
+  in the tree: it reports what it left alone, and refreshing one means deleting
+  the file first. Three runs in a row had rewritten the same write-echo fixture
+  to whatever the room temperature implied that hour.
+- A settings-reset probe run now moves every writable parameter off its
+  documented default before resetting, so the reset has to prove it undid
+  something; the destructive prompt says so before you answer it.
+- `scripts/capture_fixtures.py` takes `--device`, so a second panel needs a
+  second pointer file instead of `.local/device.json` being swapped about. A
+  pointer that does not exist now exits 3, the usage code, rather than 1, which
+  is this script's code for fixture drift.
+
 ## [0.3.0] - 2026-09-11
 
 Adds 2 buttons, a reset and a restore. Both are off until you turn them on.
