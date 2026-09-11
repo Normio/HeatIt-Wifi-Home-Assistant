@@ -19,6 +19,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - What each of these will let you set **follows the panel**: the setpoints stop
   at the temperature limits, each limit stops half a degree short of the other,
   and the load limit stops at your model's rating.
+- Four of the panel's own settings, on its device page: **Open window
+  detection** and **External sensor** as switches, **Standby display**
+  (setpoint or measured temperature) and **Buttons** (enabled, disabled or menu
+  locked) as selects. Turning **External sensor** on with no wireless sensor
+  paired does nothing on the panel, so the switch turns itself back off at the
+  next reading, and the log says once that the panel accepted the change
+  without applying it.
+- The panel's readings, as five **sensors** and one **binary sensor**: room
+  temperature, the power it is drawing, the energy it has consumed — ready for
+  the Energy dashboard — the countdown on a detected open window, and whether
+  it is detecting one. WiFi signal strength joins them as a diagnostic, off
+  until you turn it on.
+
+### Changed
+
+- The room a panel is assigned to in the MyHeatit app now only **picks between
+  the areas you already have** — matched by name, so `bedroom` finds `Bedroom`.
+  It no longer creates an area automatically.
 
 ## [0.1.0] - 2026-09-11
 

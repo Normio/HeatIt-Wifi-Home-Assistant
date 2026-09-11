@@ -31,7 +31,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 
-from .entity import HeatitWifiPanelEntity
+from .entity import HeatitParameterEntity
 from .registry import PARAMETERS
 
 if TYPE_CHECKING:
@@ -142,7 +142,7 @@ def _rated_load(coordinator: HeatitWifiPanelCoordinator) -> float:
 
 
 @dataclass(frozen=True, kw_only=True)
-class HeatitNumberEntityDescription(NumberEntityDescription):
+class HeatitNumberDescription(NumberEntityDescription):
     """One ``number`` row of §5.2: a parameter, and where its bounds come from."""
 
     parameter: str
@@ -159,62 +159,70 @@ class HeatitNumberEntityDescription(NumberEntityDescription):
     """The highest value to offer, on the same terms."""
 
 
-NUMBERS: Final[tuple[HeatitNumberEntityDescription, ...]] = (
-    HeatitNumberEntityDescription(
+NUMBERS: tuple[HeatitNumberDescription, ...] = (
+    HeatitNumberDescription(
         key="comfort_setpoint",
         parameter="heatingSetpoint",
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         minimum_fn=_lowest_setpoint,
         maximum_fn=_highest_setpoint,
+        entity_category=EntityCategory.CONFIG,
     ),
-    HeatitNumberEntityDescription(
+    HeatitNumberDescription(
         key="eco_setpoint",
         parameter="ecoSetpoint",
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         minimum_fn=_lowest_setpoint,
         maximum_fn=_highest_setpoint,
+        entity_category=EntityCategory.CONFIG,
     ),
-    HeatitNumberEntityDescription(
+    HeatitNumberDescription(
         key="minimum_temperature_limit",
         parameter="minimumTemperatureLimit",
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         maximum_fn=_highest_minimum_limit,
+        entity_category=EntityCategory.CONFIG,
     ),
-    HeatitNumberEntityDescription(
+    HeatitNumberDescription(
         key="maximum_temperature_limit",
         parameter="maximumTemperatureLimit",
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         minimum_fn=_lowest_maximum_limit,
+        entity_category=EntityCategory.CONFIG,
     ),
     # No device class, on purpose: this is an *offset*, and converting an
     # offset to °F is wrong — one degree Celsius of calibration is 1.8 °F of
     # calibration, not 33.8. Its icon comes from icons.json, which is what a
     # row with no device class to supply one is for.
-    HeatitNumberEntityDescription(
+    HeatitNumberDescription(
         key="sensor_calibration",
         parameter="sensorCalibration",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        entity_category=EntityCategory.CONFIG,
     ),
-    HeatitNumberEntityDescription(
+    HeatitNumberDescription(
         key="load_limit",
         parameter=LOAD_LIMIT,
         device_class=NumberDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         maximum_fn=_rated_load,
+        entity_category=EntityCategory.CONFIG,
     ),
-    HeatitNumberEntityDescription(
+    HeatitNumberDescription(
         key="active_display_brightness",
         parameter="activeDisplayBrightness",
         native_unit_of_measurement=PERCENTAGE,
+        entity_category=EntityCategory.CONFIG,
     ),
-    HeatitNumberEntityDescription(
+    HeatitNumberDescription(
         key="standby_display_brightness",
         parameter="standbyDisplayBrightness",
         native_unit_of_measurement=PERCENTAGE,
+        entity_category=EntityCategory.CONFIG,
     ),
 )
 
@@ -238,16 +246,15 @@ async def async_setup_entry(
     )
 
 
-class HeatitPanelNumber(HeatitWifiPanelEntity, NumberEntity):
+class HeatitPanelNumber(HeatitParameterEntity, NumberEntity):
     """One panel setting a user gives a value to rather than chooses."""
 
-    _attr_entity_category = EntityCategory.CONFIG
-    entity_description: HeatitNumberEntityDescription
+    entity_description: HeatitNumberDescription
 
     def __init__(
         self,
         coordinator: HeatitWifiPanelCoordinator,
-        description: HeatitNumberEntityDescription,
+        description: HeatitNumberDescription,
     ) -> None:
         """Bind to the parameter this row reads and writes.
 
@@ -256,11 +263,10 @@ class HeatitPanelNumber(HeatitWifiPanelEntity, NumberEntity):
         every other row takes the registry's, which is the same range the
         client will accept the write against.
         """
-        self._descriptor = PARAMETERS[description.parameter]
-        super().__init__(
-            coordinator, description.key, read_path=self._descriptor.read_path
-        )
+        super().__init__(coordinator, description.key, parameter=description.parameter)
         self.entity_description = description
+        self._descriptor = PARAMETERS[self._parameter]
+        """The registry's own, for the step and the bounds that do not move."""
         self._minimum: Bound = description.minimum_fn or _standing(
             _registry_bound(self._descriptor, self._descriptor.minimum, "minimum")
         )
@@ -272,7 +278,7 @@ class HeatitPanelNumber(HeatitWifiPanelEntity, NumberEntity):
     @override
     def native_value(self) -> float | None:
         """Return the reading in user units, a pending *write echo* winning."""
-        return self.coordinator.numeric(self.entity_description.parameter)
+        return self.coordinator.numeric(self._parameter)
 
     @property
     @override
@@ -307,6 +313,4 @@ class HeatitPanelNumber(HeatitWifiPanelEntity, NumberEntity):
         exist alongside the climate entity, which can only reach the *live*
         bank.
         """
-        await self.coordinator.async_write_parameter(
-            self.entity_description.parameter, value=value
-        )
+        await self.coordinator.async_write_parameter(self._parameter, value=value)

@@ -1,5 +1,13 @@
 {
   "entity": {
+    "binary_sensor": {
+      "open_window_detected": {
+        "default": "mdi:window-closed-variant",
+        "state": {
+          "on": "mdi:window-open-variant"
+        }
+      }
+    },
     "climate": {
       "panel": {
         "default": "mdi:radiator",
@@ -9,11 +17,11 @@
       }
     },
     "number": {
-      "sensor_calibration": {
-        "default": "mdi:thermometer-plus"
-      },
       "active_display_brightness": {
         "default": "mdi:brightness-6"
+      },
+      "sensor_calibration": {
+        "default": "mdi:thermometer-plus"
       },
       "standby_display_brightness": {
         "default": "mdi:brightness-4"

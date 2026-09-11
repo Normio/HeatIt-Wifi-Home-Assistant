@@ -11,6 +11,8 @@ two independent encodings, so a row is added here by hand when a platform
 ships. Its final form is 21 entities, of which 3 are disabled by default.
 """
 
+import importlib
+from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
@@ -18,6 +20,7 @@ from homeassistant.components.climate.const import HVACMode
 from homeassistant.components.number import NumberDeviceClass
 from homeassistant.const import (
     PERCENTAGE,
+    STATE_OFF,
     EntityCategory,
     Platform,
     UnitOfPower,
@@ -28,7 +31,6 @@ from homeassistant.helpers import entity_registry as er
 from custom_components.heatit_wifi_panel.api import HeatitConnectionError
 from custom_components.heatit_wifi_panel.const import DOMAIN
 from custom_components.heatit_wifi_panel.entity import HeatitWifiPanelEntity
-from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.fakes import ABSENT, FakeHeatitClient
 from tests.integration.conftest import REFERENCE_DEVICE_ID, panel_device, setup_entry
 
@@ -39,6 +41,21 @@ if TYPE_CHECKING:
     from custom_components.heatit_wifi_panel.coordinator import (
         HeatitWifiPanelCoordinator,
     )
+
+INTEGRATION_DIR = Path(__file__).parents[2] / "custom_components" / "heatit_wifi_panel"
+
+#: §9.2's ``parallel-updates`` rule, transcribed: ``0`` on the two read-only
+#: platforms, ``1`` on the five that write. A platform that has not shipped yet
+#: skips, so the sweep grows with the integration instead of being rewritten.
+PARALLEL_UPDATES = {
+    Platform.BINARY_SENSOR: 0,
+    Platform.BUTTON: 1,
+    Platform.CLIMATE: 1,
+    Platform.NUMBER: 1,
+    Platform.SELECT: 1,
+    Platform.SENSOR: 0,
+    Platform.SWITCH: 1,
+}
 
 
 class Row(NamedTuple):
@@ -52,12 +69,26 @@ class Row(NamedTuple):
     state_class: str | None
     category: str | None
     enabled: bool
-    state: str
+    state: str | None
+    """The state against the reference capture, or ``None`` when the entity is
+    disabled by default and so has none until a user enables it."""
+
+    read_path: str | None
+    """§5.2's read path, or ``None`` for an entity nothing can drop.
+
+    Two kinds of row carry ``None``. The climate entity reads
+    ``parameters.panelMode`` and the temperature sensor reads
+    ``roomTemperature``, both *required core*: a status without either is not a
+    status, so neither can go missing on its own. The rest are droppable, and
+    the sweep below removes each in turn.
+    """
 
 
 #: §5.2, transcribed. The climate entity's name is ``None`` because it takes
 #: the device's own — it *is* the panel — and its three measurement columns are
-#: empty because a thermostat is not a measurement.
+#: empty because a thermostat is not a measurement. The states are the
+#: reference capture's own readings: room 23.0 °C, no power, no consumption,
+#: no open window.
 ENTITY_TABLE = [
     Row(
         platform=Platform.CLIMATE,
@@ -69,104 +100,252 @@ ENTITY_TABLE = [
         category=None,
         enabled=True,
         state=HVACMode.HEAT,
+        read_path=None,
     ),
-    *(
-        Row(
-            platform=Platform.NUMBER,
-            key=key,
-            name=name,
-            device_class=device_class,
-            unit=unit,
-            state_class=None,
-            category=EntityCategory.CONFIG,
-            enabled=True,
-            state=state,
-        )
-        for key, name, device_class, unit, state in [
-            (
-                "comfort_setpoint",
-                "Comfort setpoint",
-                NumberDeviceClass.TEMPERATURE,
-                UnitOfTemperature.CELSIUS,
-                "19.0",
-            ),
-            (
-                "eco_setpoint",
-                "Eco setpoint",
-                NumberDeviceClass.TEMPERATURE,
-                UnitOfTemperature.CELSIUS,
-                "18.0",
-            ),
-            (
-                "minimum_temperature_limit",
-                "Minimum temperature limit",
-                NumberDeviceClass.TEMPERATURE,
-                UnitOfTemperature.CELSIUS,
-                "5.0",
-            ),
-            (
-                "maximum_temperature_limit",
-                "Maximum temperature limit",
-                NumberDeviceClass.TEMPERATURE,
-                UnitOfTemperature.CELSIUS,
-                "40.0",
-            ),
-            # No device class: an offset converted to °F is wrong (§5.2).
-            (
-                "sensor_calibration",
-                "Sensor calibration",
-                None,
-                UnitOfTemperature.CELSIUS,
-                "0.0",
-            ),
-            # Watts and percent, not the device's units of 100 W and 10 %.
-            (
-                "load_limit",
-                "Load limit",
-                NumberDeviceClass.POWER,
-                UnitOfPower.WATT,
-                "600.0",
-            ),
-            (
-                "active_display_brightness",
-                "Active display brightness",
-                None,
-                PERCENTAGE,
-                "100.0",
-            ),
-            (
-                "standby_display_brightness",
-                "Standby display brightness",
-                None,
-                PERCENTAGE,
-                "0.0",
-            ),
-        ]
+    # Both *setpoint banks* are *required core*, so neither number can go
+    # missing on its own: a status without one is not a status (§6.3).
+    Row(
+        platform=Platform.NUMBER,
+        key="comfort_setpoint",
+        name="Comfort setpoint",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="19.0",
+        read_path=None,
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="eco_setpoint",
+        name="Eco setpoint",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="18.0",
+        read_path=None,
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="minimum_temperature_limit",
+        name="Minimum temperature limit",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="5.0",
+        read_path="parameters.minimumTemperatureLimit",
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="maximum_temperature_limit",
+        name="Maximum temperature limit",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="40.0",
+        read_path="parameters.maximumTemperatureLimit",
+    ),
+    # No device class, on purpose: it is an offset, and a °F conversion of
+    # an offset is wrong (§5.2).
+    Row(
+        platform=Platform.NUMBER,
+        key="sensor_calibration",
+        name="Sensor calibration",
+        device_class=None,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="0.0",
+        read_path="parameters.sensorCalibration",
+    ),
+    # Watts and percent from here down, not the device's units of 100 W
+    # and 10 %: the registry carries the scale (§5.4).
+    Row(
+        platform=Platform.NUMBER,
+        key="load_limit",
+        name="Load limit",
+        device_class=NumberDeviceClass.POWER,
+        unit=UnitOfPower.WATT,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="600.0",
+        read_path="parameters.loadLimit",
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="active_display_brightness",
+        name="Active display brightness",
+        device_class=None,
+        unit=PERCENTAGE,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="100.0",
+        read_path="parameters.activeDisplayBrightness",
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="standby_display_brightness",
+        name="Standby display brightness",
+        device_class=None,
+        unit=PERCENTAGE,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="0.0",
+        read_path="parameters.standbyDisplayBrightness",
+    ),
+    Row(
+        platform=Platform.SWITCH,
+        key="open_window_detection",
+        name="Open window detection",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state=STATE_OFF,
+        read_path="parameters.OWD.openWindowDetection",
+    ),
+    Row(
+        platform=Platform.SWITCH,
+        key="external_sensor",
+        name="External sensor",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state=STATE_OFF,
+        read_path="parameters.sensorMode",
+    ),
+    Row(
+        platform=Platform.SELECT,
+        key="standby_display",
+        name="Standby display",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="measured_temperature",
+        read_path="parameters.temperatureDisplay",
+    ),
+    Row(
+        platform=Platform.SELECT,
+        key="buttons",
+        name="Buttons",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="disabled",
+        read_path="parameters.disableButtons",
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="temperature",
+        name="Temperature",
+        device_class="temperature",
+        unit="°C",
+        state_class="measurement",
+        category=None,
+        enabled=True,
+        state="23.0",
+        read_path=None,
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="power",
+        name="Power",
+        device_class="power",
+        unit="W",
+        state_class="measurement",
+        category=None,
+        enabled=True,
+        state="0.0",
+        read_path="currentPower",
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="energy",
+        name="Energy",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+        category=None,
+        enabled=True,
+        state="0.0",
+        read_path="totalConsumption",
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="signal_strength",
+        name="Signal strength",
+        device_class="signal_strength",
+        unit="dBm",
+        state_class="measurement",
+        category="diagnostic",
+        enabled=False,
+        state=None,
+        read_path="Network.wifiSignalStrength",
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="open_window_time_remaining",
+        name="Open window time remaining",
+        device_class="duration",
+        unit="s",
+        state_class=None,
+        category="diagnostic",
+        enabled=True,
+        state="0",
+        read_path="parameters.OWD.activeTime",
+    ),
+    Row(
+        platform=Platform.BINARY_SENSOR,
+        key="open_window_detected",
+        name="Open window detected",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=None,
+        enabled=True,
+        state="off",
+        read_path="parameters.OWD.activeNow",
     ),
 ]
 
-#: §5.2's read-path column for every **optional** parameter, and the row that
-#: reads it: the entity that disappears when a firmware stops returning that
-#: path, or ``None`` while no platform exposes it yet. Both halves are
-#: test-side literals, so the path a row reads is compared against §5.2 rather
-#: than against the registry that implements it.
-#:
-#: The *required core* parameters are deliberately absent. A status without one
-#: is not a status, so dropping one fails the poll rather than losing an entity
-#: (§6.3) — which is why the two *setpoint banks* are the two numbers that can
-#: never go missing on their own.
-ENTITY_OF_READ_PATH: dict[str, str | None] = {
-    "parameters.minimumTemperatureLimit": "minimum_temperature_limit",
-    "parameters.maximumTemperatureLimit": "maximum_temperature_limit",
-    "parameters.sensorCalibration": "sensor_calibration",
-    "parameters.loadLimit": "load_limit",
-    "parameters.activeDisplayBrightness": "active_display_brightness",
-    "parameters.standbyDisplayBrightness": "standby_display_brightness",
-    "parameters.disableButtons": None,
-    "parameters.temperatureDisplay": None,
-    "parameters.sensorMode": None,
-    "parameters.OWD.openWindowDetection": None,
-}
+
+@pytest.mark.parametrize(
+    ("platform", "expected"), sorted(PARALLEL_UPDATES.items()), ids=lambda value: value
+)
+def test_every_platform_module_declares_parallel_updates(
+    platform: Platform, expected: int
+) -> None:
+    """§9.2's rule test, in one place rather than once per platform module.
+
+    ``PARALLEL_UPDATES`` has to be a module-level name in each platform — that
+    is how Home Assistant reads it — so the declaration cannot be shared; the
+    *assertion* can, and this is it.
+    """
+    if not (INTEGRATION_DIR / f"{platform}.py").is_file():
+        pytest.skip(f"the {platform} platform has not shipped yet")
+
+    module = importlib.import_module(f"custom_components.heatit_wifi_panel.{platform}")
+    declared = module.PARALLEL_UPDATES
+
+    assert declared == expected
 
 
 def registry_entries(
@@ -206,8 +385,19 @@ async def test_each_entity_is_the_one_the_table_describes(
     assert registered.original_name == row.name
     assert registered.entity_category == row.category
     assert (registered.disabled_by is None) == row.enabled
+    # The registry carries the three measurement columns for **every** row,
+    # disabled ones included: the platform records them as it registers the
+    # entity, before it declines to add a disabled one.
+    assert registered.original_device_class == row.device_class
+    assert registered.unit_of_measurement == row.unit
+    assert (registered.capabilities or {}).get("state_class") == row.state_class
 
     state = hass.states.get(registered.entity_id)
+    if not row.enabled:
+        assert state is None
+        return
+    # And the state carries them as the user meets them, which is the encoding
+    # that matters for a row that ships enabled.
     assert state is not None
     assert state.state == row.state
     assert state.attributes.get("device_class") == row.device_class
@@ -215,42 +405,35 @@ async def test_each_entity_is_the_one_the_table_describes(
     assert state.attributes.get("state_class") == row.state_class
 
 
-# --- presence-gated creation (§5.4) -----------------------------------------
-
-
-def test_every_optional_parameter_has_a_read_path_row_here() -> None:
-    """The map covers the registry, so a new parameter cannot slip past it.
-
-    The registry is asked which parameters are optional and nothing else; the
-    read path each one resolves at, and the entity that reads it, stay
-    test-side transcriptions of §5.2 so the two encodings remain independent.
-    """
-    optional = {d.read_path for d in PARAMETERS.values() if not d.required}
-    assert set(ENTITY_OF_READ_PATH) == optional
-
-
-@pytest.mark.parametrize("read_path", sorted(ENTITY_OF_READ_PATH), ids=str)
-async def test_a_parameter_missing_at_setup_costs_exactly_its_own_entity(
+@pytest.mark.parametrize(
+    "row",
+    [row for row in ENTITY_TABLE if row.read_path is not None],
+    ids=lambda row: row.key,
+)
+async def test_a_dropped_parameter_costs_only_its_own_entity(
     hass: HomeAssistant,
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
-    read_path: str,
+    row: Row,
 ) -> None:
-    """§5.4: a descriptor becomes an entity only if its read path resolves.
+    """§8.5, over the whole table: setup succeeds, and one entity is missing.
 
-    Setup still succeeds, the one row that reads the missing parameter is not
-    created at all — not created-and-unavailable — and every other row is
-    exactly where it was.
+    §5.4 gates creation on the **first** status, so a firmware that never
+    returns a parameter costs exactly that parameter's entity — and the check
+    that matters is the other half, that every other entity is still there. A
+    per-platform version of this test could not see a dropped switch taking the
+    climate entity with it.
     """
-    patched_client.set_status({read_path: ABSENT})
+    assert row.read_path is not None, "the parametrisation dropped the None rows"
+    patched_client.set_status({row.read_path: ABSENT})
 
     assert await setup_entry(hass, mock_config_entry)
 
-    absent = ENTITY_OF_READ_PATH[read_path]
-    expected = {
-        f"{REFERENCE_DEVICE_ID}-{row.key}" for row in ENTITY_TABLE if row.key != absent
+    assert set(registry_entries(hass, mock_config_entry)) == {
+        f"{REFERENCE_DEVICE_ID}-{other.key}"
+        for other in ENTITY_TABLE
+        if other.key != row.key
     }
-    assert set(registry_entries(hass, mock_config_entry)) == expected
 
 
 # --- the base entity's rules ------------------------------------------------

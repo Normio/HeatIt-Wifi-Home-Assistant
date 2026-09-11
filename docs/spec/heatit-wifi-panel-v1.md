@@ -559,8 +559,17 @@ and if it ever turns up an advertisement it amends this spec rather than having 
 
 ### 4.4 Naming and area — read once, then frozen
 
-`name` becomes the entry title **and** the device name; a non-empty `room` becomes `suggested_area`.
-Both are read **at creation only** and never rewritten by a poll.
+`name` becomes the entry title **and** the device name; a `room` that matches an area Home Assistant
+already has becomes `suggested_area`, and one that matches none is dropped. Both are read **at
+creation only** and never rewritten by a poll.
+
+The area registry is the user's, not the panel's. `suggested_area` is core's only creation-time area
+input and core resolves it through `area_registry.async_get_or_create`, so passing the room
+unconditionally *creates* an area for any room name the user has never made one for — adding to the
+registry rather than choosing from it. The room therefore only ever picks between areas that already
+exist, matched by the registry's own normalisation, so `bedroom` finds `Bedroom`. With no match the
+device is left unassigned and Home Assistant offers its own area picker for it, which is the same
+place a user who never set a room in the MyHeatit app ends up.
 
 Home Assistant's convention is that the user owns the entry title and device name once the entry
 exists — which is why the rediscovery idiom updates `CONF_HOST` and never the title. Following an app
@@ -1673,6 +1682,15 @@ rather than a surprise.
 Corrections to this document after v1 was frozen. Each entry names the register row or issue that
 forced it, and the PR that carried it.
 
+**2026-09-11 — §4.4's `room` only picks an area, it never creates one** (PR pending).
+§4.4 said "a non-empty `room` becomes `suggested_area`" and took that to be a suggestion. It is not:
+core resolves `suggested_area` through `area_registry.async_get_or_create`, so a room naming no
+existing area had one *created* — the panel silently writing to a registry that is the user's. As
+shipped in 0.1.0, adding a panel whose MyHeatit room was `Bedroom` made a `Bedroom` area. §4.4 now
+matches the room against the existing areas and drops it when nothing matches; the paragraph above
+records why, and the unmatched case is the one Home Assistant already handles by offering its area
+picker.
+
 **2026-09-09 — `scripts/check_layout.py` joins §3.1 and §9.4** ([#36](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/36), PR #49).
 Three of #36's acceptance criteria — no `strings.json` anywhere, brand assets nowhere else in the
 repository, `hacs.json` holding exactly three keys — have no upstream enforcer: hassfest validates
@@ -1912,21 +1930,43 @@ the 1.5 s a write needs to reach the status would report a *silent undo* that ne
 `DataUpdateCoordinator` cancels the debounced refresh when a scheduled poll runs, so no later
 refresh would correct it before the next *poll interval*.
 
+**2026-09-11 — the switch and select platforms refine §3.5** ([#43](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/43)).
+§3.5 has every entity description carry `value_fn` / `set_value_fn` callables, and the amendment of
+[#41](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/41) let the climate entity out of
+descriptions altogether while holding the rule for "the five description-driven platforms". The two
+that landed here are description-driven and carry **no callables**: `HeatitSwitchDescription` holds
+the parameter's wire name, and `HeatitSelectDescription` holds that plus the option names and the
+device value behind each. A `value_fn` here could only be `lambda c: c.parameter("sensorMode")` —
+the same call with the same argument the description already names — and a `set_value_fn` the
+matching `async_write_parameter`, so the pair would restate the wire name twice more per entity and
+give a reviewer three places to check that a switch writes what it reads. §3.5's point is that the
+*table* holds what varies between entities rather than a class per entity, and a description naming
+one registry parameter holds exactly that. The callables stay, for a platform whose reading is **not** one
+parameter: `sensor.py` and `binary_sensor.py`, merged alongside this from
+[#44](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/44), carry a `read_path` and a
+`value_fn` for exactly that reason — their rows read top-level *status* fields the registry holds no
+descriptor for, and the signal strength needs a parse rather than a lookup. So the rule is **narrowed
+to "where the value is not one *observed parameter*"** rather than dropped, and the two shapes are
+the two halves of §5.2's table: what the panel accepts a write for, and what it only reports. The
+binding that every parameter-backed platform does share, the registry lookup that turns a wire name
+into a read path, moves to a second base class in `entity.py`, `HeatitParameterEntity`, so §3.5's
+"a base `CoordinatorEntity` supplying `DeviceInfo` and the availability rule" now describes two
+classes: that one and the parameter binding on top of it.
+
 **2026-09-11 — the number ticket refines §3.5, §5.2 and §5.3** ([#42](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/42)).
-Three refinements. (1) §3.5 has an entity description carry `value_fn` / `set_value_fn` callables.
-**A number row carries a wire name instead** — `parameter: str` — because §3.3 gives the registry
-the dotted read path, the step, the scale and the bounds one write is validated against, and a
-per-row `value_fn` would restate eight of those read paths in a second place for the two encodings
-to drift apart in. Reading and writing go through the coordinator's `numeric()` and
-`async_write_parameter()` keyed by that name, so the *write echo*, the debounced refresh and the
-*silent undo* stay one per panel. What the row does carry that the registry cannot is the half §5.2
-marks **dynamic**: `minimum_fn` / `maximum_fn`, each answered from coordinator data on every access.
-The callable-per-row rule stands wherever a platform's value genuinely is per entity. (2) §5.2 bounds
-the *load limit* at `maxLoad × 100` but does not say what bounds it on a firmware that does not
-report `maxLoad`. It is then **the registry's own ceiling**, 1500 W — the largest model Heatit sells
-— and the device refuses anything above its own rating either way (Q17). `maxLoad` gets no registry
-descriptor: the registry is the client's *write* surface, and a descriptor would make a
-never-written parameter writable. (3) #41's amendment gave the *climate* entity the registry's
-bounds on a *setpoint bank* where a *temperature limit* is absent. **Both setpoint numbers need the
-same two readings on the same terms**, so the fallback moves to the coordinator as
-`minimum_temperature` / `maximum_temperature` and is written once rather than per platform.
+Three refinements, on top of #43's narrowing of §3.5 above, which `number.py` sits inside: a number
+*is* one *observed parameter*, so `HeatitNumberDescription` holds that parameter's wire name and no
+`value_fn`. (1) It does carry two callables, and the narrowing does not cover them, because they are
+not the value: `minimum_fn` / `maximum_fn` are the half of §5.2 marked **dynamic**, answered from
+coordinator data on every access. So the shape of the rule is **the value of a parameter-backed
+entity is a lookup, never a callable; anything about that value that moves with device state is a
+callable, because nothing else can be read fresh.** Ten of the sixteen bounds in the eight rows do
+not move and are the registry's. (2) §5.2 bounds the *load limit* at `maxLoad × 100` but does not say
+what bounds it on a firmware that does not report `maxLoad`. It is then **the registry's own
+ceiling**, 1500 W — the largest model Heatit sells — and the device refuses anything above its own
+rating either way (Q17). `maxLoad` gets no registry descriptor: the registry is the client's *write*
+surface, and a descriptor would make a never-written parameter writable. (3) #41's amendment gave the
+*climate* entity the registry's bounds on a *setpoint bank* where a *temperature limit* is absent.
+**Both setpoint numbers need the same two readings on the same terms**, so the fallback moves to the
+coordinator as `minimum_temperature` / `maximum_temperature` and is written once rather than per
+platform.

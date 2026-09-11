@@ -77,6 +77,14 @@ REDACTED_FIELDS: Final[Mapping[str, str]] = {
     "Network.ipAddress": "10.0.0.2",  # RFC 1918
 }
 
+WIFI_SIGNAL_STRENGTH: Final = "Network.wifiSignalStrength"
+"""Where the signal strength sits in a *status*.
+
+Named because two modules need the same path and must not drift: the
+:attr:`PanelStatus.signal_strength_dbm` parse below, and the read path the
+diagnostic sensor's presence and availability are gated on (§5.2).
+"""
+
 SIGNAL_STRENGTH: Final = re.compile(r"^\s*(-?\d+)\s*dBm\s*$", re.IGNORECASE)
 
 
@@ -245,7 +253,7 @@ class PanelStatus:
     @property
     def signal_strength_dbm(self) -> int | None:
         """``Network.wifiSignalStrength`` parsed, or ``None``."""
-        return parse_signal_strength(self.get("Network.wifiSignalStrength"))
+        return parse_signal_strength(self.get(WIFI_SIGNAL_STRENGTH))
 
 
 def _decode_json(raw: bytes, content_type: str) -> object:

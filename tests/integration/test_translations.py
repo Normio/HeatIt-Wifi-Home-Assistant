@@ -10,9 +10,15 @@ user.
 resolves and that a message carries the placeholders its call site fills — an
 `{expected_id}` the code never substitutes renders as literal braces to the
 user, which is a bug and not a matter of phrasing. The key lists are
-transcribed from §4 and §6 rather than read out of the module, so the two
+transcribed from §4, §5.2 and §6 rather than read out of the module, so the two
 encodings stay independent; the placeholder *names* are read from the code,
 because agreeing on them is the whole point.
+
+An entity's own two kinds of string are here as well: its **name**, which
+``has_entity_name`` resolves and without which the entity carries the device's
+name alone, and a select's **options**, which are states resolved at
+``entity.select.<key>.state.<option>`` — an option with nothing there reaches a
+dashboard as ``menu_locked``.
 """
 
 import json
@@ -53,6 +59,32 @@ EXCEPTIONS = [
     "parameter_rejected",
     "unexpected_response",
     "set_temperature_while_off",
+]
+
+#: Every entity §5.2 names in ``translations/en.json``, by platform and key.
+#: The climate entity is deliberately absent: it sets ``_attr_name = None`` and
+#: takes the device's own name, so it has no ``name`` to resolve.
+ENTITY_NAMES = [
+    ("number", "comfort_setpoint"),
+    ("number", "eco_setpoint"),
+    ("number", "minimum_temperature_limit"),
+    ("number", "maximum_temperature_limit"),
+    ("number", "sensor_calibration"),
+    ("number", "load_limit"),
+    ("number", "active_display_brightness"),
+    ("number", "standby_display_brightness"),
+    ("switch", "open_window_detection"),
+    ("switch", "external_sensor"),
+    ("select", "standby_display"),
+    ("select", "buttons"),
+]
+
+#: §5.2's two selects and the options each offers. A select's options are its
+#: states, resolved at ``entity.select.<key>.state.<option>``, and an option
+#: with nothing there reaches the user as the raw key.
+SELECT_STATES = [
+    ("standby_display", ["setpoint", "measured_temperature"]),
+    ("buttons", ["enabled", "disabled", "menu_locked"]),
 ]
 
 #: A write-time message and the placeholders its call site fills (§6.4). The
@@ -143,3 +175,21 @@ def test_the_missing_field_message_carries_the_path(
 ) -> None:
     """§6.3's key needs the dotted path, which is why the client carries it."""
     assert "{field}" in translations["exceptions"]["missing_field"]["message"]
+
+
+@pytest.mark.parametrize(("platform", "key"), ENTITY_NAMES)
+def test_every_entity_is_named(
+    translations: dict[str, Any], platform: str, key: str
+) -> None:
+    """A name is what ``has_entity_name`` resolves; without one there is none."""
+    assert translations["entity"][platform][key]["name"]
+
+
+@pytest.mark.parametrize(("key", "options"), SELECT_STATES)
+def test_every_select_option_is_written(
+    translations: dict[str, Any], key: str, options: list[str]
+) -> None:
+    """Each option is a state, and each state carries the words a user reads."""
+    states = translations["entity"]["select"][key]["state"]
+    assert list(states) == options
+    assert all(states.values())

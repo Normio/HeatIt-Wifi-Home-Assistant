@@ -12,7 +12,6 @@ step decides what is on the grid — so the write assertions here are made again
 ``patched_client.writes``, which records the serialised query value.
 """
 
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -28,18 +27,16 @@ from homeassistant.components.number.const import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
 
-from custom_components.heatit_wifi_panel.const import DOMAIN, POST_WRITE_REFRESH_DELAY
+from custom_components.heatit_wifi_panel.const import POST_WRITE_REFRESH_DELAY
 from custom_components.heatit_wifi_panel.number import (
     NUMBERS,
-    HeatitNumberEntityDescription,
+    HeatitNumberDescription,
     HeatitPanelNumber,
 )
 from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.fakes import ABSENT
-from tests.integration.conftest import REFERENCE_DEVICE_ID, setup_entry
+from tests.integration.conftest import advance, entity_id, setup_entry
 
 if TYPE_CHECKING:
     from freezegun.api import FrozenDateTimeFactory
@@ -55,22 +52,9 @@ COMFORT = 19.0
 ECO = 18.0
 
 
-def entity_id(hass: HomeAssistant, key: str) -> str:
-    """Return one number's entity id, asked of the registry rather than spelled.
-
-    The id core generates moves between releases — 2026.9 began prefixing it
-    with the device's area — while the unique id is ours and does not.
-    """
-    found = er.async_get(hass).async_get_entity_id(
-        NUMBER_DOMAIN, DOMAIN, f"{REFERENCE_DEVICE_ID}-{key}"
-    )
-    assert found is not None
-    return found
-
-
 def attributes(hass: HomeAssistant, key: str) -> dict[str, object]:
     """Return one number's state attributes."""
-    state = hass.states.get(entity_id(hass, key))
+    state = hass.states.get(entity_id(hass, NUMBER_DOMAIN, key))
     assert state is not None
     return dict(state.attributes)
 
@@ -83,7 +67,7 @@ def bounds(hass: HomeAssistant, key: str) -> tuple[object, object]:
 
 def value(hass: HomeAssistant, key: str) -> str:
     """Return one number's state."""
-    state = hass.states.get(entity_id(hass, key))
+    state = hass.states.get(entity_id(hass, NUMBER_DOMAIN, key))
     assert state is not None
     return state.state
 
@@ -91,15 +75,6 @@ def value(hass: HomeAssistant, key: str) -> str:
 async def loaded(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     """Set the entry up and assert the numbers arrived."""
     assert await setup_entry(hass, entry)
-
-
-async def advance(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float
-) -> None:
-    """Move every clock on by ``seconds``, and let what that fires run."""
-    freezer.tick(timedelta(seconds=seconds))
-    async_fire_time_changed_exact(hass)
-    await hass.async_block_till_done()
 
 
 async def repoll(
@@ -124,7 +99,7 @@ async def set_value(hass: HomeAssistant, key: str, to: float) -> None:
     await hass.services.async_call(
         NUMBER_DOMAIN,
         SERVICE_SET_VALUE,
-        {ATTR_ENTITY_ID: entity_id(hass, key), ATTR_VALUE: to},
+        {ATTR_ENTITY_ID: entity_id(hass, NUMBER_DOMAIN, key), ATTR_VALUE: to},
         blocking=True,
     )
 
@@ -290,7 +265,7 @@ async def test_a_row_naming_an_enumerated_parameter_refuses_to_be_built(
     with pytest.raises(ValueError, match="cannot be a number"):
         HeatitPanelNumber(
             mock_config_entry.runtime_data,
-            HeatitNumberEntityDescription(key="panel_mode", parameter="panelMode"),
+            HeatitNumberDescription(key="panel_mode", parameter="panelMode"),
         )
 
 

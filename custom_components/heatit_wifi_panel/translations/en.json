@@ -49,6 +49,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "open_window_detected": {
+        "name": "Open window detected"
+      }
+    },
     "climate": {
       "panel": {
         "state_attributes": {
@@ -62,29 +67,71 @@
       }
     },
     "number": {
+      "active_display_brightness": {
+        "name": "Active display brightness"
+      },
       "comfort_setpoint": {
         "name": "Comfort setpoint"
       },
       "eco_setpoint": {
         "name": "Eco setpoint"
       },
-      "minimum_temperature_limit": {
-        "name": "Minimum temperature limit"
+      "load_limit": {
+        "name": "Load limit"
       },
       "maximum_temperature_limit": {
         "name": "Maximum temperature limit"
       },
+      "minimum_temperature_limit": {
+        "name": "Minimum temperature limit"
+      },
       "sensor_calibration": {
         "name": "Sensor calibration"
       },
-      "load_limit": {
-        "name": "Load limit"
-      },
-      "active_display_brightness": {
-        "name": "Active display brightness"
-      },
       "standby_display_brightness": {
         "name": "Standby display brightness"
+      }
+    },
+    "select": {
+      "buttons": {
+        "name": "Buttons",
+        "state": {
+          "enabled": "Enabled",
+          "disabled": "Disabled",
+          "menu_locked": "Menu locked"
+        }
+      },
+      "standby_display": {
+        "name": "Standby display",
+        "state": {
+          "setpoint": "Setpoint",
+          "measured_temperature": "Measured temperature"
+        }
+      }
+    },
+    "sensor": {
+      "energy": {
+        "name": "Energy"
+      },
+      "open_window_time_remaining": {
+        "name": "Open window time remaining"
+      },
+      "power": {
+        "name": "Power"
+      },
+      "signal_strength": {
+        "name": "Signal strength"
+      },
+      "temperature": {
+        "name": "Temperature"
+      }
+    },
+    "switch": {
+      "external_sensor": {
+        "name": "External sensor"
+      },
+      "open_window_detection": {
+        "name": "Open window detection"
       }
     }
   },

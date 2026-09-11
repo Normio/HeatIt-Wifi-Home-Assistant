@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.const import CONF_HOST, Platform
 from homeassistant.core import callback
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import UNDEFINED
@@ -28,10 +29,18 @@ from .coordinator import HeatitWifiPanelConfigEntry, HeatitWifiPanelCoordinator
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.typing import UndefinedType
 
     from .api import PanelStatus
 
-PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.NUMBER]
+PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.CLIMATE,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 """The platform modules to forward to; each platform ticket adds its own."""
 
 
@@ -66,11 +75,12 @@ def _async_register_device(
     device id has a migration path rather than a dead end (ADR-0003). There is
     deliberately **no** ``configuration_url``: the panel serves no web UI.
 
-    ``name`` and ``suggested_area`` are written **at creation only** (§4.4).
-    The registry honours ``suggested_area`` when it makes the device and
-    ignores it afterwards; ``name`` is withheld on every later setup, so a
-    rename in the MyHeatit app simply diverges instead of overwriting what
-    Home Assistant shows. ``model`` and ``sw_version`` are refreshed each
+    ``name`` and the area are written **at creation only** (§4.4). The
+    registry honours ``suggested_area`` when it makes the device and ignores it
+    afterwards; ``name`` is withheld on every later setup, so a rename in the
+    MyHeatit app simply diverges instead of overwriting what Home Assistant
+    shows. The room is suggested only when it already names an area — see
+    ``_suggested_area``. ``model`` and ``sw_version`` are refreshed each
     setup instead — they are facts about the hardware, and §3.5 has a firmware
     change picked up on reload.
     """
@@ -90,6 +100,26 @@ def _async_register_device(
         manufacturer=MANUFACTURER,
         model=status.model,
         name=(status.name or FALLBACK_DEVICE_NAME) if creating else UNDEFINED,
-        suggested_area=status.room or None,
+        suggested_area=_suggested_area(hass, status.room),
         sw_version=status.firmware,
     )
+
+
+@callback
+def _suggested_area(hass: HomeAssistant, room: str | None) -> str | UndefinedType:
+    """Suggest the panel's room, but only when it already names an area (§4.4).
+
+    ``suggested_area`` is core's only creation-time area input, and core resolves
+    it through ``area_registry.async_get_or_create`` — a room Home Assistant has
+    no area for is *created* as one. The room is a label from the MyHeatit app;
+    it gets to pick between the areas the user has made, not to add to them. With
+    no match the device is left unassigned, which is what has Home Assistant offer
+    its own area picker for it.
+
+    Matching is the registry's, so it is the same normalisation an area rename
+    would apply: "bedroom" finds "Bedroom".
+    """
+    if not room:
+        return UNDEFINED
+    area = ar.async_get(hass).async_get_area_by_name(room)
+    return area.name if area is not None else UNDEFINED
