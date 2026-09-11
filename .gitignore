@@ -19,3 +19,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# uv's lock file. The floor row is pinned by requirements_test.txt and CI
+# installs from that, so a lock file here would be a second, unread answer to
+# the same question — and a local `uv` run writes one whether asked to or not.
+uv.lock
