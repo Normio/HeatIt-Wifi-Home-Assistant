@@ -61,19 +61,26 @@ class Row(NamedTuple):
     state_class: str | None
     category: str | None
     enabled: bool
-    state: str
+    state: str | None
+    """The state against the reference capture, or ``None`` when the entity is
+    disabled by default and so has none until a user enables it."""
+
     read_path: str | None
     """§5.2's read path, or ``None`` for an entity nothing can drop.
 
-    The climate entity's is ``parameters.panelMode``, which is *required core*:
-    a status without it is not a status, so it never goes missing on its own and
-    the dropped-parameter sweep has nothing to try.
+    Two kinds of row carry ``None``. The climate entity reads
+    ``parameters.panelMode`` and the temperature sensor reads
+    ``roomTemperature``, both *required core*: a status without either is not a
+    status, so neither can go missing on its own. The rest are droppable, and
+    the sweep below removes each in turn.
     """
 
 
 #: §5.2, transcribed. The climate entity's name is ``None`` because it takes
 #: the device's own — it *is* the panel — and its three measurement columns are
-#: empty because a thermostat is not a measurement.
+#: empty because a thermostat is not a measurement. The states are the
+#: reference capture's own readings: room 23.0 °C, no power, no consumption,
+#: no open window.
 ENTITY_TABLE = [
     Row(
         platform=Platform.CLIMATE,
@@ -134,6 +141,78 @@ ENTITY_TABLE = [
         enabled=True,
         state="disabled",
         read_path="parameters.disableButtons",
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="temperature",
+        name="Temperature",
+        device_class="temperature",
+        unit="°C",
+        state_class="measurement",
+        category=None,
+        enabled=True,
+        state="23.0",
+        read_path=None,
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="power",
+        name="Power",
+        device_class="power",
+        unit="W",
+        state_class="measurement",
+        category=None,
+        enabled=True,
+        state="0.0",
+        read_path="currentPower",
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="energy",
+        name="Energy",
+        device_class="energy",
+        unit="kWh",
+        state_class="total_increasing",
+        category=None,
+        enabled=True,
+        state="0.0",
+        read_path="totalConsumption",
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="signal_strength",
+        name="Signal strength",
+        device_class="signal_strength",
+        unit="dBm",
+        state_class="measurement",
+        category="diagnostic",
+        enabled=False,
+        state=None,
+        read_path="Network.wifiSignalStrength",
+    ),
+    Row(
+        platform=Platform.SENSOR,
+        key="open_window_time_remaining",
+        name="Open window time remaining",
+        device_class="duration",
+        unit="s",
+        state_class=None,
+        category="diagnostic",
+        enabled=True,
+        state="0",
+        read_path="parameters.OWD.activeTime",
+    ),
+    Row(
+        platform=Platform.BINARY_SENSOR,
+        key="open_window_detected",
+        name="Open window detected",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=None,
+        enabled=True,
+        state="off",
+        read_path="parameters.OWD.activeNow",
     ),
 ]
 
@@ -196,8 +275,19 @@ async def test_each_entity_is_the_one_the_table_describes(
     assert registered.original_name == row.name
     assert registered.entity_category == row.category
     assert (registered.disabled_by is None) == row.enabled
+    # The registry carries the three measurement columns for **every** row,
+    # disabled ones included: the platform records them as it registers the
+    # entity, before it declines to add a disabled one.
+    assert registered.original_device_class == row.device_class
+    assert registered.unit_of_measurement == row.unit
+    assert (registered.capabilities or {}).get("state_class") == row.state_class
 
     state = hass.states.get(registered.entity_id)
+    if not row.enabled:
+        assert state is None
+        return
+    # And the state carries them as the user meets them, which is the encoding
+    # that matters for a row that ships enabled.
     assert state is not None
     assert state.state == row.state
     assert state.attributes.get("device_class") == row.device_class

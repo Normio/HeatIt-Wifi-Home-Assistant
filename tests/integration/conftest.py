@@ -1,8 +1,8 @@
 """Fixtures for the client seam: a booted ``hass``, an entry, and the fake.
 
-The helpers at the foot are the ones every platform suite needs and none of
-them owns: finding an entity by the unique id that *is* ours, and advancing
-both clocks the debounced refresh is held against.
+Alongside them, the helpers every platform suite needs and none of them owns:
+finding an entity by the unique id that *is* ours, and advancing both clocks
+the debounced refresh is held against.
 """
 
 from datetime import timedelta
@@ -90,6 +90,22 @@ def mock_config_entry() -> MockConfigEntry:
     )
 
 
+def entity_id(hass: HomeAssistant, platform: str, key: str) -> str:
+    """Return one entity's id, asked of the registry rather than spelled out.
+
+    The id core generates is core's business and moves between releases: Home
+    Assistant 2026.9 began prefixing it with the device's area, turning
+    ``climate.naytehuone_1`` into ``climate.bedroom_naytehuone_1`` under this
+    very fixture. The unique id is ours and does not move, so it is what an
+    entity is found by — ``{device id}-{key}``, §5.2's own two halves.
+    """
+    found = er.async_get(hass).async_get_entity_id(
+        platform, DOMAIN, f"{REFERENCE_DEVICE_ID}-{key}"
+    )
+    assert found is not None
+    return found
+
+
 def panel_device(hass: HomeAssistant, entry: MockConfigEntry) -> DeviceEntry:
     """Return the one device the entry owns.
 
@@ -109,23 +125,6 @@ async def setup_entry(hass: HomeAssistant, entry: MockConfigEntry) -> bool:
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     return entry.state is ConfigEntryState.LOADED
-
-
-def entity_id(hass: HomeAssistant, domain: str, key: str) -> str:
-    """Return one entity's id, asked of the registry rather than spelled out.
-
-    The id core generates is core's business and moves between releases: Home
-    Assistant 2026.9 began prefixing it with the device's area, turning
-    ``climate.naytehuone_1`` into ``climate.bedroom_naytehuone_1`` under this
-    very fixture. The unique id is ours and does not move, so it is what an
-    entity is found by. ``domain`` is the entity's own — ``switch``, ``select``
-    — and ``key`` the suffix of §5.2.
-    """
-    found = er.async_get(hass).async_get_entity_id(
-        domain, DOMAIN, f"{REFERENCE_DEVICE_ID}-{key}"
-    )
-    assert found is not None
-    return found
 
 
 async def advance(

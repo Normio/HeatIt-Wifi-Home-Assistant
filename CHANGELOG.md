@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paired does nothing on the panel, so the switch turns itself back off at the
   next reading, and the log says once that the panel accepted the change
   without applying it.
+- The panel's readings, as five **sensors** and one **binary sensor**: room
+  temperature, the power it is drawing, the energy it has consumed — ready for
+  the Energy dashboard — the countdown on a detected open window, and whether
+  it is detecting one. WiFi signal strength joins them as a diagnostic, off
+  until you turn it on.
 
 ### Changed
 

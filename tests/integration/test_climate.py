@@ -63,25 +63,15 @@ COMFORT = 19.0
 ECO = 18.0
 
 
-def climate_id(hass: HomeAssistant) -> str:
-    """Return the one climate entity's id.
-
-    The entity is named after the device because ``_attr_name`` is ``None`` —
-    this entity *is* the panel (§5.2) — so its id is doubly core's to choose;
-    :func:`entity_id` finds it by the unique id, which is ours.
-    """
-    return entity_id(hass, CLIMATE_DOMAIN, KEY)
-
-
 async def loaded(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     """Set the entry up and assert the climate entity arrived."""
     assert await setup_entry(hass, entry)
-    assert hass.states.get(climate_id(hass)) is not None
+    assert hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY)) is not None
 
 
 def attributes(hass: HomeAssistant) -> dict[str, Any]:
     """Return the climate entity's state attributes."""
-    state = hass.states.get(climate_id(hass))
+    state = hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY))
     assert state is not None
     return dict(state.attributes)
 
@@ -91,7 +81,7 @@ async def call(hass: HomeAssistant, service: str, **data: object) -> None:
     await hass.services.async_call(
         CLIMATE_DOMAIN,
         service,
-        {ATTR_ENTITY_ID: climate_id(hass), **data},
+        {ATTR_ENTITY_ID: entity_id(hass, CLIMATE_DOMAIN, KEY), **data},
         blocking=True,
     )
 
@@ -136,7 +126,7 @@ async def test_the_reference_panel_reads_as_a_thermostat(
     """Every §5.3 reading, from the one status a real panel produced."""
     await loaded(hass, mock_config_entry)
 
-    state = hass.states.get(climate_id(hass))
+    state = hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY))
     assert state is not None
     assert state.state == HVACMode.HEAT
     assert state.attributes[ATTR_PRESET_MODE] == PRESET_COMFORT
@@ -165,7 +155,7 @@ async def test_eco_is_a_preset_and_never_a_third_hvac_mode(
 
     await loaded(hass, mock_config_entry)
 
-    state = hass.states.get(climate_id(hass))
+    state = hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY))
     assert state is not None
     assert state.state == expected
 
@@ -534,6 +524,6 @@ async def test_the_entity_goes_unavailable_on_the_first_failed_poll(
     await mock_config_entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
 
-    state = hass.states.get(climate_id(hass))
+    state = hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY))
     assert state is not None
     assert state.state == STATE_UNAVAILABLE

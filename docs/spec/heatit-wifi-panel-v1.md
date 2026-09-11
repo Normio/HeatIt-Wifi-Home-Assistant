@@ -1941,10 +1941,13 @@ the same call with the same argument the description already names — and a `se
 matching `async_write_parameter`, so the pair would restate the wire name twice more per entity and
 give a reviewer three places to check that a switch writes what it reads. §3.5's point is that the
 *table* holds what varies between entities rather than a class per entity, and a description naming
-one registry parameter holds exactly that. The callables stay available for a platform whose reading
-is **not** one parameter — `sensor.py`'s signal-strength parse and its top-level reads are the
-expected first use ([#44](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/44)) — so the
-rule is narrowed to "where the value is not one *observed parameter*" rather than dropped. The
+one registry parameter holds exactly that. The callables stay, for a platform whose reading is **not** one
+parameter: `sensor.py` and `binary_sensor.py`, merged alongside this from
+[#44](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/44), carry a `read_path` and a
+`value_fn` for exactly that reason — their rows read top-level *status* fields the registry holds no
+descriptor for, and the signal strength needs a parse rather than a lookup. So the rule is **narrowed
+to "where the value is not one *observed parameter*"** rather than dropped, and the two shapes are
+the two halves of §5.2's table: what the panel accepts a write for, and what it only reports. The
 binding that every parameter-backed platform does share, the registry lookup that turns a wire name
 into a read path, moves to a second base class in `entity.py`, `HeatitParameterEntity`, so §3.5's
 "a base `CoordinatorEntity` supplying `DeviceInfo` and the availability rule" now describes two

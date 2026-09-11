@@ -1,5 +1,13 @@
 {
   "entity": {
+    "binary_sensor": {
+      "open_window_detected": {
+        "default": "mdi:window-closed-variant",
+        "state": {
+          "on": "mdi:window-open-variant"
+        }
+      }
+    },
     "climate": {
       "panel": {
         "default": "mdi:radiator",

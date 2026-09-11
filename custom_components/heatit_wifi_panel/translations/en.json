@@ -49,6 +49,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "open_window_detected": {
+        "name": "Open window detected"
+      }
+    },
     "climate": {
       "panel": {
         "state_attributes": {
@@ -76,6 +81,23 @@
           "setpoint": "Setpoint",
           "measured_temperature": "Measured temperature"
         }
+      }
+    },
+    "sensor": {
+      "energy": {
+        "name": "Energy"
+      },
+      "open_window_time_remaining": {
+        "name": "Open window time remaining"
+      },
+      "power": {
+        "name": "Power"
+      },
+      "signal_strength": {
+        "name": "Signal strength"
+      },
+      "temperature": {
+        "name": "Temperature"
       }
     },
     "switch": {

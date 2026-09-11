@@ -33,7 +33,13 @@ if TYPE_CHECKING:
 
     from .api import PanelStatus
 
-PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SELECT, Platform.SWITCH]
+PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.CLIMATE,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 """The platform modules to forward to; each platform ticket adds its own."""
 
 
