@@ -1355,7 +1355,17 @@ def multi_parameter_writes_are_atomic(run: Run) -> str | None:
 @check("Q5", tier=WRITE)
 def echo_reports_the_applied_value(run: Run) -> str | None:
     """Check that the echo uses the name sent and the value applied."""
-    cold = cold_setpoint(run.panel.status())
+    status = run.panel.status()
+    cold = cold_setpoint(status)
+    # A **whole** degree wherever one is also safely below the room. Type
+    # normalisation is what this check exists to show — `20` coming back for
+    # `20.0` — and only an integer-valued setpoint can show it; a `.5` echoes
+    # `20.5` and says nothing about the type. It is also why the committed
+    # fixture kept drifting: `cold_setpoint` lands on a half degree whenever
+    # the room does, so two runs in a row rewrote the evidence away.
+    floor = float(math.floor(cold))
+    minimum = float(status.parameters["minimumTemperatureLimit"])
+    cold = floor if floor >= minimum + 1.0 else cold
     response = run.write_applied("heatingSetpoint", f"{cold:.1f}")
     echo = response.json()
     expect("heatingSetpoint" in echo, f"echo keys {sorted(echo)}")
@@ -1740,7 +1750,12 @@ def nudge_off_defaults(run: Run) -> dict[str, str]:
             response = run.write(name, plan[name])
             if response.status != HTTPStatus.OK:
                 continue
-        if serialise(read_parameter(run.panel.status().doc, name)) == plan[name]:
+        # Confirm by polling, never by one immediate read: the panel commits a
+        # write in 305-632 ms (Q31). The first two runs of this function read
+        # once and lost a different parameter each time — and on both runs the
+        # one written last, whose read raced its own write most tightly.
+        _, reflected = run.reflect(name, plan[name])
+        if reflected is not None:
             moved[name] = plan[name]
     return moved
 
