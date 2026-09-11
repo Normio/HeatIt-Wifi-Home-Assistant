@@ -23,9 +23,6 @@ ships here; the remaining entities follow in later releases.
   it moves with the preset and is blank while the panel is off
   ([ADR-0004](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/blob/main/docs/adr/0004-eco-as-a-climate-preset.md)). Whether the
   element is on comes from the panel's relay, not from its reported power.
-- Set up by entering the panel's address. If that address later changes, Home
-  Assistant follows the panel to the new one by itself; the address and the
-  poll interval can also be changed by hand.
 
 ### Verified
 
