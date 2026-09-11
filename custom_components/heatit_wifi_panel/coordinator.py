@@ -49,7 +49,7 @@ from .const import (
     VERIFIED_FIRMWARES,
     foreign_panel_placeholders,
 )
-from .registry import PARAMETERS
+from .registry import PARAMETERS, SETPOINT_MAXIMUM, SETPOINT_MINIMUM
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -176,6 +176,42 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
             pending.value if pending is not None else PARAMETERS[key].read(self.data)
         )
         return value if isinstance(value, int | float | bool) else None
+
+    def numeric(self, key: str) -> float | None:
+        """One parameter as a float; ``None`` when absent or not a number.
+
+        :meth:`parameter` answers in the registry's declared type, which for
+        three parameters is a boolean and for two an enumerated integer. Every
+        caller that wants a temperature, a wattage or a percentage wants one
+        float and wants anything else to read as no reading at all, so the
+        coercion lives here rather than once per platform.
+        """
+        value = self.parameter(key)
+        return None if value is None or isinstance(value, bool) else float(value)
+
+    @property
+    def minimum_temperature(self) -> float:
+        """The *minimum temperature limit*, or the panel's own floor below it.
+
+        Both limits are optional parameters under §5.4's presence-gating, so a
+        firmware returning neither still has a thermostat and two setpoints.
+        What bounds them then is what bounds them on the device — the registry's
+        own bounds on a *setpoint bank*, which every setpoint write is already
+        validated against.
+
+        Every platform that needs the limits needs them on exactly these terms,
+        so the fallback is written once here rather than per platform.
+        """
+        return self._limit("minimumTemperatureLimit", SETPOINT_MINIMUM)
+
+    @property
+    def maximum_temperature(self) -> float:
+        """The *maximum temperature limit*, or the panel's own ceiling above it."""
+        return self._limit("maximumTemperatureLimit", SETPOINT_MAXIMUM)
+
+    def _limit(self, key: str, absolute: float) -> float:
+        limit = self.numeric(key)
+        return absolute if limit is None else limit
 
     async def async_write_parameter(self, key: str, *, value: float | bool) -> None:
         """Write one parameter: the echo shows now, the refresh decides (§5.4).

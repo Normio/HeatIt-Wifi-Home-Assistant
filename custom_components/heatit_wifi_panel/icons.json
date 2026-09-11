@@ -7,6 +7,17 @@
           "off": "mdi:radiator-off"
         }
       }
+    },
+    "number": {
+      "sensor_calibration": {
+        "default": "mdi:thermometer-plus"
+      },
+      "active_display_brightness": {
+        "default": "mdi:brightness-6"
+      },
+      "standby_display_brightness": {
+        "default": "mdi:brightness-4"
+      }
     }
   }
 }

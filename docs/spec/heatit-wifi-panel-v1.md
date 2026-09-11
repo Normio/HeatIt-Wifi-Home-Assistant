@@ -1911,3 +1911,22 @@ judges an echo, and an earlier one leaves it pending. Without that, a scheduled 
 the 1.5 s a write needs to reach the status would report a *silent undo* that never happened — and
 `DataUpdateCoordinator` cancels the debounced refresh when a scheduled poll runs, so no later
 refresh would correct it before the next *poll interval*.
+
+**2026-09-11 — the number ticket refines §3.5, §5.2 and §5.3** ([#42](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/42)).
+Three refinements. (1) §3.5 has an entity description carry `value_fn` / `set_value_fn` callables.
+**A number row carries a wire name instead** — `parameter: str` — because §3.3 gives the registry
+the dotted read path, the step, the scale and the bounds one write is validated against, and a
+per-row `value_fn` would restate eight of those read paths in a second place for the two encodings
+to drift apart in. Reading and writing go through the coordinator's `numeric()` and
+`async_write_parameter()` keyed by that name, so the *write echo*, the debounced refresh and the
+*silent undo* stay one per panel. What the row does carry that the registry cannot is the half §5.2
+marks **dynamic**: `minimum_fn` / `maximum_fn`, each answered from coordinator data on every access.
+The callable-per-row rule stands wherever a platform's value genuinely is per entity. (2) §5.2 bounds
+the *load limit* at `maxLoad × 100` but does not say what bounds it on a firmware that does not
+report `maxLoad`. It is then **the registry's own ceiling**, 1500 W — the largest model Heatit sells
+— and the device refuses anything above its own rating either way (Q17). `maxLoad` gets no registry
+descriptor: the registry is the client's *write* surface, and a descriptor would make a
+never-written parameter writable. (3) #41's amendment gave the *climate* entity the registry's
+bounds on a *setpoint bank* where a *temperature limit* is absent. **Both setpoint numbers need the
+same two readings on the same terms**, so the fallback moves to the coordinator as
+`minimum_temperature` / `maximum_temperature` and is written once rather than per platform.

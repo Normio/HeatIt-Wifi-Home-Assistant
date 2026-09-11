@@ -15,12 +15,20 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
 from homeassistant.components.climate.const import HVACMode
-from homeassistant.const import Platform
+from homeassistant.components.number import NumberDeviceClass
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    Platform,
+    UnitOfPower,
+    UnitOfTemperature,
+)
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.heatit_wifi_panel.api import HeatitConnectionError
 from custom_components.heatit_wifi_panel.const import DOMAIN
 from custom_components.heatit_wifi_panel.entity import HeatitWifiPanelEntity
+from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.fakes import ABSENT, FakeHeatitClient
 from tests.integration.conftest import REFERENCE_DEVICE_ID, panel_device, setup_entry
 
@@ -62,7 +70,103 @@ ENTITY_TABLE = [
         enabled=True,
         state=HVACMode.HEAT,
     ),
+    *(
+        Row(
+            platform=Platform.NUMBER,
+            key=key,
+            name=name,
+            device_class=device_class,
+            unit=unit,
+            state_class=None,
+            category=EntityCategory.CONFIG,
+            enabled=True,
+            state=state,
+        )
+        for key, name, device_class, unit, state in [
+            (
+                "comfort_setpoint",
+                "Comfort setpoint",
+                NumberDeviceClass.TEMPERATURE,
+                UnitOfTemperature.CELSIUS,
+                "19.0",
+            ),
+            (
+                "eco_setpoint",
+                "Eco setpoint",
+                NumberDeviceClass.TEMPERATURE,
+                UnitOfTemperature.CELSIUS,
+                "18.0",
+            ),
+            (
+                "minimum_temperature_limit",
+                "Minimum temperature limit",
+                NumberDeviceClass.TEMPERATURE,
+                UnitOfTemperature.CELSIUS,
+                "5.0",
+            ),
+            (
+                "maximum_temperature_limit",
+                "Maximum temperature limit",
+                NumberDeviceClass.TEMPERATURE,
+                UnitOfTemperature.CELSIUS,
+                "40.0",
+            ),
+            # No device class: an offset converted to °F is wrong (§5.2).
+            (
+                "sensor_calibration",
+                "Sensor calibration",
+                None,
+                UnitOfTemperature.CELSIUS,
+                "0.0",
+            ),
+            # Watts and percent, not the device's units of 100 W and 10 %.
+            (
+                "load_limit",
+                "Load limit",
+                NumberDeviceClass.POWER,
+                UnitOfPower.WATT,
+                "600.0",
+            ),
+            (
+                "active_display_brightness",
+                "Active display brightness",
+                None,
+                PERCENTAGE,
+                "100.0",
+            ),
+            (
+                "standby_display_brightness",
+                "Standby display brightness",
+                None,
+                PERCENTAGE,
+                "0.0",
+            ),
+        ]
+    ),
 ]
+
+#: §5.2's read-path column for every **optional** parameter, and the row that
+#: reads it: the entity that disappears when a firmware stops returning that
+#: path, or ``None`` while no platform exposes it yet. Both halves are
+#: test-side literals, so the path a row reads is compared against §5.2 rather
+#: than against the registry that implements it.
+#:
+#: The *required core* parameters are deliberately absent. A status without one
+#: is not a status, so dropping one fails the poll rather than losing an entity
+#: (§6.3) — which is why the two *setpoint banks* are the two numbers that can
+#: never go missing on their own.
+ENTITY_OF_READ_PATH: dict[str, str | None] = {
+    "parameters.minimumTemperatureLimit": "minimum_temperature_limit",
+    "parameters.maximumTemperatureLimit": "maximum_temperature_limit",
+    "parameters.sensorCalibration": "sensor_calibration",
+    "parameters.loadLimit": "load_limit",
+    "parameters.activeDisplayBrightness": "active_display_brightness",
+    "parameters.standbyDisplayBrightness": "standby_display_brightness",
+    "parameters.disableButtons": None,
+    "parameters.temperatureDisplay": None,
+    "parameters.sensorMode": None,
+    "parameters.OWD.openWindowDetection": None,
+}
 
 
 def registry_entries(
@@ -109,6 +213,44 @@ async def test_each_entity_is_the_one_the_table_describes(
     assert state.attributes.get("device_class") == row.device_class
     assert state.attributes.get("unit_of_measurement") == row.unit
     assert state.attributes.get("state_class") == row.state_class
+
+
+# --- presence-gated creation (§5.4) -----------------------------------------
+
+
+def test_every_optional_parameter_has_a_read_path_row_here() -> None:
+    """The map covers the registry, so a new parameter cannot slip past it.
+
+    The registry is asked which parameters are optional and nothing else; the
+    read path each one resolves at, and the entity that reads it, stay
+    test-side transcriptions of §5.2 so the two encodings remain independent.
+    """
+    optional = {d.read_path for d in PARAMETERS.values() if not d.required}
+    assert set(ENTITY_OF_READ_PATH) == optional
+
+
+@pytest.mark.parametrize("read_path", sorted(ENTITY_OF_READ_PATH), ids=str)
+async def test_a_parameter_missing_at_setup_costs_exactly_its_own_entity(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    read_path: str,
+) -> None:
+    """§5.4: a descriptor becomes an entity only if its read path resolves.
+
+    Setup still succeeds, the one row that reads the missing parameter is not
+    created at all — not created-and-unavailable — and every other row is
+    exactly where it was.
+    """
+    patched_client.set_status({read_path: ABSENT})
+
+    assert await setup_entry(hass, mock_config_entry)
+
+    absent = ENTITY_OF_READ_PATH[read_path]
+    expected = {
+        f"{REFERENCE_DEVICE_ID}-{row.key}" for row in ENTITY_TABLE if row.key != absent
+    }
+    assert set(registry_entries(hass, mock_config_entry)) == expected
 
 
 # --- the base entity's rules ------------------------------------------------
