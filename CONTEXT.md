@@ -69,7 +69,7 @@ The panel's own identifier, returned as `id`: 22 mixed-case alphanumerics, used 
 _Avoid_: serial number, panel id, device identifier
 
 **Assigned room**:
-The free-text room name the MyHeatit app stores on the panel, wire name `room`, an empty string when no room is assigned. Read once when the panel is added, as a suggestion only; Home Assistant's own area wins from then on.
+The free-text room name the MyHeatit app stores on the panel, wire name `room`, an empty string when no room is assigned. Read once when the panel is added, and only to pick between the areas Home Assistant already has — it never creates one. Home Assistant's own area wins from then on.
 _Avoid_: area, zone, location
 
 **Foreign panel**:
