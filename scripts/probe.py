@@ -797,6 +797,8 @@ class FixtureStore:
         self.directory = directory
         self.secrets = tuple(secret for secret in secrets if secret)
         self.saved: list[Path] = []
+        self.kept: list[Path] = []
+        """Fixtures a run declined to overwrite, because they already exist."""
 
     def check_scrubbable(self, body: bytes) -> None:
         """Fail closed: a scrub key or a known identifying value refuses the save."""
@@ -810,12 +812,25 @@ class FixtureStore:
                 raise ScrubViolationError(msg)
 
     def save(self, name: str, response: Response) -> Path:
-        """Write ``<name>.json`` or ``<name>.txt`` plus ``<name>.headers``."""
+        """Write ``<name>.json`` or ``<name>.txt`` plus ``<name>.headers``.
+
+        **A fixture already in the tree is never overwritten.** A committed
+        fixture is reviewed evidence, and a probe run is not a review: three
+        runs in a row rewrote the heating-setpoint echo to whatever value the
+        room temperature implied that hour, once losing the integer the fixture
+        existed to show, and once reaching a commit unnoticed inside a
+        ``git add -A``. A new firmware's directory is empty, so a capture there
+        still lands; refreshing an existing one is a deliberate act — delete
+        the file and re-run.
+        """
         self.check_scrubbable(response.body)
         content_type = response.header("Content-Type") or ""
         suffix = ".json" if "json" in content_type else ".txt"
         self.directory.mkdir(parents=True, exist_ok=True)
         path = self.directory / f"{name}{suffix}"
+        if path.exists():
+            self.kept.append(path)
+            return path
         path.write_bytes(response.body)
         path.with_suffix(".headers").write_bytes(response.raw_headers)
         self.saved.append(path)
@@ -2091,6 +2106,9 @@ class Report:
     results: list[Result]
     measurements: dict[str, str]
     fixtures: list[Path]
+    kept: list[Path]
+    """Fixtures the run left alone because the tree already had them."""
+
     snapshot: Path | None
 
     def render(self) -> Iterator[str]:
@@ -2118,6 +2136,11 @@ class Report:
             yield from (f"- `{path.relative_to(REPO_ROOT)}`" for path in self.fixtures)
         else:
             yield "- none saved (fixtures are written only with `--writes`)"
+        if self.kept:
+            yield ""
+            yield "Left as committed, not overwritten:"
+            yield ""
+            yield from (f"- `{path.relative_to(REPO_ROOT)}`" for path in self.kept)
         yield ""
         yield "### Measurements"
         yield ""
@@ -2349,6 +2372,7 @@ def main_probe(args: argparse.Namespace) -> int:
         results,
         run.measurements,
         fixtures.saved if fixtures else [],
+        fixtures.kept if fixtures else [],
         ledger.snapshot_path,
     )
     for line in report.render():
