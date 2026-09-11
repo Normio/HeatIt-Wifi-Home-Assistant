@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The panel's readings, as five **sensors** and one **binary sensor**: room
+  temperature, the power it is drawing, the energy it has consumed — ready for
+  the Energy dashboard — the countdown on a detected open window, and whether
+  it is detecting one. WiFi signal strength joins them as a diagnostic, off
+  until you turn it on.
+
 ## [0.1.0] - 2026-09-11
 
 First release: the **Heatit WiFi Panel** wall heater over its own HTTP API on

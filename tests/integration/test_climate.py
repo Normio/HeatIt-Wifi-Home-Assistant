@@ -45,13 +45,12 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
 
 from custom_components.heatit_wifi_panel.api import HeatitConnectionError
 from custom_components.heatit_wifi_panel.climate import KEY
-from custom_components.heatit_wifi_panel.const import DOMAIN, POST_WRITE_REFRESH_DELAY
-from tests.integration.conftest import REFERENCE_DEVICE_ID, setup_entry
+from custom_components.heatit_wifi_panel.const import POST_WRITE_REFRESH_DELAY
+from tests.integration.conftest import entity_id, setup_entry
 
 if TYPE_CHECKING:
     from freezegun.api import FrozenDateTimeFactory
@@ -66,32 +65,15 @@ COMFORT = 19.0
 ECO = 18.0
 
 
-def entity_id(hass: HomeAssistant) -> str:
-    """Return the one climate entity's id, asked of the registry not spelled.
-
-    The entity is named after the device because ``_attr_name`` is ``None`` —
-    this entity *is* the panel (§5.2) — but the id core generates from that
-    name is core's business and moves between releases: Home Assistant 2026.9
-    began prefixing it with the device's area, turning ``climate.naytehuone_1``
-    into ``climate.bedroom_naytehuone_1`` under this very fixture. The unique
-    id is ours and does not move, so it is what the entity is found by.
-    """
-    found = er.async_get(hass).async_get_entity_id(
-        CLIMATE_DOMAIN, DOMAIN, f"{REFERENCE_DEVICE_ID}-{KEY}"
-    )
-    assert found is not None
-    return found
-
-
 async def loaded(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     """Set the entry up and assert the climate entity arrived."""
     assert await setup_entry(hass, entry)
-    assert hass.states.get(entity_id(hass)) is not None
+    assert hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY)) is not None
 
 
 def attributes(hass: HomeAssistant) -> dict[str, Any]:
     """Return the climate entity's state attributes."""
-    state = hass.states.get(entity_id(hass))
+    state = hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY))
     assert state is not None
     return dict(state.attributes)
 
@@ -118,7 +100,7 @@ async def call(hass: HomeAssistant, service: str, **data: object) -> None:
     await hass.services.async_call(
         CLIMATE_DOMAIN,
         service,
-        {ATTR_ENTITY_ID: entity_id(hass), **data},
+        {ATTR_ENTITY_ID: entity_id(hass, CLIMATE_DOMAIN, KEY), **data},
         blocking=True,
     )
 
@@ -163,7 +145,7 @@ async def test_the_reference_panel_reads_as_a_thermostat(
     """Every §5.3 reading, from the one status a real panel produced."""
     await loaded(hass, mock_config_entry)
 
-    state = hass.states.get(entity_id(hass))
+    state = hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY))
     assert state is not None
     assert state.state == HVACMode.HEAT
     assert state.attributes[ATTR_PRESET_MODE] == PRESET_COMFORT
@@ -192,7 +174,7 @@ async def test_eco_is_a_preset_and_never_a_third_hvac_mode(
 
     await loaded(hass, mock_config_entry)
 
-    state = hass.states.get(entity_id(hass))
+    state = hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY))
     assert state is not None
     assert state.state == expected
 
@@ -561,6 +543,6 @@ async def test_the_entity_goes_unavailable_on_the_first_failed_poll(
     await mock_config_entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
 
-    state = hass.states.get(entity_id(hass))
+    state = hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY))
     assert state is not None
     assert state.state == STATE_UNAVAILABLE
