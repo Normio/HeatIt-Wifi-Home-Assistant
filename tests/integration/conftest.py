@@ -1,5 +1,11 @@
-"""Fixtures for the client seam: a booted ``hass``, an entry, and the fake."""
+"""Fixtures for the client seam: a booted ``hass``, an entry, and the fake.
 
+Alongside them, the helpers every platform suite needs and none of them owns:
+finding an entity by the unique id that *is* ours, and advancing both clocks
+the debounced refresh is held against.
+"""
+
+from datetime import timedelta
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -8,7 +14,10 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed_exact,
+)
 
 from custom_components.heatit_wifi_panel.const import DOMAIN
 from tests.fakes import FakeHeatitClient
@@ -16,6 +25,7 @@ from tests.fakes import FakeHeatitClient
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    from freezegun.api import FrozenDateTimeFactory
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.device_registry import DeviceEntry
 
@@ -115,3 +125,20 @@ async def setup_entry(hass: HomeAssistant, entry: MockConfigEntry) -> bool:
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     return entry.state is ConfigEntryState.LOADED
+
+
+async def advance(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float
+) -> None:
+    """Move every clock on by ``seconds``, and let what that fires run.
+
+    Both clocks, which is why the freezer is here rather than a bare
+    ``async_fire_time_changed``: the refresh is scheduled against the event
+    loop's, and the *write echo* it judges is held against ``monotonic()``. The
+    *exact* variant fires nothing extra — the ordinary one adds half a second
+    to cover the coordinator's scheduling jitter, and half a second is a third
+    of the delay under test.
+    """
+    freezer.tick(timedelta(seconds=seconds))
+    async_fire_time_changed_exact(hass)
+    await hass.async_block_till_done()

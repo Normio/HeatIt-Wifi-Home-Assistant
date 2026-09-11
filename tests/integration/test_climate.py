@@ -11,7 +11,6 @@ change racing a ``set_temperature`` cannot write the wrong bank; the tests that
 pass ``hvac_mode`` alongside a temperature are what pin that order.
 """
 
-from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -45,12 +44,11 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
 
 from custom_components.heatit_wifi_panel.api import HeatitConnectionError
 from custom_components.heatit_wifi_panel.climate import KEY
 from custom_components.heatit_wifi_panel.const import POST_WRITE_REFRESH_DELAY
-from tests.integration.conftest import entity_id, setup_entry
+from tests.integration.conftest import advance, entity_id, setup_entry
 
 if TYPE_CHECKING:
     from freezegun.api import FrozenDateTimeFactory
@@ -76,23 +74,6 @@ def attributes(hass: HomeAssistant) -> dict[str, Any]:
     state = hass.states.get(entity_id(hass, CLIMATE_DOMAIN, KEY))
     assert state is not None
     return dict(state.attributes)
-
-
-async def advance(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float
-) -> None:
-    """Move every clock on by ``seconds``, and let what that fires run.
-
-    Both clocks, which is why the freezer is here rather than a bare
-    ``async_fire_time_changed``: the refresh is scheduled against the event
-    loop's, and the *write echo* it judges is held against ``monotonic()``. The
-    *exact* variant fires nothing extra — the ordinary one adds half a second
-    to cover the coordinator's scheduling jitter, and half a second is a third
-    of the delay under test.
-    """
-    freezer.tick(timedelta(seconds=seconds))
-    async_fire_time_changed_exact(hass)
-    await hass.async_block_till_done()
 
 
 async def call(hass: HomeAssistant, service: str, **data: object) -> None:

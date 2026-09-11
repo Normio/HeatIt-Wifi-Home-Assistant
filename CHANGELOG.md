@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Four of the panel's own settings, on its device page: **Open window
+  detection** and **External sensor** as switches, **Standby display**
+  (setpoint or measured temperature) and **Buttons** (enabled, disabled or menu
+  locked) as selects. Turning **External sensor** on with no wireless sensor
+  paired does nothing on the panel, so the switch turns itself back off at the
+  next reading, and the log says once that the panel accepted the change
+  without applying it.
 - The panel's readings, as five **sensors** and one **binary sensor**: room
   temperature, the power it is drawing, the energy it has consumed — ready for
   the Energy dashboard — the countdown on a detected open window, and whether

@@ -4,6 +4,10 @@ Three things live here, and they are the three every one of the six platforms
 would otherwise get subtly different: which device an entity belongs to, what
 its unique id is, and when it is unavailable.
 
+:class:`HeatitParameterEntity` is the second base, for the platforms whose
+entity *is* one *observed parameter*: it resolves that parameter's read path in
+the registry once, so no platform module repeats the lookup.
+
 **Names are not one of them.** Every entity sets ``has_entity_name`` and takes
 its name from ``translation_key`` resolved in ``translations/en.json``;
 ``_attr_name`` is checked *before* ``translation_key`` in core's resolution and
@@ -24,6 +28,7 @@ from .const import DOMAIN
 # Imported for real, not under ``TYPE_CHECKING``: the class subscript below is
 # evaluated when this module is imported, whatever the annotations do.
 from .coordinator import HeatitWifiPanelCoordinator
+from .registry import PARAMETERS
 
 
 class HeatitWifiPanelEntity(CoordinatorEntity[HeatitWifiPanelCoordinator]):
@@ -75,3 +80,37 @@ class HeatitWifiPanelEntity(CoordinatorEntity[HeatitWifiPanelCoordinator]):
             self._read_path is None
             or self.coordinator.data.get(self._read_path) is not None
         )
+
+
+class HeatitParameterEntity(HeatitWifiPanelEntity):
+    """One *observed parameter*, as one entity.
+
+    Every write platform but the climate entity is this shape: one parameter,
+    read through the coordinator and written back through it. What is shared is
+    only the binding — the parameter's wire name, and the read path the registry
+    holds for it — so that each platform module carries what makes it that
+    platform and not the lookup every one of them would otherwise repeat.
+
+    Reading and writing are deliberately **not** wrapped here. They are two
+    calls on the coordinator, which is where the *write echo*, the debounced
+    refresh and the *silent undo* already live; a pair of methods forwarding to
+    it would only put a second name on each.
+    """
+
+    def __init__(
+        self,
+        coordinator: HeatitWifiPanelCoordinator,
+        key: str,
+        *,
+        parameter: str,
+    ) -> None:
+        """Bind to one registry parameter, read at the path the registry gives.
+
+        ``key`` is the entity's, from §5.2, and ``parameter`` is the wire name;
+        the two differ wherever the device's name for a setting is not the name
+        a user should read — ``sensorMode`` is the External sensor switch, and
+        ``disableButtons`` is the Buttons select.
+        """
+        super().__init__(coordinator, key, read_path=PARAMETERS[parameter].read_path)
+        self._parameter = parameter
+        """The wire name: what the coordinator is asked for and written with."""

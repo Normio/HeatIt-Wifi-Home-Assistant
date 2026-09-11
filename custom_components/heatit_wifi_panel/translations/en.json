@@ -66,6 +66,23 @@
         }
       }
     },
+    "select": {
+      "buttons": {
+        "name": "Buttons",
+        "state": {
+          "enabled": "Enabled",
+          "disabled": "Disabled",
+          "menu_locked": "Menu locked"
+        }
+      },
+      "standby_display": {
+        "name": "Standby display",
+        "state": {
+          "setpoint": "Setpoint",
+          "measured_temperature": "Measured temperature"
+        }
+      }
+    },
     "sensor": {
       "energy": {
         "name": "Energy"
@@ -81,6 +98,14 @@
       },
       "temperature": {
         "name": "Temperature"
+      }
+    },
+    "switch": {
+      "external_sensor": {
+        "name": "External sensor"
+      },
+      "open_window_detection": {
+        "name": "Open window detection"
       }
     }
   },
