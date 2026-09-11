@@ -7,153 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-11
+
+First release. A Home Assistant integration for the **Heatit WiFi Panel** wall
+heater, over the panel's own HTTP API on the local network: no cloud service,
+no account, and no vendor app in the path once the panel is on WiFi.
+
+This release ships the panel as a thermostat. The remaining entities — the
+setpoint and display numbers, the switches, the selects, the sensors and the
+reset buttons — are written against the same device client and arrive in later
+releases.
+
 ### Added
 
-- The `heatit_wifi_panel` integration package with its manifest and brand
-  assets, and `hacs.json`.
-- `scripts/check.sh`, the one entry point for ruff, `ruff format --check`, mypy
-  strict and `scripts/check_layout.py`, run locally and by CI from the same file.
-- `validate.yml` (HACS Action, hassfest), `test.yml` and a changelog check on
-  pull requests.
-- `scripts/check_layout.py`, asserting what the tree must not hold: no
-  `strings.json`, brand assets in one place and at their stated sizes,
-  `hacs.json`'s three keys, and the manifest's fixed keys in order.
-- `scripts/probe.py`, the hardware conformance probe: stdlib only, four
-  ascending tiers, claim text read from the register at runtime, a
-  snapshot-and-restore ledger verified from a fresh status read after every
-  check, `--restore` to replay a snapshot, fail-closed fixture capture, and the
-  spec's exit codes. `--destructive` and `--thermal` both refuse a
-  non-interactive stdin (a spec amendment records why).
-- `scripts/check_conformance.py`, the CI gate over the conformance register:
-  the six drift conditions of §12.4, including that the register's automated
-  ids are exactly the ids `probe.py` registers.
-- `tests/test_probe_safety.py` and `tests/test_check_conformance.py`; pytest
-  joins `scripts/check.sh`.
-- `api.py`, the device client: `get_status`, `set_parameter`, `reset_kwh`
-  and `reset_settings` over the panel's local HTTP API, one request in flight
-  per panel, the status read retried once and nothing else ever retried, and
-  the exception taxonomy of spec §3.2. Bytes are decoded as UTF-8 explicitly;
-  the verdict is HTTP 200 and a `status` matched after stripping; the device's
-  `reason` is surfaced verbatim and never parsed.
-- `config_flow.py`, the user, DHCP and reconfigure steps and the options flow
-  of spec §4. The user step is host-only and validates with a `GET` through the
-  client's own parser; `model` never gates it. `async_step_dhcp` reads the
-  status at the discovered address to learn the *device id*, which the DHCP
-  packet does not carry, then repoints the entry. Reconfigure never adopts a
-  replacement panel: `_abort_if_unique_id_mismatch` aborts with a string naming
-  both the expected and the found device id. Options hold the *poll interval*
-  alone — 60 s by default, 30 s minimum — applied by reloading the entry.
-- `coordinator.py`, the `HeatitWifiPanelConfigEntry` alias and the coordinator.
-  A failed poll is `UpdateFailed` and every entity goes unavailable on the
-  first one; a *foreign panel* is `ConfigEntryError`, naming both ids, at setup
-  and on every poll thereafter. The *observed parameters* are fixed at setup,
-  and one that vanishes, returns or appears late logs at spec §7.2's level,
-  once per transition.
-- `async_setup_entry` / `async_unload_entry`, and the device: identifiers from
-  the *device id*, the MAC in `connections`, manufacturer, model, name,
-  `sw_version`, the *assigned room* as an area suggestion, and no
-  `configuration_url`.
-- `translations/en.json`, with the config, options and exception strings.
-- A spec amendment (§15) for the five contract corrections this work forced:
-  `OptionsFlowWithReload` in place of the update listener, the device
-  registered in `__init__.py` rather than by an entity, an empty `PLATFORMS`
-  until the platform tickets fill it, a fourth `async_step_dhcp` outcome, and
-  §6.2's poll-time *foreign panel* raising `ConfigEntryError` like the
-  setup-time one.
-- `tests/integration/`, the client seam: `FakeHeatitClient` joins `fakes.py`,
-  and `config_flow.py` is held at 100 % line coverage by `scripts/check.sh`.
-  mypy follows `pytest-homeassistant-custom-component` rather than ignoring it,
-  so a `MockConfigEntry` does not decay to `Any` and disarm the type check.
-- `registry.py`, the thirteen observed parameters with their serialisers,
-  steps, bounds, read paths, scales and presence flags. Off-step and
-  out-of-range values are rejected locally, before any request exists.
-- One redaction function scrubbing exactly `id`, `Network.mac`,
-  `Network.SSID` and `Network.ipAddress`, at the wire level and on parsed data.
-- `scripts/capture_fixtures.py`, the read-only fixture capture with its
-  separate live-values block, and the first observed fixture,
-  `tests/fixtures/observed/fw-1.21/`, captured from a real panel.
-- `VERIFIED_FIRMWARES` in `const.py`, read by `scripts/check_conformance.py`
-  and asserted equal to the observed fixture directories.
-- The offline test suite's first tier: the client over `aioresponses`, the
-  registry, fixture hygiene and the capture script's read-only guarantee.
-- `test.yml` splits into a `Lint` job and a two-row `Tests` matrix (floor
-  blocking, latest on `continue-on-error` — except on a tag, where the release
-  gate calls this workflow and §10.2 makes both rows block — and a monthly
-  cron); `check.sh` gains `lint` and `test` stages so CI still runs the one
-  shared file.
+- **The panel as a device.** One panel is one device, identified by the
+  panel's own device id rather than its MAC, so a panel that changes address
+  keeps its history and its entity ids. The MAC travels in `connections` as a
+  migration path. Model, firmware and the room assigned in the MyHeatit app are
+  read from the device; the room becomes an area suggestion, and a rename in
+  Home Assistant is never overwritten by one in the app.
+- **A climate entity.** Off and Heat, with **comfort and eco as presets** —
+  the target temperature follows whichever setpoint the panel is regulating to,
+  so it changes when the preset does and is blank while the panel is off.
+  Turning on always lands in Heating; selecting a preset while off turns the
+  panel on in that mode. Temperature limits come from the device and are
+  reported as they are. Whether the element is on comes from the panel's relay
+  rather than from its reported power, which trails the relay by about 15
+  seconds. Recorded as [ADR-0004](docs/adr/0004-eco-as-a-climate-preset.md).
+- **Setup through a config flow**, host only: Home Assistant reads the panel's
+  status once to learn which unit answers there. Panels already known to the
+  router are offered by DHCP discovery. Reconfigure moves an existing panel to
+  a new address and refuses to adopt a different unit that has taken it over.
+  One option, the poll interval — 60 seconds by default, 30 seconds minimum.
+- **A failure model where the poll is the sole judge of availability.** A
+  status read is retried once inside a 10-second budget; the first poll that
+  exhausts it makes the panel unavailable, and the next good poll brings it
+  back, two log lines for a panel that was away all night. A panel answering at
+  a configured address with the wrong device id is never accepted as data. A
+  parameter this firmware does not return costs only its own entity.
+- **Writes that show at once and are then checked.** A change applies the value
+  the panel echoes back and schedules one refresh 1.5 seconds later, which is
+  the authority. A write the panel acknowledges and then does not apply is
+  logged once per parameter. Every write failure reaches the user as the
+  panel's own words rather than a traceback.
+- **One redaction function** over logging, diagnostics and fixture capture,
+  scrubbing the device id, MAC, SSID and IP address. Raw response bytes are
+  never logged at any level.
+- **Tooling that keeps the repository honest**: `scripts/check.sh` as the one
+  entry point CI also calls, so local and CI cannot drift; `scripts/probe.py`,
+  the hardware conformance probe, with four ascending hazard tiers and a
+  restore verified from a fresh status read; `scripts/capture_fixtures.py` for
+  read-only fixture capture; `scripts/check_conformance.py`,
+  `scripts/check_layout.py` and `scripts/check_release.py` as CI gates over the
+  conformance register, the repository layout and the release itself.
+- **A test suite built on captured bytes.** Every fixture is either a real
+  panel's response or derived from one in test code; nothing is modelled,
+  exposed or tested because a document said so. The client is exercised over
+  HTTP, and the config flow, coordinator and entities against a real
+  `hass` with the client faked from the same bytes.
 
-- The first observed write-path fixtures at firmware 1.21 under
-  `tests/fixtures/observed/fw-1.21/`: three write echoes (one the lying
-  `sensorMode` echo), a 400, the `text/html` 404 and the HTTP/1.0 505, each as
-  raw bytes with its headers beside it, captured by `probe.py --writes`.
+### Verified
 
-- `release.yml`: pushing a `vX.Y.Z` tag runs the validators, `test.yml` and
-  `scripts/check_release.py` against the tagged commit, and only when all of
-  them pass creates the GitHub release with the changelog section as its
-  body. A failed gate leaves the bare tag and deletes nothing.
-- `scripts/check_release.py`, the lockstep check: tag equals manifest
-  version, the tagged commit is on `main`, the files a release needs exist,
-  `hacs.json` keeps its floor gate, and the changelog section is non-empty.
-- `tests/scripts/`, holding the lockstep check's own tests. One of them
-  asserts that every `continue-on-error` in the workflows the gate calls is
-  switched off on a tag, so a failing row can never be passed over.
-- `docs/releasing.md`, the release procedure and the repository settings the
-  release depends on.
-- `tests/test_readme.py`, holding the README to the tree it describes: the
-  `## Verified firmware` table is asserted equal to the observed fixture
-  directories and to `VERIFIED_FIRMWARES`, the `## Entities` table equal to the
-  entities the platform modules declare, the Home Assistant floor equal to
-  `hacs.json`'s, and the install section present exactly when `CHANGELOG.md`
-  holds a released version. **A platform now ships its README rows in the same
-  pull request as its module.**
-- `diagnostics.py`, the config-entry diagnostics download of spec §7.3 — there
-  is no device download, one entry being one device. It carries the entry's
-  data with the host redacted, its options and the *poll interval* in force,
-  the parsed status, the firmware and whether it is verified, the *observed
-  parameters* and those that have vanished, what the last poll did — outcome,
-  duration, whether the status read's retry fired — and `raw`: the last status
-  body and headers exactly as the panel sent them. The body goes through the
-  wire-level scrub `scripts/capture_fixtures.py` writes fixtures with, and a
-  header value through the same four fields matched as text, a header naming
-  nothing that could be found by key. A download from an unverified panel is
-  therefore a fixture candidate: the panel's own bytes, one `name`
-  substitution short of a committed capture. The README's new `## Diagnostics`
-  section says as much to the user.
-- `scripts/check_release.py` gains the README: `README.md` joins the files a
-  release cannot exist without, a tag with no `## Installation` section is
-  refused, that section may never offer a manual copy into `custom_components/`,
-  and it must name HACS's Custom repositories dialog below `1.0.0` and must not
-  name it from `1.0.0` on (§11.3).
-- **The climate entity**: the panel as a thermostat. Off and Heat, comfort and
-  eco as presets, a target temperature that follows the *live setpoint* and is
-  blank while the panel is off, temperature limits read from the device with no
-  client-side clamping, and an `hvac_action` taken from the *relay state* and
-  never from power. Turning on always lands in Heating; Heat while in Eco does
-  nothing; a preset chosen while off turns the panel on in that mode; a plain
-  `climate.set_temperature` while off raises rather than guessing a bank.
-- `entity.py`, the base every platform builds on: the device by identifiers,
-  the `{id}-{key}` unique id, `has_entity_name`, and availability as the poll
-  succeeding **and** the entity's own read path resolving.
-- The optimistic update, in the coordinator and so shared by every platform to
-  come: a write shows the panel's *write echo* at once and schedules one
-  debounced refresh 1.5 s later, which is the authority. A write the panel
-  acknowledged and did not apply — a *silent undo* — warns once per parameter
-  per entry lifetime. Write failures carry spec §6.4's translation keys with
-  the device's `reason` verbatim.
-- `icons.json`, and the entity strings in `translations/en.json`.
-- A spec amendment (§15) for the four contract corrections this work forced:
-  the climate entity carries no entity description, `min_temp` / `max_temp`
-  fall back to the registry's own setpoint bounds when a firmware returns no
-  temperature limits, a locally refused value is a translated
-  `HomeAssistantError` like every other write error, and §6.5's *post-write*
-  refresh is the first status a write has had 1.5 s to reach.
-
-### Changed
-
-- The `mocked` fixture supplies aiohttp 3.14's required `stream_writer` to the
-  responses aioresponses builds, when the running aiohttp has that parameter.
-  aioresponses 0.7.9, its newest release, does not pass it, which reddened the
-  latest row on a test-only dependency's lag rather than on anything Home
-  Assistant changed under us — the one thing that row exists to report.
-- Register row Q18 moves from the `read` to the `write` tier: its evidence
-  required writing `panelMode=0`, which no read-tier check may do.
+- Firmware **1.21**, on a 600 W wall panel. The claims the integration depends
+  on are recorded row by row in the
+  [conformance register](docs/conformance/checklist.md), each with the firmware
+  it was verified at. A panel on any other version is unverified, not
+  unsupported: it is added and driven exactly the same way.
