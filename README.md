@@ -10,6 +10,26 @@ vendor app in the path once the panel is on WiFi.
 - Home Assistant **2026.3.1** or newer.
 - A Heatit WiFi Panel joined to the same network as Home Assistant.
 
+## Installation
+
+This integration is downloaded through [HACS](https://hacs.xyz), as a custom
+repository.
+
+[![Open this repository inside your Home Assistant's HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Normio&repository=HeatIt-Wifi-Home-Assistant&category=integration)
+
+The button opens HACS on this repository in your own Home Assistant. To do the
+same by hand: in HACS, open the menu in the top right, choose
+**Custom repositories**, paste this repository's address,
+`https://github.com/Normio/HeatIt-Wifi-Home-Assistant`, pick the type
+**Integration**, and add it. Then download **Heatit WiFi Panel** from HACS and
+restart Home Assistant.
+
+With the restart done, add the panel: **Settings** → **Devices & services** →
+**Add integration** → **Heatit WiFi Panel**, then enter its address. Home
+Assistant reads the panel's status once to learn which unit it is. If that
+address changes later — a new DHCP lease after a power cut, say — Home
+Assistant follows the panel to it without being asked.
+
 ## Entities
 
 One panel is one device. Every entity below belongs to it, and each is named by
