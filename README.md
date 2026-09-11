@@ -100,7 +100,7 @@ same way.
 
 | Firmware | Verified on |
 |---|---|
-| 1.21 | 600 W wall panel (`maxLoad` 6) |
+| 1.21 | 600 W wall panel (`maxLoad` 6) and 1000 W wall panel (`maxLoad` 10) |
 
 ## Network
 

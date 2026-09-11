@@ -364,9 +364,11 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         """Put every setting back to its default; nothing here is verified.
 
         The panel applies this **staggered over about 5 s**, so the refresh at
-        :data:`POST_WRITE_REFRESH_DELAY` reports a partial reset and the next
-        poll completes it. There is nothing to retry and nothing to fix: every
-        entity shows whatever the panel says at the moment it is asked.
+        :data:`POST_WRITE_REFRESH_DELAY` may report a partial reset — or the
+        panel as it was, which is what one hardware run saw at 1.8 s — and a
+        later poll carries the rest. There is nothing to retry and nothing to
+        fix either way: every entity shows whatever the panel says at the
+        moment it is asked.
         """
         await self._async_reset(self.client.reset_settings)
 

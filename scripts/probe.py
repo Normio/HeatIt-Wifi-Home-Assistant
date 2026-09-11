@@ -797,6 +797,8 @@ class FixtureStore:
         self.directory = directory
         self.secrets = tuple(secret for secret in secrets if secret)
         self.saved: list[Path] = []
+        self.kept: list[Path] = []
+        """Fixtures a run declined to overwrite, because they already exist."""
 
     def check_scrubbable(self, body: bytes) -> None:
         """Fail closed: a scrub key or a known identifying value refuses the save."""
@@ -810,12 +812,25 @@ class FixtureStore:
                 raise ScrubViolationError(msg)
 
     def save(self, name: str, response: Response) -> Path:
-        """Write ``<name>.json`` or ``<name>.txt`` plus ``<name>.headers``."""
+        """Write ``<name>.json`` or ``<name>.txt`` plus ``<name>.headers``.
+
+        **A fixture already in the tree is never overwritten.** A committed
+        fixture is reviewed evidence, and a probe run is not a review: three
+        runs in a row rewrote the heating-setpoint echo to whatever value the
+        room temperature implied that hour, once losing the integer the fixture
+        existed to show, and once reaching a commit unnoticed inside a
+        ``git add -A``. A new firmware's directory is empty, so a capture there
+        still lands; refreshing an existing one is a deliberate act — delete
+        the file and re-run.
+        """
         self.check_scrubbable(response.body)
         content_type = response.header("Content-Type") or ""
         suffix = ".json" if "json" in content_type else ".txt"
         self.directory.mkdir(parents=True, exist_ok=True)
         path = self.directory / f"{name}{suffix}"
+        if path.exists():
+            self.kept.append(path)
+            return path
         path.write_bytes(response.body)
         path.with_suffix(".headers").write_bytes(response.raw_headers)
         self.saved.append(path)
@@ -862,6 +877,13 @@ class SettingsResetOutcome:
     response: Response
     timeline: list[StatusSample]
     read_failures: int
+    nudged: dict[str, str]
+    """Each parameter confirmed off its documented default first, and at what.
+
+    A parameter missing from here could not be put off its default
+    (:func:`nudge_plan`), so the reset leaving it there proves nothing about it
+    either way.
+    """
 
 
 @dataclass
@@ -1348,7 +1370,17 @@ def multi_parameter_writes_are_atomic(run: Run) -> str | None:
 @check("Q5", tier=WRITE)
 def echo_reports_the_applied_value(run: Run) -> str | None:
     """Check that the echo uses the name sent and the value applied."""
-    cold = cold_setpoint(run.panel.status())
+    status = run.panel.status()
+    cold = cold_setpoint(status)
+    # A **whole** degree wherever one is also safely below the room. Type
+    # normalisation is what this check exists to show — `20` coming back for
+    # `20.0` — and only an integer-valued setpoint can show it; a `.5` echoes
+    # `20.5` and says nothing about the type. It is also why the committed
+    # fixture kept drifting: `cold_setpoint` lands on a half degree whenever
+    # the room does, so two runs in a row rewrote the evidence away.
+    floor = float(math.floor(cold))
+    minimum = float(status.parameters["minimumTemperatureLimit"])
+    cold = floor if floor >= minimum + 1.0 else cold
     response = run.write_applied("heatingSetpoint", f"{cold:.1f}")
     echo = response.json()
     expect("heatingSetpoint" in echo, f"echo keys {sorted(echo)}")
@@ -1658,6 +1690,91 @@ def reset_uses_the_status_envelope(run: Run) -> str | None:
     return f"body {body_text(outcome.response)}"
 
 
+def as_float(defaults: dict[str, object], which: str, fallback: float) -> float:
+    """Read one temperature-limit default as a float, however it was spelled."""
+    value = defaults.get(f"{which}imumTemperatureLimit", fallback)
+    return float(str(value))
+
+
+def nudge_plan(status: Status, defaults: dict[str, object]) -> dict[str, str]:
+    """Return the wire value each parameter is moved to before a settings reset.
+
+    The point is to make the reset prove itself. A parameter already sitting on
+    the value the reset would restore cannot tell "written back to its default"
+    from "left alone" — and on both units probed so far nine of thirteen were
+    exactly that, the load limit included. Making sure each one sits off its
+    default first gives the reset somewhere to move it from.
+
+    Nothing here can make the panel heat: both setpoints go **below** room
+    temperature, the mode goes to Eco rather than Heating, and the load limit
+    one step under the unit's own ``maxLoad`` — which is also what makes the
+    load limit's landing place observable at all, the document's fixed 15 being
+    a value this hardware rejects (Q17).
+
+    ``sensorMode`` is deliberately absent: the write is inert without a paired
+    sensor, so the panel acknowledges it and keeps the old value (Q58). Any
+    parameter whose planned value is its default anyway drops out, so every
+    entry returned is genuinely off-default by construction.
+    """
+    cold = serialise(cold_setpoint(status))
+    plan = {
+        "panelMode": "2",
+        "heatingSetpoint": cold,
+        "ecoSetpoint": cold,
+        "minimumTemperatureLimit": serialise(as_float(defaults, "min", 5.0) + 1.0),
+        "maximumTemperatureLimit": serialise(as_float(defaults, "max", 40.0) - 1.0),
+        "sensorCalibration": serialise(1.0),
+        "loadLimit": serialise(max(1, int(status.parameters["maxLoad"]) - 1)),
+        "activeDisplayBrightness": "5",
+        "standbyDisplayBrightness": "0",
+        "disableButtons": "1",
+        "temperatureDisplay": "true",
+        "openWindowDetection": "true",
+    }
+    return {
+        name: value
+        for name, value in plan.items()
+        if name in defaults and value != serialise(defaults[name])
+    }
+
+
+def nudge_off_defaults(run: Run) -> dict[str, str]:
+    """Put every writable parameter somewhere other than its default, fail-soft.
+
+    Returns only the parameters confirmed off-default by a fresh status read. A
+    write the panel refuses is left out rather than raised: the aim is to make
+    as much of the reset observable as this panel allows, and whatever it
+    declines is reported as undemonstrated instead of counted as a match.
+
+    Every value goes through :meth:`Run.write`, so the ledger holds the
+    original and the per-check restore puts it back. The reset is about to
+    overwrite all of it anyway, which is why this adds no risk in the only
+    tier that calls it.
+    """
+    status = run.panel.status()
+    # The limits last: narrowing one past a stored setpoint clamps it (Q15),
+    # and the setpoints are where the reset most needs to be visible.
+    plan = nudge_plan(status, openapi_defaults())
+    order = sorted(plan, key=lambda name: name in RESTORE_FIRST)
+    moved: dict[str, str] = {}
+    for name in order:
+        # Some parameters are already off their default — the panel ships with
+        # buttons disabled where the document defaults them on, say. Those need
+        # no write at all; what the reset has to prove is the same either way.
+        if serialise(read_parameter(status.doc, name)) != plan[name]:
+            response = run.write(name, plan[name])
+            if response.status != HTTPStatus.OK:
+                continue
+        # Confirm by polling, never by one immediate read: the panel commits a
+        # write in 305-632 ms (Q31). The first two runs of this function read
+        # once and lost a different parameter each time — and on both runs the
+        # one written last, whose read raced its own write most tightly.
+        _, reflected = run.reflect(name, plan[name])
+        if reflected is not None:
+            moved[name] = plan[name]
+    return moved
+
+
 def settings_reset(run: Run) -> SettingsResetOutcome:
     """Reset the settings once per run, every writable parameter registered."""
     if "settings" in run.shared:
@@ -1665,6 +1782,7 @@ def settings_reset(run: Run) -> SettingsResetOutcome:
         return outcome
     for name in WRITABLE_PARAMETERS:
         run.ledger.touch(name)
+    nudged = nudge_off_defaults(run)
     before = run.panel.status()
     response = run.panel.reset_settings()
     if response.status == HTTPStatus.OK:
@@ -1680,7 +1798,7 @@ def settings_reset(run: Run) -> SettingsResetOutcome:
         else:
             timeline.append((time.monotonic() - started, status.doc))
         run.sleep(SETTINGS_POLL)
-    outcome = SettingsResetOutcome(before, response, timeline, read_failures)
+    outcome = SettingsResetOutcome(before, response, timeline, read_failures, nudged)
     run.shared["settings"] = outcome
     return outcome
 
@@ -1721,27 +1839,51 @@ def settings_reset_keeps_identity_and_settles(run: Run) -> str | None:
             final["Network"][key] == before["Network"][key], f"Network.{key} changed"
         )
     settled = last_change_at(outcome.timeline)
-    run.measure("Q34 settle", f"last parameter change at {settled:.1f} s")
+    run.measure(
+        "Q34 settle",
+        f"last parameter change at {settled:.1f} s, over "
+        f"{len(outcome.nudged)} parameter(s) held off their default first",
+    )
     expect(settled <= SETTINGS_SETTLE_BOUND, f"still changing at {settled:.1f} s")
     return f"settled by {settled:.1f} s"
 
 
 @check("Q53", tier=DESTRUCTIVE)
 def post_reset_values_match_the_documented_defaults(run: Run) -> str | None:
-    """Post-reset parameter values match the vendor document's defaults."""
+    """Post-reset values match the document's defaults, bar the load limit.
+
+    The load limit is compared against the unit's own ``maxLoad`` instead,
+    because that is what the firmware does: at fw 1.21 on a 600 W unit every
+    other documented default matched and ``loadLimit`` landed on 6 rather than
+    the document's fixed 15 — which that unit would have rejected anyway
+    (Q17). A panel that starts honouring the documented 15 fails here, which
+    is the point of keeping the row.
+    """
     outcome = settings_reset(run)
     expect(bool(outcome.timeline), "no status could be read after the reset")
     final = outcome.timeline[-1][1]
-    defaults = openapi_defaults()
+    expected = openapi_defaults() | {"loadLimit": read_parameter(final, "maxLoad")}
+    # Only the parameters the reset was made to move can be judged: one that
+    # was already on its default and could not be nudged ends there either
+    # way, and counting it as a match is how this check used to flatter itself.
+    judged = {name: value for name, value in expected.items() if name in outcome.nudged}
+    undemonstrated = sorted(set(expected) - set(judged))
     differing = [
-        f"{name}: {serialise(read_parameter(final, name))} vs documented "
-        f"{serialise(default)}"
-        for name, default in defaults.items()
-        if serialise(read_parameter(final, name)) != serialise(default)
+        f"{name}: {serialise(read_parameter(final, name))} vs expected "
+        f"{serialise(value)}"
+        for name, value in judged.items()
+        if serialise(read_parameter(final, name)) != serialise(value)
     ]
-    run.measure("Q53 defaults", "; ".join(differing) or "all match")
+    missed = (
+        f"; not demonstrated: {', '.join(undemonstrated)}" if undemonstrated else ""
+    )
+    run.measure(
+        "Q53 defaults",
+        f"{len(judged)} judged, {'; '.join(differing) or 'all match'}{missed}",
+    )
+    expect(bool(judged), "no parameter could be moved off its default")
     expect(not differing, "; ".join(differing))
-    return f"{len(defaults)} defaults match"
+    return f"{len(judged)} of {len(expected)} restored to their default"
 
 
 # --------------------------------------------------------------------------- #
@@ -1964,6 +2106,9 @@ class Report:
     results: list[Result]
     measurements: dict[str, str]
     fixtures: list[Path]
+    kept: list[Path]
+    """Fixtures the run left alone because the tree already had them."""
+
     snapshot: Path | None
 
     def render(self) -> Iterator[str]:
@@ -1991,6 +2136,11 @@ class Report:
             yield from (f"- `{path.relative_to(REPO_ROOT)}`" for path in self.fixtures)
         else:
             yield "- none saved (fixtures are written only with `--writes`)"
+        if self.kept:
+            yield ""
+            yield "Left as committed, not overwritten:"
+            yield ""
+            yield from (f"- `{path.relative_to(REPO_ROOT)}`" for path in self.kept)
         yield ""
         yield "### Measurements"
         yield ""
@@ -2135,9 +2285,12 @@ def confirm_tiers(
     if DESTRUCTIVE in enabled and any(entry.tier == DESTRUCTIVE for entry in checks):
         question = (
             f"Run destructive checks on the panel at {host}? The kWh counter is "
-            f"zeroed for good, and a settings reset puts the panel at its defaults "
-            f"(comfort 21.0 °C, Heating mode) for about 15 s until the restore "
-            f"lands — the heater runs for that long if the room is colder."
+            f"zeroed for good; every writable parameter is first moved off its "
+            f"documented default so the reset can be seen to undo it, and a "
+            f"settings reset then puts the panel at its defaults (comfort 21.0 °C, "
+            f"Heating mode) for about 15 s until the restore lands — the heater "
+            f"runs for that long if the room is colder. Every parameter is "
+            f"restored and verified from a fresh read."
         )
         if not ask_yes_no(question):
             enabled = enabled - {DESTRUCTIVE}
@@ -2219,6 +2372,7 @@ def main_probe(args: argparse.Namespace) -> int:
         results,
         run.measurements,
         fixtures.saved if fixtures else [],
+        fixtures.kept if fixtures else [],
         ledger.snapshot_path,
     )
     for line in report.render():
