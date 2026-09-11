@@ -559,8 +559,17 @@ and if it ever turns up an advertisement it amends this spec rather than having 
 
 ### 4.4 Naming and area — read once, then frozen
 
-`name` becomes the entry title **and** the device name; a non-empty `room` becomes `suggested_area`.
-Both are read **at creation only** and never rewritten by a poll.
+`name` becomes the entry title **and** the device name; a `room` that matches an area Home Assistant
+already has becomes `suggested_area`, and one that matches none is dropped. Both are read **at
+creation only** and never rewritten by a poll.
+
+The area registry is the user's, not the panel's. `suggested_area` is core's only creation-time area
+input and core resolves it through `area_registry.async_get_or_create`, so passing the room
+unconditionally *creates* an area for any room name the user has never made one for — adding to the
+registry rather than choosing from it. The room therefore only ever picks between areas that already
+exist, matched by the registry's own normalisation, so `bedroom` finds `Bedroom`. With no match the
+device is left unassigned and Home Assistant offers its own area picker for it, which is the same
+place a user who never set a room in the MyHeatit app ends up.
 
 Home Assistant's convention is that the user owns the entry title and device name once the entry
 exists — which is why the rediscovery idiom updates `CONF_HOST` and never the title. Following an app
@@ -1672,6 +1681,15 @@ rather than a surprise.
 
 Corrections to this document after v1 was frozen. Each entry names the register row or issue that
 forced it, and the PR that carried it.
+
+**2026-09-11 — §4.4's `room` only picks an area, it never creates one** (PR pending).
+§4.4 said "a non-empty `room` becomes `suggested_area`" and took that to be a suggestion. It is not:
+core resolves `suggested_area` through `area_registry.async_get_or_create`, so a room naming no
+existing area had one *created* — the panel silently writing to a registry that is the user's. As
+shipped in 0.1.0, adding a panel whose MyHeatit room was `Bedroom` made a `Bedroom` area. §4.4 now
+matches the room against the existing areas and drops it when nothing matches; the paragraph above
+records why, and the unmatched case is the one Home Assistant already handles by offering its area
+picker.
 
 **2026-09-09 — `scripts/check_layout.py` joins §3.1 and §9.4** ([#36](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/36), PR #49).
 Three of #36's acceptance criteria — no `strings.json` anywhere, brand assets nowhere else in the
