@@ -30,7 +30,7 @@ from homeassistant.exceptions import ServiceValidationError
 
 from .const import DOMAIN
 from .entity import HeatitWifiPanelEntity
-from .registry import PARAMETERS, SETPOINT_MAXIMUM, SETPOINT_MINIMUM
+from .registry import PARAMETERS
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -47,8 +47,6 @@ KEY: Final = "panel"
 PANEL_MODE: Final = "panelMode"
 COMFORT_SETPOINT: Final = "heatingSetpoint"
 ECO_SETPOINT: Final = "ecoSetpoint"
-MINIMUM_LIMIT: Final = "minimumTemperatureLimit"
-MAXIMUM_LIMIT: Final = "maximumTemperatureLimit"
 
 MODE_OFF: Final = 0
 MODE_HEATING: Final = 1
@@ -140,13 +138,6 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
         """Which *setpoint bank* the panel is regulating to; ``None`` while Off."""
         return MODE_TO_BANK.get(self._panel_mode)
 
-    def _temperature(self, key: str) -> float | None:
-        """One temperature parameter as a number, the pending echo winning."""
-        value = self.coordinator.parameter(key)
-        if value is None or isinstance(value, bool):
-            return None
-        return float(value)
-
     @property
     @override
     def hvac_mode(self) -> HVACMode:
@@ -185,7 +176,7 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
     def target_temperature(self) -> float | None:
         """The *live setpoint*; ``None`` while Off, where there is none."""
         bank = self._live_bank
-        return None if bank is None else self._temperature(bank)
+        return None if bank is None else self.coordinator.numeric(bank)
 
     @property
     @override
@@ -197,23 +188,13 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
         out-of-bounds display to defend against: a limit change is followed by
         a refresh and the card agrees with the panel again.
         """
-        return self._limit(MINIMUM_LIMIT, SETPOINT_MINIMUM)
+        return self.coordinator.minimum_temperature
 
     @property
     @override
     def max_temp(self) -> float:
         """The device's maximum, on the same terms as :attr:`min_temp`."""
-        return self._limit(MAXIMUM_LIMIT, SETPOINT_MAXIMUM)
-
-    def _limit(self, key: str, absolute: float) -> float:
-        """Return a *temperature limit*, or the panel's own bound when absent.
-
-        Both limits are *optional parameters*: a firmware that returns neither
-        still has a thermostat, and the registry's own bounds — the ones every
-        setpoint write is validated against — are what the card then offers.
-        """
-        limit = self._temperature(key)
-        return absolute if limit is None else limit
+        return self.coordinator.maximum_temperature
 
     @override
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:

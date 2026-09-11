@@ -17,7 +17,15 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
 from homeassistant.components.climate.const import HVACMode
-from homeassistant.const import STATE_OFF, EntityCategory, Platform
+from homeassistant.components.number import NumberDeviceClass
+from homeassistant.const import (
+    PERCENTAGE,
+    STATE_OFF,
+    EntityCategory,
+    Platform,
+    UnitOfPower,
+    UnitOfTemperature,
+)
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.heatit_wifi_panel.api import HeatitConnectionError
@@ -93,6 +101,108 @@ ENTITY_TABLE = [
         enabled=True,
         state=HVACMode.HEAT,
         read_path=None,
+    ),
+    # Both *setpoint banks* are *required core*, so neither number can go
+    # missing on its own: a status without one is not a status (§6.3).
+    Row(
+        platform=Platform.NUMBER,
+        key="comfort_setpoint",
+        name="Comfort setpoint",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="19.0",
+        read_path=None,
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="eco_setpoint",
+        name="Eco setpoint",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="18.0",
+        read_path=None,
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="minimum_temperature_limit",
+        name="Minimum temperature limit",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="5.0",
+        read_path="parameters.minimumTemperatureLimit",
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="maximum_temperature_limit",
+        name="Maximum temperature limit",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="40.0",
+        read_path="parameters.maximumTemperatureLimit",
+    ),
+    # No device class, on purpose: it is an offset, and a °F conversion of
+    # an offset is wrong (§5.2).
+    Row(
+        platform=Platform.NUMBER,
+        key="sensor_calibration",
+        name="Sensor calibration",
+        device_class=None,
+        unit=UnitOfTemperature.CELSIUS,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="0.0",
+        read_path="parameters.sensorCalibration",
+    ),
+    # Watts and percent from here down, not the device's units of 100 W
+    # and 10 %: the registry carries the scale (§5.4).
+    Row(
+        platform=Platform.NUMBER,
+        key="load_limit",
+        name="Load limit",
+        device_class=NumberDeviceClass.POWER,
+        unit=UnitOfPower.WATT,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="600.0",
+        read_path="parameters.loadLimit",
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="active_display_brightness",
+        name="Active display brightness",
+        device_class=None,
+        unit=PERCENTAGE,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="100.0",
+        read_path="parameters.activeDisplayBrightness",
+    ),
+    Row(
+        platform=Platform.NUMBER,
+        key="standby_display_brightness",
+        name="Standby display brightness",
+        device_class=None,
+        unit=PERCENTAGE,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="0.0",
+        read_path="parameters.standbyDisplayBrightness",
     ),
     Row(
         platform=Platform.SWITCH,

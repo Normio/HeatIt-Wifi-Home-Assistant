@@ -38,6 +38,14 @@ Home Assistant from the device's name and its own.
 | Entity | Platform | What it is |
 |---|---|---|
 | Heatit WiFi Panel (`panel`) | climate | The thermostat: off and heat, the comfort and eco presets, the temperature the panel is regulating to, and whether the element is on right now. It carries the panel's own name, because it *is* the panel. |
+| Comfort setpoint (`comfort_setpoint`) | number | The temperature the panel heats to in comfort. |
+| Eco setpoint (`eco_setpoint`) | number | The temperature it heats to in eco. |
+| Minimum temperature limit (`minimum_temperature_limit`) | number | The lowest either setpoint may be set to. |
+| Maximum temperature limit (`maximum_temperature_limit`) | number | The highest either setpoint may be set to. |
+| Sensor calibration (`sensor_calibration`) | number | An offset added to the temperature the panel measures, −6 to +6 °C. |
+| Load limit (`load_limit`) | number | The most power the panel will draw, in watts, up to the rating of your model. |
+| Active display brightness (`active_display_brightness`) | number | How bright the panel's display is while you are using it. |
+| Standby display brightness (`standby_display_brightness`) | number | How bright it is the rest of the time; 0 turns it off. |
 | Open window detection (`open_window_detection`) | switch | Whether the panel drops to a low temperature when it senses a window opening. |
 | External sensor (`external_sensor`) | switch | Whether the panel regulates to a paired wireless sensor instead of its own. With no sensor paired the panel accepts the change and ignores it, so the switch turns itself back off a second or two later. |
 | Standby display (`standby_display`) | select | What the panel's display shows when nobody is touching it: the setpoint, or the measured temperature. |
@@ -53,6 +61,16 @@ Eco is a **preset**, not a second target temperature, and the target follows
 whichever setpoint the panel is regulating to — so it changes when the preset
 does, and is blank while the panel is off. The reasoning, and what was weighed
 against it, is in [ADR-0004](docs/adr/0004-eco-as-a-climate-preset.md).
+
+The two setpoint numbers are how you reach the *other* bank: either can be set
+at any time, whichever mode the panel is in, and the panel goes on regulating
+to the one the mode selects. They also keep a history per bank, which the
+thermostat's single target cannot.
+
+What each number will let you set follows the panel rather than a fixed range.
+The setpoints stop at the temperature limits, each limit stops half a degree
+short of the other, and the load limit stops at your model's rating — so Home
+Assistant does not offer a value the panel is going to refuse.
 
 The panel publishes its energy counter in steps of roughly 0.04 kWh rather than
 continuously, so the Energy sensor sits flat for minutes and then jumps. That is

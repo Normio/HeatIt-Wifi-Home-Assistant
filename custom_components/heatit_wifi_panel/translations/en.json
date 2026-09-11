@@ -66,6 +66,32 @@
         }
       }
     },
+    "number": {
+      "active_display_brightness": {
+        "name": "Active display brightness"
+      },
+      "comfort_setpoint": {
+        "name": "Comfort setpoint"
+      },
+      "eco_setpoint": {
+        "name": "Eco setpoint"
+      },
+      "load_limit": {
+        "name": "Load limit"
+      },
+      "maximum_temperature_limit": {
+        "name": "Maximum temperature limit"
+      },
+      "minimum_temperature_limit": {
+        "name": "Minimum temperature limit"
+      },
+      "sensor_calibration": {
+        "name": "Sensor calibration"
+      },
+      "standby_display_brightness": {
+        "name": "Standby display brightness"
+      }
+    },
     "select": {
       "buttons": {
         "name": "Buttons",
