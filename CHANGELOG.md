@@ -50,9 +50,17 @@ releases.
   the authority. A write the panel acknowledges and then does not apply is
   logged once per parameter. Every write failure reaches the user as the
   panel's own words rather than a traceback.
+- **A diagnostics download**, on the panel's device page: the status as the
+  integration parsed it, the same status as the raw bytes the panel sent, the
+  firmware and whether a capture exists for it, which parameters this panel
+  returns and which have stopped, and what the last poll did. On a firmware no
+  capture covers, that download is what adds it — it carries the panel's own
+  bytes, fields this integration does not read included.
 - **One redaction function** over logging, diagnostics and fixture capture,
-  scrubbing the device id, MAC, SSID and IP address. Raw response bytes are
-  never logged at any level.
+  scrubbing the device id, MAC, SSID and IP address — and the panel's address
+  in the configuration, on the way into a diagnostics file, so it can be
+  attached to an issue as it is. The panel's name and room are kept: they are
+  labels, not identifiers. Raw response bytes are never logged at any level.
 - **Tooling that keeps the repository honest**: `scripts/check.sh` as the one
   entry point CI also calls, so local and CI cannot drift; `scripts/probe.py`,
   the hardware conformance probe, with four ascending hazard tiers and a
