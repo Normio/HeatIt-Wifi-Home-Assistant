@@ -546,14 +546,17 @@ The status read is not optional: the *device id* is not in the DHCP packet, and 
 packet's MAC alone would repoint an entry without the id verification that foreign-panel safety rests
 on.
 
-**Why no mDNS or SSDP matcher.** Unicast mDNS to the panel's `:5353` — from an ephemeral port and
-from source port 5353, for `_services._dns-sd._udp.local`, `_http._tcp.local` and `_heatit._tcp.local`
-— drew no reply; unicast SSDP to `:1900` drew no reply; only tcp/80 is open. Both negatives are
-**soft**: the probing host sat on a different VLAN, and link-local mDNS (224.0.0.251, TTL 1) cannot
-cross a routed boundary, so the multicast half was untestable rather than silent. Independently, the
-Espressif OUI kills a `macaddress: "E4B323*"` matcher outright — it would fire on every ESP32 device
-on a user's LAN. The on-segment check is register row Q28 / procedure P-2; **it does not gate v1**,
-and if it ever turns up an advertisement it amends this spec rather than having delayed it.
+**Why no mDNS or SSDP matcher.** The panel runs no mDNS responder. Unicast mDNS to its `:5353` —
+from an ephemeral port and from source port 5353, for `_services._dns-sd._udp.local`,
+`_http._tcp.local` and `_heatit._tcp.local` — drew no reply, and a multicast browse through a
+reflecting router, in which the panel's own-segment neighbours answered within 100 ms, returned no
+record for it: no service of any type, no hostname, no answer to the reverse lookup of its address
+(register row Q28, procedure P-2, fw 1.21). Unicast SSDP to `:1900` drew no reply and only tcp/80
+is open; that negative stays **soft**, since SSDP reflection was not demonstrated. Independently,
+the Espressif OUI kills a `macaddress: "E4B323*"` matcher outright — it would fire on every ESP32
+device on a user's LAN, and the same browse saw other devices with that prefix. The DHCP
+lease hostname is still unread; if a later on-segment run finds a distinctive one it amends this
+spec rather than having delayed it.
 
 `quality_scale.yaml`: `discovery-update-info` **done** (`async_step_dhcp` in `config_flow.py`);
 `discovery` **exempt**, with the finding above as the comment.
@@ -1212,7 +1215,7 @@ below as `exempt` with a one-line reason. The burden of proof sits on leaving a 
 | `reauthentication-flow` | the local API has no authentication |
 | `action-setup` | no custom service actions in v1 |
 | `dynamic-devices`, `stale-devices` | one config entry is one fixed device |
-| `discovery` | the panel advertises no mDNS or SSDP response to unicast probing; link-local multicast was untestable across the VLAN boundary; the Espressif OUI makes a MAC-prefix matcher unusable (§4.3) |
+| `discovery` | the panel runs no mDNS responder: unicast and reflected-multicast browses that its neighbours answer return no record for it; SSDP is a unicast negative; the Espressif OUI makes a MAC-prefix matcher unusable (§4.3, Q28) |
 
 `test-coverage` (silver, > 95 %) is adopted **as reported, not gated**, and the yaml comment says so.
 `discovery-update-info` is **done**. Everything else is `done`, or `todo` until the release that ships
@@ -1647,7 +1650,8 @@ rather than a surprise.
 2. **On-segment discovery.** Register row Q28 / procedure P-2, tracked as its own issue. It is blocked
    on network access, not on a decision, and it explicitly does **not** gate v1: the manifest ships
    `dhcp: [{"registered_devices": true}]` either way. If it ever turns up an advertisement, it amends
-   this spec and flips `discovery` from `exempt` to `done`.
+   this spec and flips `discovery` from `exempt` to `done`. *Closed for mDNS on 2026-09-11 — see
+   §15; SSDP on-segment and the DHCP hostname remain P-2's open steps.*
 3. **The runtime response to firmware drift.** The *detection* half is settled — every claim sits in
    the register with the firmware it was verified at, a second firmware that disagrees flips a row to
    `contradicted`, and the dependents cell names what breaks. The *posture* half is settled — observed
@@ -1682,6 +1686,17 @@ rather than a surprise.
 
 Corrections to this document after v1 was frozen. Each entry names the register row or issue that
 forced it, and the PR that carried it.
+
+**2026-09-11 — §4.3's mDNS negative is hard, not soft** ([#32](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/32), PR pending).
+§4.3 called both discovery negatives soft because link-local multicast could not cross the VLAN
+boundary. The site router turned out to reflect mDNS, and a reflected browse is a real measurement
+once the panel's own-segment neighbours are seen answering in it — they did, within 100 ms,
+across 75 s and seven service types plus the reverse lookup of the panel's address, and the panel
+answered nothing. Q28 flips to `verified fw 1.21`, §4.3 and the `discovery` exemption row say the
+panel runs no mDNS responder rather than that the question was untestable, and §13's item 2 notes
+what is still open: SSDP was not shown to reflect, so its negative stays unicast-only, and the DHCP
+lease hostname is unread. Nothing in the manifest or the config flow changes — `discovery` stays
+`exempt`, on evidence instead of an excuse.
 
 **2026-09-11 — §4.4's `room` only picks an area, it never creates one** (PR pending).
 §4.4 said "a non-empty `room` becomes `suggested_area`" and took that to be a suggestion. It is not:

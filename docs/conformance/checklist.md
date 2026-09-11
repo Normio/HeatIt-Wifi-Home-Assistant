@@ -97,7 +97,7 @@ as what v1 claimed, with its corrections appended and dated.
 | Q25 | `OWD.activeTime` is `0` while `activeNow` is false | agrees | read | verified fw 1.21 | [#13](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/13) | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) open-window duration sensor |
 | Q26 | The device `id` survives a settings reset | silent | destructive | verified fw 1.21 | [#10](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/10) | `docs/adr/0003-device-id-as-unique-id.md` |
 | Q27 | `name` and `room` are free text; `room` is `""` before the panel is assigned in the app | silent | read | verified fw 1.21 | [#10](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/10) | [#10](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/10) title and `suggested_area` |
-| Q28 | The panel advertises nothing discoverable on its own L2 segment | silent | manual | open | [P-2](#p-2) | [#10](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/10) discovery, [#21](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/21) `quality_scale.yaml` |
+| Q28 | The panel runs no mDNS responder: a multicast browse that its own-segment neighbours answer within 100 ms returns no record for it — no service of any type, no hostname, no reverse PTR. SSDP is a unicast negative only and the DHCP lease hostname is unread | silent | manual | verified fw 1.21 | [#32](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/32), [P-2](#p-2) | [#10](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/10) discovery, [#21](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/21) `quality_scale.yaml` |
 | Q29 | An unknown path returns `404` with `Content-Type: text/html` and the body `Nothing matches the given URI`; `GET /` is the same, so there is no web UI | silent | read | verified fw 1.21 | [#13](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/13) | [#10](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/10) config-flow fingerprint, no `configuration_url` |
 | Q30 | The panel accepts at least 2 concurrent connections; its accept backlog fails at roughly 4–5 | silent | read | verified fw 1.21 | [#17](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/17) | [#17](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/17) one-request-in-flight lock |
 | Q31 | A write is reflected in `/api/status` within 1.5 s (observed 305–632 ms) | silent | write | verified fw 1.21 | [#7](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/7) | [#17](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/17) post-write refresh delay |
@@ -160,8 +160,26 @@ Report: both `id` values, both `firmware` values, and whether `Network.mac` chan
 <a id="p-2"></a>
 ### P-2 — on-segment discovery (Q28)
 
-Needs a host on the panel's **own L2 segment**. Link-local mDNS (224.0.0.251, TTL 1) cannot cross a
-routed boundary, so a sweep from another VLAN is no evidence at all.
+Needs a host on the panel's **own L2 segment**, or a router that reflects mDNS between segments.
+Link-local mDNS (224.0.0.251, TTL 1) cannot cross a routed boundary on its own, so a sweep from
+another VLAN is no evidence at all **unless the panel's neighbours show up in it** — that is the
+control that turns an off-segment browse into a real measurement.
+
+**What closed the mDNS half (2026-09-11, fw 1.21).** The site router reflects mDNS. A 75 s browse
+from `10.10.150.0/24` for `_services._dns-sd._udp`, `_http._tcp`, `_heatit._tcp`, `_arduino._tcp`,
+`_esphomelib._tcp`, `_espressif._tcp`, `_esphome._tcp` and the reverse PTR of the panel's address
+returned other devices on the panel's own `10.10.30.0/24`, and repeated `_http._tcp` queries drew
+their answers within 40–120 ms every time — the control that makes the browse a measurement. The
+panel, alive on tcp/80 throughout, appeared in none of it: no A record for `10.10.30.40`, no
+instance naming it, no answer to the reverse lookup, no announcement in the background chatter.
+Devices sharing the panel's `E4:B3:23` OUI did answer, which is the MAC-prefix matcher's false
+positive seen live.
+
+**Still open.** SSDP: the same run's multicast `M-SEARCH` drew nothing from any device, so
+reflection of SSDP is unproven and the `:1900` negative remains the unicast one. The DHCP lease
+hostname: the router exposes no admin surface off-segment. Neither changes the row — Home
+Assistant's zeroconf is the mDNS half — but whoever sits on the segment should still run steps 3
+and 4 below.
 
 The full checklist, including what has already been ruled out from off-segment, is in
 [#32](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/32). In short: a ~30 s
