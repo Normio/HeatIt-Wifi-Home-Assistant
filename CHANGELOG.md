@@ -11,13 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Buttons**
 
-- Reset the energy counter, off until you turn it on. Home Assistant checks
-  afterwards that the counter actually went to zero and says so in the log once
-  if it did not; a counter zeroed from the MyHeatit app or the panel is left
-  alone.
+- Reset the energy counter, off until you turn it on. Home Assistant says so
+  in the log, once, if the counter does not go to zero afterwards.
 - Restore the panel's default settings, off until you turn it on. The network
-  and the panel's pairing are kept, and the panel applies the rest over about
-  five seconds.
+  and the panel's pairing are kept.
 
 ## [0.2.0] - 2026-09-11
 

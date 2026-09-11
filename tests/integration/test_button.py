@@ -30,6 +30,7 @@ from custom_components.heatit_wifi_panel.const import (
     POST_WRITE_REFRESH_DELAY,
     RESET_VERIFY_DELAY,
 )
+from tests.fakes import ABSENT
 from tests.integration.conftest import (
     REFERENCE_DEVICE_ID,
     advance,
@@ -362,18 +363,51 @@ async def test_a_press_at_zero_clears_a_record_still_pending(
     freezer: FrozenDateTimeFactory,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A zero reading replaces the pending record with nothing to verify."""
+    """A zero reading replaces the pending record with nothing to verify.
+
+    The counter then climbs back above where the *first* press found it, which
+    is what makes this discriminating: a record left standing from that press
+    would read the climb as a reset that did not take and warn about it.
+    """
     patched_client.set_status({TOTAL_CONSUMPTION: BANKED_KWH})
     coordinator = await press(hass, mock_config_entry, RESET_ENERGY.key)
 
     patched_client.set_status({TOTAL_CONSUMPTION: 0.0})
     await coordinator.async_refresh()
     await HeatitPanelButton(coordinator, description(RESET_ENERGY.key)).async_press()
+
+    patched_client.set_status({TOTAL_CONSUMPTION: BANKED_KWH + 1})
     await advance(hass, freezer, RESET_VERIFY_DELAY)
     await coordinator.async_refresh()
 
     assert patched_client.resets == [RESET_ENERGY.reset, RESET_ENERGY.reset]
     assert warnings_of(caplog) == []
+
+
+async def test_a_counter_the_panel_stopped_returning_ends_the_check_quietly(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A reading that is gone is not a reset that failed (§6.3).
+
+    The *energy counter* has no registry descriptor, so the coordinator's
+    vanished-parameter warning never covers it — the energy sensor going
+    unavailable is how §6.3 reports this one. What the verification owes is
+    the record that it gave up, at ``debug``, and no accusation.
+    """
+    patched_client.set_status({TOTAL_CONSUMPTION: BANKED_KWH})
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        coordinator = await press(hass, mock_config_entry, RESET_ENERGY.key)
+        patched_client.set_status({TOTAL_CONSUMPTION: ABSENT})
+        await advance(hass, freezer, RESET_VERIFY_DELAY)
+        await coordinator.async_refresh()
+
+    assert warnings_of(caplog) == []
+    assert [record.levelno for record in reset_lines(caplog)] == [logging.DEBUG]
 
 
 async def test_a_drop_home_assistant_did_not_cause_is_never_logged(

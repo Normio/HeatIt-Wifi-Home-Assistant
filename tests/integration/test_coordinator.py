@@ -21,6 +21,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
 
 from custom_components.heatit_wifi_panel.api import (
+    TOTAL_CONSUMPTION,
     HeatitConnectionError,
     HeatitMissingFieldError,
     HeatitParameterRejected,
@@ -678,7 +679,7 @@ async def test_a_reset_the_panel_never_acknowledged_verifies_nothing(
     arrive would blame the panel for a network failure the user has already
     been told about.
     """
-    patched_client.set_status({"totalConsumption": 4.32})
+    patched_client.set_status({TOTAL_CONSUMPTION: 4.32})
     coordinator = await loaded(hass, mock_config_entry)
     patched_client.refuse_reset(HeatitConnectionError("timed out"))
 

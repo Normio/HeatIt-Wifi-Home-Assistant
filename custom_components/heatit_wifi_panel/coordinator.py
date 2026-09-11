@@ -103,9 +103,11 @@ class _PendingReset:
     judge_after: float
     """The ``monotonic()`` reading from which a poll may judge this reset.
 
-    :data:`RESET_VERIFY_DELAY` after the acknowledgement. Earlier than that the
-    counter may simply not have landed yet, and a reset has no *write echo* to
-    tell the two apart.
+    :data:`RESET_VERIFY_DELAY` after the acknowledgement, and the same question
+    :attr:`_PendingEcho.judge_after` answers for a write: which reading is late
+    enough to settle it. The delay is longer here because the evidence is
+    weaker — a write has an echo to compare against and a reset has nothing
+    but the counter falling.
     """
 
 
@@ -225,12 +227,15 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         self._presence_recorded = False
         self._echoes: dict[str, _PendingEcho] = {}
         """The *write echo* of each write awaiting its refresh, by wire name."""
-        self._undone_parameters: set[str] = set()
-        """Those a *silent undo* has already been warned about (§6.5)."""
+        self._warned_anomalies: set[str] = set()
+        """What §7.2's one warning has already been spent on, by anomaly.
+
+        A *silent undo* is counted per parameter (§6.5) and an unverified
+        energy reset once per entry lifetime (§5.5), which is why the keys are
+        namespaced strings rather than parameter names alone.
+        """
         self._pending_reset: _PendingReset | None = None
         """The *energy counter* reset awaiting the poll that judges it (§5.5)."""
-        self._reset_unobserved = False
-        """Whether a reset the counter did not follow has been warned about."""
 
     def parameter(self, key: str) -> int | float | bool | None:
         """One parameter's value in user units, a pending *write echo* winning.
@@ -338,11 +343,19 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         A press made at ``0.00`` still sends the request: the last reading may
         be a whole *poll interval* stale and the request is harmless. What it
         does not do is leave a record, because a zero cannot fall below itself.
+
+        The record is written **after** the acknowledgement, so a press the
+        panel never answered replaces nothing: §5.5's "a second press replaces
+        the pending record" is about a second *ack*, and a request that failed
+        leaves an earlier one still waiting for its verdict — which it should,
+        because that earlier reset may well have taken.
         """
         pre_reset = self.data.get_float(TOTAL_CONSUMPTION)
         await self._async_reset(self.client.reset_kwh)
         self._pending_reset = (
-            _PendingReset(pre_reset, monotonic() + RESET_VERIFY_DELAY)
+            _PendingReset(
+                pre_reset=pre_reset, judge_after=monotonic() + RESET_VERIFY_DELAY
+            )
             if pre_reset
             else None
         )
@@ -433,6 +446,21 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         self._judge_reset(status)
         return status
 
+    def _log_anomaly(self, spent: str, message: str, *args: object) -> None:
+        """Report one device anomaly at §7.2's cadence: warning once, then debug.
+
+        Both anomalies a poll can turn up — a *silent undo*, and a reset the
+        *energy counter* did not follow — are told this way: loud the first
+        time, and debug from then on, so a panel misbehaving on every poll
+        cannot bury the log in its own noise. ``spent`` is what the one warning
+        is spent on, which is per parameter for one of them and once per entry
+        lifetime for the other; the cadence is the same either way and lives
+        here.
+        """
+        first = spent not in self._warned_anomalies
+        self._warned_anomalies.add(spent)
+        LOGGER.log(logging.WARNING if first else logging.DEBUG, message, *args)
+
     def _judge_reset(self, status: PanelStatus) -> None:
         """Say once when a reset the panel acknowledged left the counter alone.
 
@@ -445,21 +473,32 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         **A counter drop Home Assistant did not cause is never mentioned.**
         Only a pending record is ever judged, so a reset from the MyHeatit app
         — a legitimate act the statistics engine already reads as a new meter
-        cycle — passes in silence. A counter that has *vanished* from the
-        status is not judged either: :meth:`_note_presence` has already said
-        so, and one absence is not two anomalies.
+        cycle — passes in silence.
+
+        A counter the panel has stopped returning ends the record with no
+        verdict, and says so at ``debug``. The *energy counter* is not a
+        *parameter*: it has no registry descriptor, so :meth:`_note_presence`
+        never sweeps it and the absence is already reported the way §6.3
+        reports one — the energy sensor goes unavailable. What would be wrong
+        is blaming the panel for a reset that cannot be checked, so the line
+        records that the check was abandoned and nothing more.
         """
         pending = self._pending_reset
         if pending is None or monotonic() < pending.judge_after:
             return
         self._pending_reset = None
         current = status.get_float(TOTAL_CONSUMPTION)
-        if current is None or current < pending.pre_reset:
+        if current is None:
+            LOGGER.debug(
+                "the energy counter is absent from the panel's status, so the "
+                "reset acknowledged at %s kWh cannot be verified",
+                pending.pre_reset,
+            )
             return
-        first = not self._reset_unobserved
-        self._reset_unobserved = True
-        LOGGER.log(
-            logging.WARNING if first else logging.DEBUG,
+        if current < pending.pre_reset:
+            return
+        self._log_anomaly(
+            "energy-reset",
             "the panel acknowledged an energy counter reset at %s kWh and its "
             "status now reads %s kWh; the counter was not zeroed",
             pending.pre_reset,
@@ -492,10 +531,8 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
             applied = PARAMETERS[key].read(status)
             if applied is None or applied == pending.value:
                 continue
-            first = key not in self._undone_parameters
-            self._undone_parameters.add(key)
-            LOGGER.log(
-                logging.WARNING if first else logging.DEBUG,
+            self._log_anomaly(
+                f"silent-undo:{key}",
                 "the panel acknowledged %s=%r and its status now reads %r; the "
                 "write was accepted and not applied",
                 key,
