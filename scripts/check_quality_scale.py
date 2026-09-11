@@ -1,0 +1,286 @@
+"""Enforce ``quality_scale.yaml``, because nothing upstream will (§9.2).
+
+hassfest returns early for a custom integration and never parses the file, and
+no reviewer grades it. So the file is a checklist we hold ourselves to, and this
+script is what makes a tick in it mean something: a rule marked ``done`` points
+at evidence that exists, and deleting that evidence breaks the build until the
+yaml is updated.
+
+It fails when a rule key is missing or unknown; when a ``done`` or ``exempt``
+entry has no comment; when a ``done`` comment does not start with a
+repo-relative path that exists; when the manifest carries a ``quality_scale``
+key; or when any rule is still ``todo`` and the version under check — the
+manifest's, which the release gate holds equal to the tag — is 1.0.0 or later.
+Below 1.0.0 it reports the ``todo`` count and passes.
+
+The rule list is vendored here, with the core commit it was read from, and
+the yaml is parsed with the loader hassfest itself uses. Run from
+``scripts/check.sh``'s test stage, that loader being Home Assistant's.
+"""
+
+import argparse
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, NamedTuple
+
+from awesomeversion import AwesomeVersion
+from check_layout import json_document
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.util.yaml import load_yaml_dict
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+INTEGRATION = Path("custom_components") / "heatit_wifi_panel"
+QUALITY_SCALE = INTEGRATION / "quality_scale.yaml"
+MANIFEST = INTEGRATION / "manifest.json"
+
+#: The commit of ``home-assistant/core`` whose ``script/hassfest/quality_scale.py``
+#: the list below was read from. When core adds a rule, both move together and
+#: the yaml gains a ``todo``.
+CORE_COMMIT = "5ffb0d10d53194d158b9f8e4361dc2200cd1ed76"
+
+#: hassfest's ``ALL_RULES``, in its order: bronze, silver, gold, platinum.
+RULES: tuple[str, ...] = (
+    # bronze
+    "action-setup",
+    "appropriate-polling",
+    "brands",
+    "common-modules",
+    "config-flow",
+    "config-flow-test-coverage",
+    "dependency-transparency",
+    "docs-actions",
+    "docs-conditions",
+    "docs-high-level-description",
+    "docs-installation-instructions",
+    "docs-removal-instructions",
+    "docs-triggers",
+    "entity-event-setup",
+    "entity-unique-id",
+    "has-entity-name",
+    "runtime-data",
+    "test-before-configure",
+    "test-before-setup",
+    "unique-config-entry",
+    # silver
+    "action-exceptions",
+    "config-entry-unloading",
+    "docs-configuration-parameters",
+    "docs-installation-parameters",
+    "entity-unavailable",
+    "integration-owner",
+    "log-when-unavailable",
+    "parallel-updates",
+    "reauthentication-flow",
+    "test-coverage",
+    # gold
+    "devices",
+    "diagnostics",
+    "discovery",
+    "discovery-update-info",
+    "docs-data-update",
+    "docs-examples",
+    "docs-known-limitations",
+    "docs-supported-devices",
+    "docs-supported-functions",
+    "docs-troubleshooting",
+    "docs-use-cases",
+    "dynamic-devices",
+    "entity-category",
+    "entity-device-class",
+    "entity-disabled-by-default",
+    "entity-translations",
+    "exception-translations",
+    "icon-translations",
+    "reconfiguration-flow",
+    "repair-issues",
+    "stale-devices",
+    # platinum
+    "async-dependency",
+    "inject-websession",
+    "strict-typing",
+)
+
+STATUSES = frozenset({"done", "todo", "exempt"})
+#: hassfest's schema for the mapping form: these two keys and no other.
+ENTRY_KEYS = frozenset({"status", "comment"})
+#: The first release that may carry no ``todo`` (§9.2, failure condition 5).
+FIRST_COMPLETE_VERSION = AwesomeVersion("1.0.0")
+#: Punctuation a comment may hang on the path before its prose.
+TRAILING_PUNCTUATION = ".,:;"
+
+
+@dataclass(frozen=True)
+class QualityScaleCheck:
+    """What the gate found: the problems, and the rules still ``todo``."""
+
+    problems: list[str] = field(default_factory=list)
+    todo: list[str] = field(default_factory=list)
+
+
+class Entry(NamedTuple):
+    """One rule's value, read out of either of hassfest's two shapes."""
+
+    status: str
+    comment: str | None
+
+
+def load_rules(root: Path) -> tuple[dict[str, Any], list[str]]:
+    """Return the ``rules`` mapping, or the one problem that stops the gate."""
+    path = root / QUALITY_SCALE
+    if not path.is_file():
+        return {}, [f"{QUALITY_SCALE}: missing"]
+    try:
+        document = load_yaml_dict(path)
+    except HomeAssistantError as err:
+        return {}, [f"{QUALITY_SCALE}: {err}"]
+    if set(document) != {"rules"} or not isinstance(document["rules"], dict):
+        problem = (
+            f"{QUALITY_SCALE}: the document is a 'rules' mapping and nothing "
+            f"else, but its keys are {sorted(document)}"
+        )
+        return {}, [problem]
+    return document["rules"], []
+
+
+def read_entry(rule: str, value: object) -> Entry | str:
+    """Read one rule's value, or return the problem with its shape.
+
+    hassfest's two shapes: a bare string is a status with no comment, and a
+    mapping carries ``status`` and ``comment`` and nothing else.
+    """
+    if isinstance(value, str):
+        status, comment = value, None
+    elif isinstance(value, dict):
+        if set(value) != ENTRY_KEYS:
+            return (
+                f"{QUALITY_SCALE}: {rule} carries {sorted(value)}, must be "
+                f"exactly {sorted(ENTRY_KEYS)}"
+            )
+        status = value["status"]
+        comment = value["comment"] if isinstance(value["comment"], str) else None
+    else:
+        return f"{QUALITY_SCALE}: {rule} is {value!r}, not a rule"
+    if status not in STATUSES:
+        return (
+            f"{QUALITY_SCALE}: {rule} is {status!r}, must be one of {sorted(STATUSES)}"
+        )
+    return Entry(status, comment or None)
+
+
+def evidence_problem(root: Path, rule: str, comment: str) -> str | None:
+    """Return why a ``done`` comment's first word is not evidence, or ``None``.
+
+    The first whitespace-delimited word, with any punctuation the prose hung
+    on it removed, must be a path inside ``root`` that exists.
+    """
+    word = comment.split(maxsplit=1)[0].rstrip(TRAILING_PUNCTUATION)
+    candidate = Path(word)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return (
+            f"{QUALITY_SCALE}: {rule} is done, but {word!r} is not a repo-relative path"
+        )
+    if not (root / candidate).exists():
+        return (
+            f"{QUALITY_SCALE}: {rule} is done, but its evidence {word!r} does "
+            f"not exist — a done comment starts with the test, module or "
+            f"directory that proves it"
+        )
+    return None
+
+
+def check_rules(root: Path, rules: dict[str, Any]) -> QualityScaleCheck:
+    """Apply failure conditions 1 to 3 over the mapping, collecting the ``todo``."""
+    result = QualityScaleCheck()
+    result.problems.extend(
+        f"{QUALITY_SCALE}: {rule} is missing" for rule in RULES if rule not in rules
+    )
+    result.problems.extend(
+        f"{QUALITY_SCALE}: {rule} is unknown — the vendored list is core's at "
+        f"{CORE_COMMIT[:12]}"
+        for rule in rules
+        if rule not in RULES
+    )
+    for rule in RULES:
+        if rule not in rules:
+            continue
+        entry = read_entry(rule, rules[rule])
+        if isinstance(entry, str):
+            result.problems.append(entry)
+        elif entry.status == "todo":
+            result.todo.append(rule)
+        elif entry.comment is None:
+            result.problems.append(
+                f"{QUALITY_SCALE}: {rule} is {entry.status} and has no comment"
+            )
+        elif entry.status == "done":
+            problem = evidence_problem(root, rule, entry.comment)
+            if problem is not None:
+                result.problems.append(problem)
+    return result
+
+
+def check_manifest(root: Path) -> tuple[list[str], str | None]:
+    """Assert the manifest makes no claim, and return the version under check."""
+    manifest = json_document(root / MANIFEST)
+    if manifest is None:
+        return [f"{MANIFEST}: missing"], None
+    problems = []
+    if "quality_scale" in manifest:
+        problems.append(
+            f"{MANIFEST}: no quality_scale key — the yaml says what we hold "
+            f"ourselves to, and the manifest makes no claim a reviewer never graded"
+        )
+    version = manifest.get("version")
+    return problems, version if isinstance(version, str) else None
+
+
+def check_todo(todo: list[str], version: str | None) -> list[str]:
+    """Failure condition 5: from 1.0.0 on, nothing is still ``todo``."""
+    if not todo or version is None or AwesomeVersion(version) < FIRST_COMPLETE_VERSION:
+        return []
+    return [
+        f"{QUALITY_SCALE}: {rule} is todo, and {version} is {FIRST_COMPLETE_VERSION} "
+        f"or later — done, or exempt with a reason"
+        for rule in todo
+    ]
+
+
+def check_quality_scale(root: Path) -> QualityScaleCheck:
+    """Run the whole gate over the tree at ``root``."""
+    rules, problems = load_rules(root)
+    if problems:
+        return QualityScaleCheck(problems=problems)
+    result = check_rules(root, rules)
+    manifest_problems, version = check_manifest(root)
+    result.problems.extend(manifest_problems)
+    result.problems.extend(check_todo(result.todo, version))
+    return result
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Parse the command line, run the gate, and report."""
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=REPO_ROOT,
+        metavar="DIR",
+        help=argparse.SUPPRESS,
+    )
+    args = parser.parse_args(argv)
+
+    result = check_quality_scale(args.root)
+    if result.problems:
+        sys.exit(
+            "\n".join(f"check_quality_scale: {problem}" for problem in result.problems)
+        )
+    if result.todo:
+        print(  # noqa: T201 — the report is the script's output
+            f"check_quality_scale: {len(result.todo)} rules todo: "
+            + ", ".join(result.todo)
+        )
+
+
+if __name__ == "__main__":
+    main()

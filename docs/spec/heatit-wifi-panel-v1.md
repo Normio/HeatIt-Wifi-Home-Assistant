@@ -1999,3 +1999,27 @@ The same run answered **Q53**: every parameter lands on the vendor document's st
 fixed 15, which that unit rejects anyway (Q17). The row is `verified fw 1.21` and `disagrees`, and
 the probe's check compares the load limit against `maxLoad` so that a firmware honouring the
 document would fail it.
+
+**2026-09-11 — the quality-scale gate runs in the test stage, reads the manifest's version, and holds the icon rule one way** ([#47](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/47)).
+Three refinements. (1) §9.2 has `scripts/check_quality_scale.py` "run from `test.yml`", and §9.4
+groups it with the check scripts, which run in `check.sh`'s lint half — the half that needs no Home
+Assistant. It runs in the **test half** instead: the yaml is parsed with
+`homeassistant.util.yaml.load_yaml_dict`, the loader hassfest itself uses, so a file hassfest would
+refuse is one this refuses, and PyYAML ships no stubs for mypy strict to accept a direct import. The
+cost is one run per matrix row, of a script that takes a moment. Failure condition 4 leaves
+`check_layout.py` as the amendment of PR #49 promised; that script now skips a `quality_scale` key
+rather than naming it, so one problem has one line. (2) "The version under check" in condition 5 is
+the manifest's `version`: `check_release.py` holds the tag equal to it, so on a tag they are one
+number, and on a pull request the manifest is the only version there is — which makes the pull
+request that bumps it to `1.0.0` the one that fails on a leftover `todo`, before any tag exists. No
+rule is `todo` today: every row of §9.1's "everything else" shipped by 0.3.0, and the `discovery`
+comment is §9.1's verbatim while register row Q28 stays open — when
+[#32](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/32) closes it, the comment moves
+with the table. (3) §9.2's table has `icon-translations` assert that every `translation_key`
+"resolves in `translations/en.json` and `icons.json`", and §5.2 has icons "only where a device class
+does not supply one": four entities — the two switches and the two selects — have neither and take
+their domain's icon, as §5.2 lists them. The test therefore holds `icons.json` **one way**, every key
+in it naming a shipping entity and every value an `mdi:` name, and holds the literal ban on both
+sides, no `_attr_name` string and no `_attr_icon` or description `icon` on any entity. The icon
+cannot be read back from a state: icon translations are resolved by the frontend, not the state
+machine. `translations/en.json` is held both ways, every entity resolving and no orphan key.

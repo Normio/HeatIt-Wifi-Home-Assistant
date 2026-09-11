@@ -3,8 +3,9 @@
 hassfest validates ``strings.json`` only when the file is present, and the HACS
 Action never looks past ``hacs.json`` and the manifest. The parts of the spec
 that say what must *not* be in the tree — no ``strings.json``, brand assets in
-one place, ``hacs.json`` holding exactly three keys, no ``quality_scale`` in the
-manifest — are therefore checked here or nowhere.
+one place, ``hacs.json`` holding exactly three keys — are therefore checked
+here or nowhere. The manifest's other absence, a ``quality_scale`` key, is
+``scripts/check_quality_scale.py``'s to assert, beside the yaml it concerns.
 
 Run from ``scripts/check.sh``. Silent when the tree is clean; otherwise prints
 one line per problem and exits non-zero.
@@ -157,25 +158,20 @@ def check_hacs_json(path: Path) -> list[str]:
 
 
 def check_manifest(path: Path) -> list[str]:
-    """Assert the manifest's fixed keys, their order, and no ``quality_scale``."""
+    """Assert the manifest's fixed keys and their order.
+
+    A ``quality_scale`` key is skipped rather than named here: it is
+    ``check_quality_scale.py``'s failure condition, and one problem should have
+    one line.
+    """
     manifest = json_document(path)
     if manifest is None:
         return [f"{rel(path)}: missing"]
 
-    problems = []
-    if "quality_scale" in manifest:
-        problems.append(
-            f"{rel(path)}: no quality_scale key — quality_scale.yaml says what "
-            f"we hold ourselves to, and the manifest makes no claim a reviewer "
-            f"never graded"
-        )
-
     keys = [key for key in manifest if key != "quality_scale"]
     if keys != MANIFEST_KEYS:
-        problems.append(
-            f"{rel(path)}: keys are {keys}, must be exactly {MANIFEST_KEYS}"
-        )
-    return problems
+        return [f"{rel(path)}: keys are {keys}, must be exactly {MANIFEST_KEYS}"]
+    return []
 
 
 def main() -> None:
