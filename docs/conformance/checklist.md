@@ -119,7 +119,7 @@ as what v1 claimed, with its corrections appended and dated.
 | Q47 | `OWD.activeTime` counts down in seconds while `activeNow` is true | agrees | manual | open | [P-4](#p-4) | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) open-window duration sensor |
 | Q48 | `externalSensorFallback` appears in status once an external sensor is paired | silent | manual | open | [P-6](#p-6) | [#12](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/12) observed parameters only |
 | Q49 | `lowTemperatureProtection` appears in status on some firmware | silent | manual | open | [P-7](#p-7) | [#12](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/12) observed parameters only |
-| Q50 | A settings reset on a 1500 W unit lands `loadLimit` at its `maxLoad` | agrees | manual | open | [P-8](#p-8) | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) load limit bounds |
+| Q50 | A settings reset lands `loadLimit` at the unit's own `maxLoad` on a **second model** — any whose `maxLoad` is not 6; a unit above 1500 W would further separate `maxLoad` from `min(maxLoad, 15)`, which the 600 W observation cannot | disagrees | manual | open | [P-8](#p-8) | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) load limit bounds; Q53 answered the 600 W side |
 | Q51 | The 0.5 °C setpoint grid and the 0.1 °C calibration grid hold on firmwares other than 1.21 | silent | manual | open | [P-9](#p-9) | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) number steps |
 | Q52 | The device `id` survives a factory reset and a firmware update | silent | manual | open | [P-1](#p-1) | `docs/adr/0003-device-id-as-unique-id.md` — every entity orphans if it churns |
 | Q53 | A settings reset lands every parameter on the vendor document's stated default **except `loadLimit`, which lands on the unit's own `maxLoad`** | disagrees | destructive | verified fw 1.21 | [#73](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/73) | `docs/api/heatit-wifi-panel-openapi.yaml` — the only claim we have about post-reset state, and wrong in this one place; Q50 is the same fact from the other side, on a unit whose `maxLoad` is not 6 |
@@ -242,15 +242,32 @@ Needs a firmware other than 1.21, where the parameter actually exists.
 Report: the raw status at each step, and the firmware string.
 
 <a id="p-8"></a>
-### P-8 — settings reset on a non-600 W unit (Q50)
+### P-8 — settings reset on a second model (Q50)
 
-Needs a 1500 W (or any non-600 W) panel. Destroys that panel's settings.
+Needs a panel whose `maxLoad` is not 6 — a 1000 W unit does. Destroys that
+panel's settings, so snapshot them first.
+
+This is `probe.py`'s own destructive tier pointed at another panel, and a
+second pointer file is how it gets there:
+
+```
+cp .local/device.example.json .local/device-<unit>.json     # fill in host, maxLoad, notes
+python3 scripts/probe.py --device .local/device-<unit>.json --destructive
+```
+
+By hand, if the probe cannot reach it:
 
 1. `GET /api/status`; record `maxLoad` and the full `parameters` object.
 2. `DELETE /api/reset/settings`.
 3. Wait 10 s, then `GET /api/status` and record `parameters` again.
+4. Write every recorded parameter back, and confirm each from a fresh read.
 
-Report: `maxLoad`, and `loadLimit` before and after. This also fills Q53 for that model.
+Report: `maxLoad`, and `loadLimit` before and after. Q53 is verified on the
+600 W unit, where the reset landed the load limit on `maxLoad` 6 rather than
+the document's fixed 15; this run is that question for a second model. Note
+what it still cannot settle: at `maxLoad` 10 or 15, "lands on `maxLoad`" and
+"lands on `min(maxLoad, 15)`" predict the same value, so only a unit above
+1500 W separates them.
 
 <a id="p-9"></a>
 ### P-9 — quantisation on another firmware (Q51)

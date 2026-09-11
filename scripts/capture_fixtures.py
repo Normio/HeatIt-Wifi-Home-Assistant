@@ -1,7 +1,9 @@
 """Capture an observed status fixture from a real panel, read-only (§8.1).
 
-Reads ``.local/device.json``, imports the client **directly** — no Home
-Assistant boot — performs one ``GET /api/status`` through the real read path,
+Reads a device pointer — ``.local/device.json`` unless ``--device`` names
+another, so a second unit needs a second pointer file and no edit here —
+imports the client **directly** — no Home Assistant boot — performs one
+``GET /api/status`` through the real read path,
 scrubs the bytes on the way, and writes them under
 ``tests/fixtures/observed/fw-<firmware>/`` beside the raw response headers and
 a manifest. Then it prints a diff against what is committed.
@@ -78,11 +80,21 @@ def say(line: str) -> None:
     sys.stdout.write(line + "\n")
 
 
-def device_host() -> str:
-    """Read the panel's address from the gitignored device pointer."""
-    if not DEVICE_FILE.is_file():
-        sys.exit(f"{DEVICE_FILE} is missing; copy .local/device.example.json")
-    device = json.loads(DEVICE_FILE.read_text(encoding="utf-8"))
+def device_host(path: Path = DEVICE_FILE) -> str:
+    """Read the panel's address from the gitignored device pointer.
+
+    One pointer is one panel, as ``probe.py`` reads them: the destructive
+    prompt there names a host, and a file holding several would make "which
+    panel?" a flag away from someone else's heater. A second unit is a second
+    file, named on the command line.
+    """
+    if not path.is_file():
+        # ``EXIT_USAGE``, as the docstring promises: a bare ``sys.exit(str)``
+        # exits 1, which is ``EXIT_DRIFT`` — and a mistyped ``--device`` is a
+        # usage error, not a fixture that has drifted.
+        sys.stderr.write(f"{path} is missing; copy .local/device.example.json\n")
+        sys.exit(EXIT_USAGE)
+    device = json.loads(path.read_text(encoding="utf-8"))
     host = str(device["host"])
     port = int(device.get("port", 80))
     return host if port == DEFAULT_PORT else f"{host}:{port}"
@@ -204,9 +216,12 @@ def main() -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="diff only; write nothing"
     )
+    parser.add_argument(
+        "--device", type=Path, default=DEVICE_FILE, help="the device pointer file"
+    )
     args = parser.parse_args()
 
-    host = device_host()
+    host = device_host(args.device)
     try:
         raw, headers, firmware = asyncio.run(read_status(host))
     except HeatitError as err:
