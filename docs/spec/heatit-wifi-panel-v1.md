@@ -1244,8 +1244,9 @@ hyphen-slugged keys, values `done` / `todo` / `exempt` — and checked by
    gains a `todo`);
 2. a `done` or `exempt` entry has no comment;
 3. a **`done` comment does not start with a repo-relative path that exists** — a test file, a module,
-   or a directory that is the evidence. Free text may follow the path. Deleting the test that proved a
-   rule breaks the build until the yaml is updated;
+   or a directory that is the evidence. Free text may follow the path, and any later word in it that
+   starts with a top-level directory of the tree is a path too, held to the same test (amended
+   2026-09-11, #47). Deleting the test that proved a rule breaks the build until the yaml is updated;
 4. `manifest.json` carries a `quality_scale` key — **the key is deliberately omitted**: the yaml says
    what we hold ourselves to, and the manifest makes no claim a reviewer never graded;
 5. **any rule is `todo` and the version under check is `v1.0.0` or later.** On PRs and 0.x tags the
@@ -1260,7 +1261,7 @@ at it:
 |---|---|
 | `entity-unique-id` | every entity has a unique id of the form `{id}-{key}`, stable across a reload |
 | `has-entity-name` | `_attr_has_entity_name` is true on every entity |
-| `entity-translations`, `icon-translations` | every `translation_key` resolves in `translations/en.json` and `icons.json`; no `_attr_name` literal |
+| `entity-translations`, `icon-translations` | every `translation_key` resolves in `translations/en.json`, and every key in `icons.json` names a shipping entity; no `_attr_name` or icon literal (amended 2026-09-11, #47) |
 | `parallel-updates` | every platform module declares `PARALLEL_UPDATES`: `0` on `sensor` and `binary_sensor`, `1` on the five write platforms |
 | `config-entry-unloading` | unload returns true and the client/session hold nothing afterwards |
 | `unique-config-entry` | a second entry for the same status `id` aborts |
@@ -2022,4 +2023,7 @@ their domain's icon, as §5.2 lists them. The test therefore holds `icons.json` 
 in it naming a shipping entity and every value an `mdi:` name, and holds the literal ban on both
 sides, no `_attr_name` string and no `_attr_icon` or description `icon` on any entity. The icon
 cannot be read back from a state: icon translations are resolved by the frontend, not the state
-machine. `translations/en.json` is held both ways, every entity resolving and no orphan key.
+machine. `translations/en.json` is held both ways, every entity resolving and no orphan key. And
+condition 3 gains a clause: `common-modules` names two modules, and a second path in a `done`
+comment's free text was evidence in name only — so every word starting with a top-level directory
+of the tree is checked to exist, not the first alone.

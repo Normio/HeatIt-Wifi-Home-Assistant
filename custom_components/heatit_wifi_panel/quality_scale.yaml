@@ -27,8 +27,8 @@ rules:
     status: done
     comment: >-
       custom_components/heatit_wifi_panel/coordinator.py holds the coordinator
-      and entity.py the base entity; the path is the module, and existence is
-      the check
+      and custom_components/heatit_wifi_panel/entity.py the base entity; the
+      path is the module, and existence is the check
   config-flow:
     status: done
     comment: >-
@@ -119,8 +119,9 @@ rules:
   config-entry-unloading:
     status: done
     comment: >-
-      tests/integration/test_init.py — unload returns true, and neither
-      hass.data nor the shared session holds anything afterwards
+      tests/integration/test_init.py — unload returns true, runtime_data is
+      gone, and neither hass.data nor the shared session holds anything
+      afterwards
   docs-configuration-parameters:
     status: exempt
     comment: >-
@@ -134,8 +135,9 @@ rules:
   entity-unavailable:
     status: done
     comment: >-
-      tests/integration/test_entity.py — every entity is unavailable on the
-      first failed poll, and a vanished parameter takes only its own
+      tests/integration/test_entity.py — the base entity every platform builds
+      on is unavailable while the poll is failing, and a vanished parameter
+      takes only its own entity
   integration-owner:
     status: done
     comment: custom_components/heatit_wifi_panel/manifest.json names @Normio in codeowners

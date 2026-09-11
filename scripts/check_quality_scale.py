@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from awesomeversion import AwesomeVersion
+from awesomeversion import AwesomeVersion, AwesomeVersionException
 from check_layout import json_document
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util.yaml import load_yaml_dict
@@ -106,11 +106,15 @@ STATUSES = frozenset({"done", "todo", "exempt"})
 ENTRY_KEYS = frozenset({"status", "comment"})
 #: The first release that may carry no ``todo`` (§9.2, failure condition 5).
 FIRST_COMPLETE_VERSION = AwesomeVersion("1.0.0")
-#: Punctuation a comment may hang on the path before its prose.
+#: Punctuation a comment may hang on a path before its prose.
 TRAILING_PUNCTUATION = ".,:;"
+#: A word starting with one of these is a repo path, wherever it sits in the
+#: comment, and must exist like the first word must: a comment that names a
+#: second module as evidence is held to it.
+TREE_PREFIXES = ("custom_components/", "scripts/", "tests/", "docs/")
 
 
-@dataclass(frozen=True)
+@dataclass
 class QualityScaleCheck:
     """What the gate found: the problems, and the rules still ``todo``."""
 
@@ -123,6 +127,10 @@ class Entry(NamedTuple):
 
     status: str
     comment: str | None
+
+
+class MalformedRuleError(ValueError):
+    """A rule's value is in neither of hassfest's shapes; the message says why."""
 
 
 def load_rules(root: Path) -> tuple[dict[str, Any], list[str]]:
@@ -143,8 +151,8 @@ def load_rules(root: Path) -> tuple[dict[str, Any], list[str]]:
     return document["rules"], []
 
 
-def read_entry(rule: str, value: object) -> Entry | str:
-    """Read one rule's value, or return the problem with its shape.
+def read_entry(rule: str, value: object) -> Entry:
+    """Read one rule's value, or raise :class:`MalformedRuleError` saying what is wrong.
 
     hassfest's two shapes: a bare string is a status with no comment, and a
     mapping carries ``status`` and ``comment`` and nothing else.
@@ -153,40 +161,48 @@ def read_entry(rule: str, value: object) -> Entry | str:
         status, comment = value, None
     elif isinstance(value, dict):
         if set(value) != ENTRY_KEYS:
-            return (
+            msg = (
                 f"{QUALITY_SCALE}: {rule} carries {sorted(value)}, must be "
                 f"exactly {sorted(ENTRY_KEYS)}"
             )
+            raise MalformedRuleError(msg)
         status = value["status"]
         comment = value["comment"] if isinstance(value["comment"], str) else None
     else:
-        return f"{QUALITY_SCALE}: {rule} is {value!r}, not a rule"
+        msg = f"{QUALITY_SCALE}: {rule} is {value!r}, not a rule"
+        raise MalformedRuleError(msg)
     if status not in STATUSES:
-        return (
+        msg = (
             f"{QUALITY_SCALE}: {rule} is {status!r}, must be one of {sorted(STATUSES)}"
         )
+        raise MalformedRuleError(msg)
     return Entry(status, comment or None)
 
 
-def evidence_problem(root: Path, rule: str, comment: str) -> str | None:
-    """Return why a ``done`` comment's first word is not evidence, or ``None``.
+def evidence_problems(root: Path, rule: str, comment: str) -> list[str]:
+    """Return why a ``done`` comment's paths are not evidence, one line each.
 
-    The first whitespace-delimited word, with any punctuation the prose hung
-    on it removed, must be a path inside ``root`` that exists.
+    The first whitespace-delimited word must be a path inside ``root`` that
+    exists, and so must any later word that starts like one — with the
+    punctuation the prose hung on either removed.
     """
-    word = comment.split(maxsplit=1)[0].rstrip(TRAILING_PUNCTUATION)
-    candidate = Path(word)
-    if candidate.is_absolute() or ".." in candidate.parts:
-        return (
-            f"{QUALITY_SCALE}: {rule} is done, but {word!r} is not a repo-relative path"
-        )
-    if not (root / candidate).exists():
-        return (
-            f"{QUALITY_SCALE}: {rule} is done, but its evidence {word!r} does "
-            f"not exist — a done comment starts with the test, module or "
-            f"directory that proves it"
-        )
-    return None
+    first, *rest = (word.rstrip(TRAILING_PUNCTUATION) for word in comment.split())
+    named = [first, *(word for word in rest if word.startswith(TREE_PREFIXES))]
+    problems = []
+    for word in named:
+        candidate = Path(word)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            problems.append(
+                f"{QUALITY_SCALE}: {rule} is done, but {word!r} is not a "
+                f"repo-relative path"
+            )
+        elif not (root / candidate).exists():
+            problems.append(
+                f"{QUALITY_SCALE}: {rule} is done, but its evidence {word!r} does "
+                f"not exist — a done comment starts with the test, module or "
+                f"directory that proves it"
+            )
+    return problems
 
 
 def check_rules(root: Path, rules: dict[str, Any]) -> QualityScaleCheck:
@@ -204,19 +220,19 @@ def check_rules(root: Path, rules: dict[str, Any]) -> QualityScaleCheck:
     for rule in RULES:
         if rule not in rules:
             continue
-        entry = read_entry(rule, rules[rule])
-        if isinstance(entry, str):
-            result.problems.append(entry)
-        elif entry.status == "todo":
+        try:
+            entry = read_entry(rule, rules[rule])
+        except MalformedRuleError as err:
+            result.problems.append(str(err))
+            continue
+        if entry.status == "todo":
             result.todo.append(rule)
         elif entry.comment is None:
             result.problems.append(
                 f"{QUALITY_SCALE}: {rule} is {entry.status} and has no comment"
             )
         elif entry.status == "done":
-            problem = evidence_problem(root, rule, entry.comment)
-            if problem is not None:
-                result.problems.append(problem)
+            result.problems.extend(evidence_problems(root, rule, entry.comment))
     return result
 
 
@@ -237,7 +253,15 @@ def check_manifest(root: Path) -> tuple[list[str], str | None]:
 
 def check_todo(todo: list[str], version: str | None) -> list[str]:
     """Failure condition 5: from 1.0.0 on, nothing is still ``todo``."""
-    if not todo or version is None or AwesomeVersion(version) < FIRST_COMPLETE_VERSION:
+    if not todo or version is None:
+        return []
+    try:
+        complete = AwesomeVersion(version) >= FIRST_COMPLETE_VERSION
+    except AwesomeVersionException:
+        return [
+            f"{MANIFEST}: version {version!r} does not parse, so nothing can be todo"
+        ]
+    if not complete:
         return []
     return [
         f"{QUALITY_SCALE}: {rule} is todo, and {version} is {FIRST_COMPLETE_VERSION} "

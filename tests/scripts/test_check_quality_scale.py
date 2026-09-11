@@ -271,6 +271,31 @@ def test_free_text_may_follow_the_path(tmp_path: Path, comment: str) -> None:
     assert problems(root) == []
 
 
+def test_every_repo_path_the_comment_names_must_exist(tmp_path: Path) -> None:
+    """A second module named as evidence is held to it, wherever it sits."""
+    root = tree(
+        tmp_path,
+        rules_yaml(
+            brands=f"status: done\ncomment: {EVIDENCE} and tests/gone.py, both",
+        ),
+    )
+
+    found = problems(root)
+
+    assert len(found) == 1
+    assert "brands" in found[0]
+    assert "tests/gone.py" in found[0]
+
+
+def test_a_word_that_is_not_a_repo_path_is_prose(tmp_path: Path) -> None:
+    root = tree(
+        tmp_path,
+        rules_yaml(brands=f"status: done\ncomment: {EVIDENCE} reads en.json/name"),
+    )
+
+    assert problems(root) == []
+
+
 @pytest.mark.parametrize("path", ["/etc/passwd", "../tests/evidence.py"])
 def test_the_path_is_repo_relative(tmp_path: Path, path: str) -> None:
     """An absolute path, or one climbing out, is not evidence in this tree."""
@@ -341,6 +366,16 @@ def test_a_todo_fails_from_one_point_oh(tmp_path: Path, version: str) -> None:
     assert len(found) == 1
     assert "brands" in found[0]
     assert version in found[0]
+
+
+def test_an_unparseable_version_is_named_rather_than_raised(tmp_path: Path) -> None:
+    root = tree(tmp_path, rules_yaml(brands="todo"), version="not a version")
+
+    found = problems(root)
+
+    assert len(found) == 1
+    assert "manifest.json" in found[0]
+    assert "not a version" in found[0]
 
 
 def test_the_version_under_check_is_the_manifests(tmp_path: Path) -> None:

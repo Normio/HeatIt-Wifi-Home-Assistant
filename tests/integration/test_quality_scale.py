@@ -36,6 +36,7 @@ INTEGRATION_DIR = Path(__file__).parents[2] / "custom_components" / "heatit_wifi
 #: §5.2: the device id, a hyphen, and the key — which is also the translation key.
 UNIQUE_ID = re.compile(rf"^{re.escape(REFERENCE_DEVICE_ID)}-(?P<key>[a-z_]+)$")
 
+#: What ``icons.json`` may hold: a Material Design Icons name, and nothing else.
 ICON = re.compile(r"^mdi:[a-z0-9-]+$")
 
 
@@ -59,6 +60,29 @@ def shipped(hass: HomeAssistant) -> list[Entity]:
         for platform in async_get_platforms(hass, DOMAIN)
         for entity in platform.entities.values()
     ]
+
+
+def translation_keys(entities: list[Entity]) -> set[tuple[str, str]]:
+    """Each entity's ``(platform, translation_key)``, the two halves of a key."""
+    return {
+        (entity.platform.domain, entity.translation_key)
+        for entity in entities
+        if entity.platform is not None and entity.translation_key is not None
+    }
+
+
+def sets_attr_name(entity: Entity) -> bool:
+    """Whether one of *our* classes sets ``_attr_name`` on this entity.
+
+    Asked of the integration's own classes rather than of ``hasattr``, so a
+    default core might one day give ``Entity`` cannot make every entity look
+    like the one that took the device's name.
+    """
+    return any(
+        "_attr_name" in vars(cls)
+        for cls in type(entity).__mro__
+        if cls.__module__.startswith("custom_components.")
+    )
 
 
 @pytest.fixture
@@ -139,7 +163,8 @@ async def test_no_entity_carries_a_name_or_an_icon_literal(
     same rule.
     """
     for entity in every_entity:
-        assert getattr(entity, "_attr_name", None) is None, entity.entity_id
+        if sets_attr_name(entity):
+            assert entity._attr_name is None, entity.entity_id  # noqa: SLF001 — the literal is the subject
         assert getattr(entity, "_attr_icon", None) is None, entity.entity_id
         description = getattr(entity, "entity_description", None)
         if description is not None:
@@ -162,8 +187,7 @@ async def test_every_translation_key_resolves_in_en_json(
         assert entity.platform is not None
         assert entity.translation_key is not None, entity.entity_id
         node = translations[entity.platform.domain][entity.translation_key]
-        takes_the_device_name = hasattr(entity, "_attr_name")
-        assert ("name" in node) is not takes_the_device_name, entity.entity_id
+        assert ("name" in node) is not sets_attr_name(entity), entity.entity_id
 
 
 @pytest.mark.usefixtures("patched_client")
@@ -176,13 +200,8 @@ async def test_en_json_names_exactly_the_entities_that_ship(
     written = {
         (platform, key) for platform, keys in translations.items() for key in keys
     }
-    shipped_keys = {
-        (entity.platform.domain, entity.translation_key)
-        for entity in every_entity
-        if entity.platform is not None
-    }
 
-    assert written == shipped_keys
+    assert written == translation_keys(every_entity)
 
 
 @pytest.mark.usefixtures("patched_client")
@@ -198,11 +217,7 @@ async def test_icons_json_is_keyed_by_the_same_translation_keys(
     """
     icons = read_json("icons.json")
     assert set(icons) == {"entity"}
-    shipped_keys = {
-        (entity.platform.domain, entity.translation_key)
-        for entity in every_entity
-        if entity.platform is not None
-    }
+    shipped_keys = translation_keys(every_entity)
 
     for platform, keys in icons["entity"].items():
         for key, icon in keys.items():
