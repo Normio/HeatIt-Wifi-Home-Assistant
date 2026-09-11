@@ -7,19 +7,31 @@ own retry inside the *poll budget*.
 """
 
 import logging
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
-from homeassistant.exceptions import ConfigEntryError
+from homeassistant.exceptions import (
+    ConfigEntryError,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
 
 from custom_components.heatit_wifi_panel.api import (
     HeatitConnectionError,
     HeatitMissingFieldError,
+    HeatitParameterRejected,
     HeatitProtocolError,
     HeatitResponseError,
 )
-from custom_components.heatit_wifi_panel.const import DOMAIN, VERIFIED_FIRMWARES
+from custom_components.heatit_wifi_panel.const import (
+    DOMAIN,
+    POST_WRITE_REFRESH_DELAY,
+    VERIFIED_FIRMWARES,
+)
 from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.fakes import ABSENT, FakeHeatitClient
 from tests.integration.conftest import (
@@ -29,6 +41,7 @@ from tests.integration.conftest import (
 )
 
 if TYPE_CHECKING:
+    from freezegun.api import FrozenDateTimeFactory
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -49,6 +62,19 @@ POLL_FAILURES = [
     (HeatitResponseError(404, "Not Found"), "invalid_response", None),
 ]
 
+#: §6.4's table. Every one is a ``HomeAssistantError`` and never a
+#: ``ServiceValidationError``, which stays reserved for the one local case the
+#: climate entity owns.
+WRITE_FAILURES = [
+    (
+        HeatitParameterRejected("heatingSetpoint", 400, "invalid data for setpoint"),
+        "parameter_rejected",
+        {"parameter": "heatingSetpoint", "reason": "invalid data for setpoint"},
+    ),
+    (HeatitConnectionError("timed out"), "cannot_connect", None),
+    (HeatitProtocolError("a captive page"), "unexpected_response", None),
+    (HeatitResponseError(405, "Method Not Allowed"), "unexpected_response", None),
+]
 
 LOGGER_NAME = f"custom_components.{DOMAIN}"
 
@@ -358,3 +384,199 @@ async def test_an_unverified_firmware_informs_once_per_setup(
     lines = panel_lines(caplog)
     assert len(lines) == 1
     assert next(iter(VERIFIED_FIRMWARES)) in lines[0].getMessage()
+
+
+# --- the write path ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(("failure", "key", "placeholders"), WRITE_FAILURES)
+async def test_a_failed_write_says_what_the_panel_said(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    failure: Exception,
+    key: str,
+    placeholders: dict[str, str] | None,
+) -> None:
+    """§6.4's table, with the device's ``reason`` verbatim and never parsed.
+
+    A ``400`` is not a user error: Home Assistant's own layers and the registry
+    have both bounded the value before the device sees it, so a rejection means
+    our bounds and the panel's disagree — which is drift, and drift is an
+    error.
+    """
+    coordinator = await loaded(hass, mock_config_entry)
+    patched_client.refuse(failure)
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await coordinator.async_write_parameter("heatingSetpoint", value=21.0)
+
+    assert not isinstance(raised.value, ServiceValidationError)
+    assert raised.value.translation_domain == DOMAIN
+    assert raised.value.translation_key == key
+    if placeholders is not None:
+        assert raised.value.translation_placeholders == placeholders
+
+
+async def test_a_failed_write_leaves_availability_alone(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The poll decides whether the panel is gone, not the write (§6.4)."""
+    coordinator = await loaded(hass, mock_config_entry)
+    patched_client.refuse(HeatitConnectionError("timed out"))
+
+    with pytest.raises(HomeAssistantError):
+        await coordinator.async_write_parameter("heatingSetpoint", value=21.0)
+
+    assert coordinator.last_update_success is True
+
+
+async def test_the_refresh_is_scheduled_even_when_the_write_failed(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The panel commits in 300-600 ms, so a lost *response* proves nothing.
+
+    The refresh is what converges Home Assistant to whatever the device did.
+    """
+    coordinator = await loaded(hass, mock_config_entry)
+    reads = patched_client.status_reads
+    patched_client.refuse(HeatitConnectionError("timed out"))
+
+    with pytest.raises(HomeAssistantError):
+        await coordinator.async_write_parameter("heatingSetpoint", value=21.0)
+    async_fire_time_changed_exact(
+        hass, dt_util.utcnow() + timedelta(seconds=POST_WRITE_REFRESH_DELAY)
+    )
+    await hass.async_block_till_done()
+
+    assert patched_client.status_reads == reads + 1
+
+
+async def test_a_silent_undo_warns_once_per_parameter(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """§6.5's one known instance: ``sensorMode`` with no sensor paired.
+
+    Client-side quantisation has already removed the snap case, so every
+    mismatch that survives is a device refusal disguised as success. Warning
+    once per parameter per entry lifetime, debug after that (§7.2).
+    """
+    coordinator = await loaded(hass, mock_config_entry)
+    patched_client.echoes["sensorMode"] = True
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        for _ in range(2):
+            await coordinator.async_write_parameter("sensorMode", value=True)
+            freezer.tick(timedelta(seconds=POST_WRITE_REFRESH_DELAY))
+            await coordinator.async_refresh()
+
+    lines = [
+        record
+        for record in panel_lines(caplog, logging.DEBUG)
+        if "acknowledged" in record.getMessage()
+    ]
+    assert [record.levelno for record in lines] == [logging.WARNING, logging.DEBUG]
+    assert "sensorMode" in lines[0].getMessage()
+
+
+async def test_a_write_the_panel_applied_says_nothing(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    coordinator = await loaded(hass, mock_config_entry)
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        await coordinator.async_write_parameter("heatingSetpoint", value=21.0)
+        patched_client.set_status({"parameters.heatingSetpoint": 21.0})
+        freezer.tick(timedelta(seconds=POST_WRITE_REFRESH_DELAY))
+        await coordinator.async_refresh()
+
+    assert [
+        record
+        for record in panel_lines(caplog)
+        if "acknowledged" in record.getMessage()
+    ] == []
+
+
+async def test_a_vanished_parameter_is_not_also_a_silent_undo(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """One absence is one anomaly: the vanishing, which §6.3 already named."""
+    coordinator = await loaded(hass, mock_config_entry)
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        await coordinator.async_write_parameter("loadLimit", value=700)
+        patched_client.set_status({"parameters.loadLimit": ABSENT})
+        freezer.tick(timedelta(seconds=POST_WRITE_REFRESH_DELAY))
+        await coordinator.async_refresh()
+
+    warnings = panel_lines(caplog, logging.WARNING)
+    assert len(warnings) == 1
+    assert "acknowledged" not in warnings[0].getMessage()
+
+
+async def test_a_poll_inside_the_window_neither_judges_nor_drops_the_echo(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A poll can land in the 1.5 s a write needs to reach the status (Q31).
+
+    Core cancels the debounced refresh when a scheduled poll runs, so that poll
+    is the only one coming. Judging it would report a *silent undo* that never
+    happened and drop the user's value back for a whole *poll interval*; §6.5
+    names the **post-write** refresh, and this is not yet it.
+    """
+    coordinator = await loaded(hass, mock_config_entry)
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        await coordinator.async_write_parameter("heatingSetpoint", value=21.0)
+        # The panel has acknowledged it and has not committed it yet.
+        await coordinator.async_refresh()
+        assert coordinator.parameter("heatingSetpoint") == 21.0
+
+        patched_client.set_status({"parameters.heatingSetpoint": 21.0})
+        freezer.tick(timedelta(seconds=POST_WRITE_REFRESH_DELAY))
+        await coordinator.async_refresh()
+
+    assert coordinator.parameter("heatingSetpoint") == 21.0
+    assert panel_lines(caplog, logging.WARNING) == []
+
+
+async def test_a_value_the_registry_refuses_never_reaches_the_panel(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Off the 0.5 grid, refused locally — and §6.4 wants that translated too.
+
+    Core checks a ``climate.set_temperature`` against ``min_temp`` and
+    ``max_temp`` and never against ``target_temperature_step``, so an off-grid
+    value does reach the registry, which raises before a request exists.
+    """
+    coordinator = await loaded(hass, mock_config_entry)
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await coordinator.async_write_parameter("heatingSetpoint", value=21.3)
+
+    assert raised.value.translation_key == "invalid_value"
+    assert raised.value.translation_placeholders is not None
+    assert "21.3" in raised.value.translation_placeholders["error"]
+    assert patched_client.writes == []

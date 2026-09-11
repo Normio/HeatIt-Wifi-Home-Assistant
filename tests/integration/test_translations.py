@@ -42,8 +42,27 @@ CONFIG_ABORTS = [
     "reconfigure_successful",
     "wrong_panel",
 ]
-#: Every translation key §6 raises an exception under.
-EXCEPTIONS = ["cannot_connect", "invalid_response", "missing_field", "foreign_panel"]
+#: Every translation key §6 raises an exception under: the poll's four, then
+#: §6.4's write-time table and the one local ``ServiceValidationError``.
+EXCEPTIONS = [
+    "cannot_connect",
+    "invalid_response",
+    "missing_field",
+    "foreign_panel",
+    "invalid_value",
+    "parameter_rejected",
+    "unexpected_response",
+    "set_temperature_while_off",
+]
+
+#: A write-time message and the placeholders its call site fills (§6.4). The
+#: device's ``reason`` reaches the user verbatim, so the message has to have
+#: somewhere to put it.
+WRITE_PLACEHOLDERS = [
+    ("invalid_value", ["error"]),
+    ("parameter_rejected", ["parameter", "reason"]),
+    ("unexpected_response", ["status"]),
+]
 
 
 @pytest.fixture(scope="module")
@@ -108,6 +127,15 @@ def test_a_foreign_panel_is_named_on_both_sides(
         node = node[segment]
     for placeholder in foreign_panel_placeholders("expected", "actual"):
         assert f"{{{placeholder}}}" in node
+
+
+@pytest.mark.parametrize(("key", "placeholders"), WRITE_PLACEHOLDERS)
+def test_a_write_failure_has_somewhere_to_put_the_panels_words(
+    translations: dict[str, Any], key: str, placeholders: list[str]
+) -> None:
+    message = translations["exceptions"][key]["message"]
+    for placeholder in placeholders:
+        assert f"{{{placeholder}}}" in message
 
 
 def test_the_missing_field_message_carries_the_path(

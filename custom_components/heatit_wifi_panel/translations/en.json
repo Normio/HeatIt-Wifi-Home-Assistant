@@ -48,6 +48,20 @@
       }
     }
   },
+  "entity": {
+    "climate": {
+      "panel": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "comfort": "Comfort",
+              "eco": "Eco"
+            }
+          }
+        }
+      }
+    }
+  },
   "exceptions": {
     "cannot_connect": {
       "message": "The panel did not answer."
@@ -60,6 +74,18 @@
     },
     "foreign_panel": {
       "message": "A different panel answered at this address. This entry is for panel {expected_id}, but {actual_id} answered. Change the address with Reconfigure, or add the new panel as its own device."
+    },
+    "invalid_value": {
+      "message": "Home Assistant did not send that to the panel: {error}"
+    },
+    "parameter_rejected": {
+      "message": "The panel refused {parameter}, saying: {reason}"
+    },
+    "unexpected_response": {
+      "message": "The panel answered the change in a way that could not be read: {status}"
+    },
+    "set_temperature_while_off": {
+      "message": "The panel is off, so there is no temperature to set. Turn it on first, or pass a preset or hvac_mode: heat in the same call to say which setting to change."
     }
   }
 }

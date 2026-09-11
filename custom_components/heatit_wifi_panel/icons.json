@@ -1,0 +1,12 @@
+{
+  "entity": {
+    "climate": {
+      "panel": {
+        "default": "mdi:radiator",
+        "state": {
+          "off": "mdi:radiator-off"
+        }
+      }
+    }
+  }
+}
