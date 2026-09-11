@@ -40,9 +40,11 @@ def auto_enable_custom_integrations(request: pytest.FixtureRequest) -> None:
 
 
 @pytest.fixture
-def fake_client(reference_status_bytes: bytes) -> FakeHeatitClient:
-    """One fake panel, answering from the reference capture's bytes."""
-    return FakeHeatitClient(reference_status_bytes)
+def fake_client(
+    reference_status_bytes: bytes, reference_headers: dict[str, str]
+) -> FakeHeatitClient:
+    """One fake panel, answering from the reference capture's bytes and headers."""
+    return FakeHeatitClient(reference_status_bytes, reference_headers)
 
 
 @pytest.fixture

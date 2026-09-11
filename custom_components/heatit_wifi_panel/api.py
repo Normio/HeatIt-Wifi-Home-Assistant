@@ -351,6 +351,24 @@ def substitute_string_field(raw: bytes, key: str, placeholder: str) -> bytes:
     return re.sub(pattern, rb'\1"' + placeholder.encode() + b'"', raw)
 
 
+def redact_text(text: str, document: Mapping[str, Any]) -> str:
+    """Replace this panel's own identifiers wherever they occur in free text.
+
+    The third face of the one redaction, for text that is neither a parsed
+    status nor a JSON body: a response header. The fields and placeholders are
+    :data:`REDACTED_FIELDS`, but the value to look for is read from the status
+    the panel just returned, because a header does not name its contents.
+
+    Substring matching, so it can only ever over-scrub — which at the wire is
+    the documented direction (:func:`redact_status_bytes`).
+    """
+    for path, placeholder in REDACTED_FIELDS.items():
+        value = resolve(document, path)
+        if isinstance(value, str) and value:
+            text = text.replace(value, placeholder)
+    return text
+
+
 def redact_status_bytes(raw: bytes) -> bytes:
     """Apply the same scrub to the raw bytes, by targeted substitution.
 
@@ -406,7 +424,12 @@ class HeatitClient:
         self.last_raw_headers: Mapping[str, str] | None = None
         """The last status response headers as received."""
         self.last_status_retried = False
-        """Whether the last status read needed its retry."""
+        """Whether the last status read used its retry, successfully or not.
+
+        Set when the second attempt is *made*, so the diagnostics download of
+        §7.3 answers "did the retry fire?" for a poll that failed as well as
+        for one that recovered.
+        """
 
     async def get_status(self) -> PanelStatus:
         """Read the whole *status*: the only read, and the only retried request.
@@ -496,9 +519,9 @@ class HeatitClient:
                 if attempt == STATUS_ATTEMPTS:
                     raise
                 first_error = err
+                self.last_status_retried = True
                 continue
             if first_error is not None:
-                self.last_status_retried = True
                 LOGGER.debug(
                     "status read of %s succeeded on retry; first attempt: %s",
                     self._host,

@@ -132,10 +132,12 @@ Top level:
 | `parameters` | object | §2.4. |
 | `Network` | object | `SSID`, `mac`, `ipAddress`, `wifiSignalStrength`, `status`. |
 
-`Network` details: `mac` is **UPPERCASE** with colons (`E4:B3:23:6A:D9:08`) — normalise through
-`dr.format_mac` before it reaches `connections`. `wifiSignalStrength` is a **signed** string
-(`"-65dBm"`); no sign fix-up is needed or wanted. `status` reads `"ok"` on a connected panel; no
-other value is reachable without dropping WiFi. The OUI `E4:B3:23` is **Espressif**, not Heatit.
+`Network` details: `mac` is **UPPERCASE** with colons (`E4:B3:23:AA:BB:CC`, the device half redacted
+here as it is everywhere outside `.local/`) — normalise through `dr.format_mac` before it reaches
+`connections`. `wifiSignalStrength` is a **signed** string (`"-65dBm"`); no sign fix-up is needed or
+wanted. `status` reads `"ok"` on a connected panel; no other value is reachable without dropping
+WiFi. The observed OUI `E4:B3:23` is **Espressif**, not Heatit — which is the finding, and the only
+half of a MAC that carries one.
 
 **No status field has ever been `null`**, and the key set never changed across a 24-sample sweep. The
 integration therefore models no third state: `null` is treated exactly as absent (§6.3).
@@ -1843,3 +1845,40 @@ already does — the coordinator catches it, logs one error line and fails the p
 `ConfigEntryError` and the coordinator raises it at both moments from one site: the translation key,
 the placeholders and everything the user sees are unchanged, and the alternative was a
 `config_entry.state` check whose only effect would have been the wording of a core log line.
+
+**2026-09-10 — §7.3's `entry_data` is redacted by key, not by the shared redaction** ([#46](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/46)).
+§7.3 sends `entry_data` and `options` "through the shared redaction", but §7.1's function scrubs four
+dotted paths *of a status*, and `entry.data` holds `host` alone — which none of them names. Applied
+there it scrubs nothing, and the download would carry the user's local address in the one field that
+is only ever that address. `entry_data` therefore goes through `async_redact_data(entry.data,
+{CONF_HOST})`, the key-based helper the platform provides for exactly this, and reads
+`**REDACTED**`; the host is hidden for the same reason §7.1 hides `Network.ipAddress`, being the
+same address by another name. §7.3's own next sentence already reserves the shared scrub for the
+`raw` section, where a key-based helper can do nothing. `options` needs neither: the *poll interval*
+is a number the user chose.
+
+**2026-09-10 — the retained retry flag means the retry was *used*, not that it *worked*** ([#46](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/46)).
+§3.2's retained state was written for §7.2's debug line, which fires only when a second attempt
+succeeds. §7.3's `last_poll` asks "whether the retry was used", and the poll a user reports is
+usually the one where both attempts failed. The flag is now set when the second attempt is *made*,
+so a `cannot_connect` poll reports `retried: true`; the debug line's cadence is unchanged. The
+record itself — outcome, duration and that flag — is a frozen `PollRecord` the coordinator writes on
+the way out of every poll, good or bad, so the download describes the poll that just happened rather
+than the last one that happened to succeed. Its `outcome` is the poll's own translation key
+(`cannot_connect`, `missing_field`, `invalid_response`, `foreign_panel`), or `ok`.
+
+**2026-09-10 — §7.3's raw *headers* are scrubbed by value, and the download names the poll interval** ([#46](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/46)).
+Two refinements the download itself forced. (1) §7.3 sends body *and headers* "through the same
+wire-level scrub", but that scrub is a substitution on `"key": "value"` JSON pairs and a header is
+neither JSON nor keyed by anything it carries — applied to one it does nothing. `redact_text` is the
+third face of the one redaction: same four fields, same placeholders, but the value to look for is
+read out of the status the panel just returned and replaced wherever it occurs in the header value.
+It can only over-scrub, which at the wire is the documented direction. The observed firmware sends
+`Content-Type` and `Content-Length` alone, which is exactly why this is not left to the observation:
+the section exists to carry what *this* firmware does that no fixture covers. `scripts/capture_fixtures.py`
+still writes headers verbatim — it captures from a panel the developer owns, into a file they read
+before committing. (2) §7.3's `entry_data` and `options` gloss reads "(host, poll interval)", but
+`ConfigEntry.options` is empty until the user opens the options flow, so a default download named no
+interval at all. `options` stays the stored options — the truth about the entry — and
+`poll_interval_seconds` beside it is the interval in force. Both, because a bug report needs the
+effective number and a reviewer needs to know whether the user ever chose it.
