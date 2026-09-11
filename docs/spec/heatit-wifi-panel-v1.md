@@ -554,7 +554,7 @@ record for it: no service of any type, no hostname, no answer to the reverse loo
 (register row Q28, procedure P-2, fw 1.21). Unicast SSDP to `:1900` drew no reply and only tcp/80
 is open; that negative stays **soft**, since SSDP reflection was not demonstrated. Independently,
 the Espressif OUI kills a `macaddress: "E4B323*"` matcher outright — it would fire on every ESP32
-device on a user's LAN, and the same browse saw three Shelly plugs with that prefix. The DHCP
+device on a user's LAN, and the same browse saw other devices with that prefix. The DHCP
 lease hostname is still unread; if a later on-segment run finds a distinctive one it amends this
 spec rather than having delayed it.
 
@@ -1690,8 +1690,8 @@ forced it, and the PR that carried it.
 **2026-09-11 — §4.3's mDNS negative is hard, not soft** ([#32](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/32), PR pending).
 §4.3 called both discovery negatives soft because link-local multicast could not cross the VLAN
 boundary. The site router turned out to reflect mDNS, and a reflected browse is a real measurement
-once the panel's own-segment neighbours are seen answering in it — twenty-odd did, within 100 ms,
-across 75 s and ten service types plus the reverse lookup of the panel's address, and the panel
+once the panel's own-segment neighbours are seen answering in it — they did, within 100 ms,
+across 75 s and seven service types plus the reverse lookup of the panel's address, and the panel
 answered nothing. Q28 flips to `verified fw 1.21`, §4.3 and the `discovery` exemption row say the
 panel runs no mDNS responder rather than that the question was untestable, and §13's item 2 notes
 what is still open: SSDP was not shown to reflect, so its negative stays unicast-only, and the DHCP

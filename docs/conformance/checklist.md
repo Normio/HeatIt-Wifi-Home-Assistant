@@ -165,15 +165,15 @@ Link-local mDNS (224.0.0.251, TTL 1) cannot cross a routed boundary on its own, 
 another VLAN is no evidence at all **unless the panel's neighbours show up in it** — that is the
 control that turns an off-segment browse into a real measurement.
 
-**What closed the mDNS half (2026-09-11, fw 1.21).** The site router reflects mDNS: a 75 s browse
+**What closed the mDNS half (2026-09-11, fw 1.21).** The site router reflects mDNS. A 75 s browse
 from `10.10.150.0/24` for `_services._dns-sd._udp`, `_http._tcp`, `_heatit._tcp`, `_arduino._tcp`,
-`_esphomelib._tcp`, `_espressif._tcp`, `_esphome._tcp`, `_shelly._tcp`, `_matter._tcp` and the
-reverse PTR of the panel's address returned twenty-odd devices on the panel's own `10.10.30.0/24`
-— Shelly, SLZB-06, Ruuvi Gateway, Chromecast — and repeated `_http._tcp` queries drew their
-answers within 40–120 ms every time. The panel, alive on tcp/80 throughout, appeared in none of
-it: no A record for `10.10.30.40`, no instance naming it, no answer to the reverse lookup, no
-announcement in the background chatter. Three of those neighbours are Shelly plugs with the same
-`E4:B3:23` OUI, which is the MAC-prefix matcher's false positive seen live.
+`_esphomelib._tcp`, `_espressif._tcp`, `_esphome._tcp` and the reverse PTR of the panel's address
+returned other devices on the panel's own `10.10.30.0/24`, and repeated `_http._tcp` queries drew
+their answers within 40–120 ms every time — the control that makes the browse a measurement. The
+panel, alive on tcp/80 throughout, appeared in none of it: no A record for `10.10.30.40`, no
+instance naming it, no answer to the reverse lookup, no announcement in the background chatter.
+Devices sharing the panel's `E4:B3:23` OUI did answer, which is the MAC-prefix matcher's false
+positive seen live.
 
 **Still open.** SSDP: the same run's multicast `M-SEARCH` drew nothing from any device, so
 reflection of SSDP is unproven and the `:1900` negative remains the unicast one. The DHCP lease
