@@ -862,6 +862,13 @@ class SettingsResetOutcome:
     response: Response
     timeline: list[StatusSample]
     read_failures: int
+    nudged: dict[str, str]
+    """Each parameter confirmed off its documented default first, and at what.
+
+    A parameter missing from here could not be put off its default
+    (:func:`nudge_plan`), so the reset leaving it there proves nothing about it
+    either way.
+    """
 
 
 @dataclass
@@ -1658,6 +1665,86 @@ def reset_uses_the_status_envelope(run: Run) -> str | None:
     return f"body {body_text(outcome.response)}"
 
 
+def as_float(defaults: dict[str, object], which: str, fallback: float) -> float:
+    """Read one temperature-limit default as a float, however it was spelled."""
+    value = defaults.get(f"{which}imumTemperatureLimit", fallback)
+    return float(str(value))
+
+
+def nudge_plan(status: Status, defaults: dict[str, object]) -> dict[str, str]:
+    """Return the wire value each parameter is moved to before a settings reset.
+
+    The point is to make the reset prove itself. A parameter already sitting on
+    the value the reset would restore cannot tell "written back to its default"
+    from "left alone" — and on both units probed so far nine of thirteen were
+    exactly that, the load limit included. Making sure each one sits off its
+    default first gives the reset somewhere to move it from.
+
+    Nothing here can make the panel heat: both setpoints go **below** room
+    temperature, the mode goes to Eco rather than Heating, and the load limit
+    one step under the unit's own ``maxLoad`` — which is also what makes the
+    load limit's landing place observable at all, the document's fixed 15 being
+    a value this hardware rejects (Q17).
+
+    ``sensorMode`` is deliberately absent: the write is inert without a paired
+    sensor, so the panel acknowledges it and keeps the old value (Q58). Any
+    parameter whose planned value is its default anyway drops out, so every
+    entry returned is genuinely off-default by construction.
+    """
+    cold = serialise(cold_setpoint(status))
+    plan = {
+        "panelMode": "2",
+        "heatingSetpoint": cold,
+        "ecoSetpoint": cold,
+        "minimumTemperatureLimit": serialise(as_float(defaults, "min", 5.0) + 1.0),
+        "maximumTemperatureLimit": serialise(as_float(defaults, "max", 40.0) - 1.0),
+        "sensorCalibration": serialise(1.0),
+        "loadLimit": serialise(max(1, int(status.parameters["maxLoad"]) - 1)),
+        "activeDisplayBrightness": "5",
+        "standbyDisplayBrightness": "0",
+        "disableButtons": "1",
+        "temperatureDisplay": "true",
+        "openWindowDetection": "true",
+    }
+    return {
+        name: value
+        for name, value in plan.items()
+        if name in defaults and value != serialise(defaults[name])
+    }
+
+
+def nudge_off_defaults(run: Run) -> dict[str, str]:
+    """Put every writable parameter somewhere other than its default, fail-soft.
+
+    Returns only the parameters confirmed off-default by a fresh status read. A
+    write the panel refuses is left out rather than raised: the aim is to make
+    as much of the reset observable as this panel allows, and whatever it
+    declines is reported as undemonstrated instead of counted as a match.
+
+    Every value goes through :meth:`Run.write`, so the ledger holds the
+    original and the per-check restore puts it back. The reset is about to
+    overwrite all of it anyway, which is why this adds no risk in the only
+    tier that calls it.
+    """
+    status = run.panel.status()
+    # The limits last: narrowing one past a stored setpoint clamps it (Q15),
+    # and the setpoints are where the reset most needs to be visible.
+    plan = nudge_plan(status, openapi_defaults())
+    order = sorted(plan, key=lambda name: name in RESTORE_FIRST)
+    moved: dict[str, str] = {}
+    for name in order:
+        # Some parameters are already off their default — the panel ships with
+        # buttons disabled where the document defaults them on, say. Those need
+        # no write at all; what the reset has to prove is the same either way.
+        if serialise(read_parameter(status.doc, name)) != plan[name]:
+            response = run.write(name, plan[name])
+            if response.status != HTTPStatus.OK:
+                continue
+        if serialise(read_parameter(run.panel.status().doc, name)) == plan[name]:
+            moved[name] = plan[name]
+    return moved
+
+
 def settings_reset(run: Run) -> SettingsResetOutcome:
     """Reset the settings once per run, every writable parameter registered."""
     if "settings" in run.shared:
@@ -1665,6 +1752,7 @@ def settings_reset(run: Run) -> SettingsResetOutcome:
         return outcome
     for name in WRITABLE_PARAMETERS:
         run.ledger.touch(name)
+    nudged = nudge_off_defaults(run)
     before = run.panel.status()
     response = run.panel.reset_settings()
     if response.status == HTTPStatus.OK:
@@ -1680,7 +1768,7 @@ def settings_reset(run: Run) -> SettingsResetOutcome:
         else:
             timeline.append((time.monotonic() - started, status.doc))
         run.sleep(SETTINGS_POLL)
-    outcome = SettingsResetOutcome(before, response, timeline, read_failures)
+    outcome = SettingsResetOutcome(before, response, timeline, read_failures, nudged)
     run.shared["settings"] = outcome
     return outcome
 
@@ -1721,7 +1809,11 @@ def settings_reset_keeps_identity_and_settles(run: Run) -> str | None:
             final["Network"][key] == before["Network"][key], f"Network.{key} changed"
         )
     settled = last_change_at(outcome.timeline)
-    run.measure("Q34 settle", f"last parameter change at {settled:.1f} s")
+    run.measure(
+        "Q34 settle",
+        f"last parameter change at {settled:.1f} s, over "
+        f"{len(outcome.nudged)} parameter(s) held off their default first",
+    )
     expect(settled <= SETTINGS_SETTLE_BOUND, f"still changing at {settled:.1f} s")
     return f"settled by {settled:.1f} s"
 
@@ -1741,15 +1833,27 @@ def post_reset_values_match_the_documented_defaults(run: Run) -> str | None:
     expect(bool(outcome.timeline), "no status could be read after the reset")
     final = outcome.timeline[-1][1]
     expected = openapi_defaults() | {"loadLimit": read_parameter(final, "maxLoad")}
+    # Only the parameters the reset was made to move can be judged: one that
+    # was already on its default and could not be nudged ends there either
+    # way, and counting it as a match is how this check used to flatter itself.
+    judged = {name: value for name, value in expected.items() if name in outcome.nudged}
+    undemonstrated = sorted(set(expected) - set(judged))
     differing = [
         f"{name}: {serialise(read_parameter(final, name))} vs expected "
         f"{serialise(value)}"
-        for name, value in expected.items()
+        for name, value in judged.items()
         if serialise(read_parameter(final, name)) != serialise(value)
     ]
-    run.measure("Q53 defaults", "; ".join(differing) or "all match")
+    missed = (
+        f"; not demonstrated: {', '.join(undemonstrated)}" if undemonstrated else ""
+    )
+    run.measure(
+        "Q53 defaults",
+        f"{len(judged)} judged, {'; '.join(differing) or 'all match'}{missed}",
+    )
+    expect(bool(judged), "no parameter could be moved off its default")
     expect(not differing, "; ".join(differing))
-    return f"{len(expected)} defaults match, the load limit at maxLoad"
+    return f"{len(judged)} of {len(expected)} restored to their default"
 
 
 # --------------------------------------------------------------------------- #
@@ -2143,9 +2247,12 @@ def confirm_tiers(
     if DESTRUCTIVE in enabled and any(entry.tier == DESTRUCTIVE for entry in checks):
         question = (
             f"Run destructive checks on the panel at {host}? The kWh counter is "
-            f"zeroed for good, and a settings reset puts the panel at its defaults "
-            f"(comfort 21.0 °C, Heating mode) for about 15 s until the restore "
-            f"lands — the heater runs for that long if the room is colder."
+            f"zeroed for good; every writable parameter is first moved off its "
+            f"documented default so the reset can be seen to undo it, and a "
+            f"settings reset then puts the panel at its defaults (comfort 21.0 °C, "
+            f"Heating mode) for about 15 s until the restore lands — the heater "
+            f"runs for that long if the room is colder. Every parameter is "
+            f"restored and verified from a fresh read."
         )
         if not ask_yes_no(question):
             enabled = enabled - {DESTRUCTIVE}
