@@ -30,6 +30,7 @@ from custom_components.heatit_wifi_panel.api import (
 from custom_components.heatit_wifi_panel.const import (
     DOMAIN,
     POST_WRITE_REFRESH_DELAY,
+    RESET_VERIFY_DELAY,
     VERIFIED_FIRMWARES,
 )
 from custom_components.heatit_wifi_panel.registry import PARAMETERS
@@ -75,6 +76,19 @@ WRITE_FAILURES = [
     (HeatitProtocolError("a captive page"), "unexpected_response", None),
     (HeatitResponseError(405, "Method Not Allowed"), "unexpected_response", None),
 ]
+
+#: §6.4's table again, for a request that carries no parameter: a reset has
+#: nothing for the registry to bound and nothing for a ``400`` to name, so the
+#: rejection row is the one row it cannot reach.
+RESET_FAILURES = [
+    (HeatitConnectionError("timed out"), "cannot_connect"),
+    (HeatitProtocolError("a captive page"), "unexpected_response"),
+    (HeatitResponseError(405, "Method Not Allowed"), "unexpected_response"),
+]
+
+#: The coordinator's two resets. Everything §6.4 asks of a reset it asks of
+#: both, and only the *energy* one is verified afterwards (§5.5).
+RESETS = ["async_reset_energy", "async_reset_settings"]
 
 LOGGER_NAME = f"custom_components.{DOMAIN}"
 
@@ -580,3 +594,102 @@ async def test_a_value_the_registry_refuses_never_reaches_the_panel(
     assert raised.value.translation_placeholders is not None
     assert "21.3" in raised.value.translation_placeholders["error"]
     assert patched_client.writes == []
+
+
+# --- the reset path ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(("failure", "key"), RESET_FAILURES)
+@pytest.mark.parametrize("reset", RESETS)
+async def test_a_failed_reset_says_what_the_panel_said(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    reset: str,
+    failure: Exception,
+    key: str,
+) -> None:
+    """A reset fails the way a write fails (§6.4), minus the rejection row.
+
+    There is no parameter to name and no value to bound, so the device's
+    ``400`` reaches the client as a plain response error — and the user gets
+    the panel's own words either way.
+    """
+    coordinator = await loaded(hass, mock_config_entry)
+    patched_client.refuse_reset(failure)
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await getattr(coordinator, reset)()
+
+    assert not isinstance(raised.value, ServiceValidationError)
+    assert raised.value.translation_domain == DOMAIN
+    assert raised.value.translation_key == key
+
+
+@pytest.mark.parametrize("reset", RESETS)
+async def test_a_failed_reset_leaves_availability_alone(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    reset: str,
+) -> None:
+    """The poll decides whether the panel is gone, a reset never does (§6)."""
+    coordinator = await loaded(hass, mock_config_entry)
+    patched_client.refuse_reset(HeatitConnectionError("timed out"))
+
+    with pytest.raises(HomeAssistantError):
+        await getattr(coordinator, reset)()
+
+    assert coordinator.last_update_success is True
+
+
+@pytest.mark.parametrize("reset", RESETS)
+async def test_the_refresh_is_scheduled_even_when_the_reset_failed(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    reset: str,
+) -> None:
+    """A lost *response* proves nothing about what the panel did with it."""
+    coordinator = await loaded(hass, mock_config_entry)
+    reads = patched_client.status_reads
+    patched_client.refuse_reset(HeatitConnectionError("timed out"))
+
+    with pytest.raises(HomeAssistantError):
+        await getattr(coordinator, reset)()
+    async_fire_time_changed_exact(
+        hass, dt_util.utcnow() + timedelta(seconds=POST_WRITE_REFRESH_DELAY)
+    )
+    await hass.async_block_till_done()
+
+    assert patched_client.status_reads == reads + 1
+
+
+async def test_a_reset_the_panel_never_acknowledged_verifies_nothing(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """§5.5 records the *ack*, so a press that never got one is not pending.
+
+    Warning about a counter that did not fall after a request that did not
+    arrive would blame the panel for a network failure the user has already
+    been told about.
+    """
+    patched_client.set_status({"totalConsumption": 4.32})
+    coordinator = await loaded(hass, mock_config_entry)
+    patched_client.refuse_reset(HeatitConnectionError("timed out"))
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        with pytest.raises(HomeAssistantError):
+            await coordinator.async_reset_energy()
+        freezer.tick(timedelta(seconds=RESET_VERIFY_DELAY))
+        await coordinator.async_refresh()
+
+    assert [
+        record
+        for record in panel_lines(caplog, logging.DEBUG)
+        if "reset" in record.getMessage()
+    ] == []

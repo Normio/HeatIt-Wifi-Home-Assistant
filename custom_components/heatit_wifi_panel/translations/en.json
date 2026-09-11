@@ -54,6 +54,14 @@
         "name": "Open window detected"
       }
     },
+    "button": {
+      "reset_energy": {
+        "name": "Reset energy counter"
+      },
+      "restore_defaults": {
+        "name": "Restore default settings"
+      }
+    },
     "climate": {
       "panel": {
         "state_attributes": {

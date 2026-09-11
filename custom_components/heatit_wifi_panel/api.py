@@ -85,6 +85,15 @@ Named because two modules need the same path and must not drift: the
 diagnostic sensor's presence and availability are gated on (§5.2).
 """
 
+TOTAL_CONSUMPTION: Final = "totalConsumption"
+"""Where the *energy counter* sits in a *status*.
+
+Named for the same reason as :data:`WIFI_SIGNAL_STRENGTH`: two modules read the
+same path and must not drift. The energy sensor publishes it, and the
+coordinator reads it twice more — once as the pre-reset value a press records,
+once as the reading a later poll judges that press by (§5.5).
+"""
+
 SIGNAL_STRENGTH: Final = re.compile(r"^\s*(-?\d+)\s*dBm\s*$", re.IGNORECASE)
 
 
