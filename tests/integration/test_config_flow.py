@@ -43,9 +43,11 @@ OTHER_HOST = "10.0.0.3"
 
 DISCOVERY = DhcpServiceInfo(ip=OTHER_HOST, hostname="heatit", macaddress="020000000001")
 
-#: The two failure classes §4.2 separates, and the error each must show. A
+#: The two failure classes §4.2 separates, and the key each must show. A
 #: refused connection is one thing; something answering that is not a panel is
-#: another, and the *required core* is what tells them apart.
+#: another, and the *required core* is what tells them apart. The same pair
+#: names a form error in the user and reconfigure steps and an abort reason in
+#: the DHCP step (§4.3), which is why one list serves all three.
 VALIDATION_FAILURES = [
     (HeatitConnectionError("refused"), "cannot_connect"),
     (HeatitMissingFieldError("parameters.panelMode"), "invalid_response"),
@@ -178,15 +180,23 @@ async def test_dhcp_follows_a_configured_panel_to_its_new_address(
     assert patched_client.status_reads == 1
 
 
-@pytest.mark.parametrize(("failure", "_error"), VALIDATION_FAILURES)
+@pytest.mark.parametrize(("failure", "reason"), VALIDATION_FAILURES)
 async def test_dhcp_aborts_quietly_on_any_failure(
     hass: HomeAssistant,
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
     failure: Exception,
-    _error: str,
+    reason: str,
 ) -> None:
-    """Home Assistant re-fires on the next DHCP event; nothing is shown (§4.3)."""
+    """Home Assistant re-fires on the next DHCP event; nothing is shown (§4.3).
+
+    Quiet, but true: the abort carries the reason validation computed, so a
+    host that answered without being a panel does not abort saying nothing
+    answered. Nobody reads either reason — core discards a discovery flow's
+    result and logs nothing — so the abort is silent either way, which is the
+    whole of §4.3's quiet. The assertion is here because the reason is what
+    picks the string, and an unasserted reason is an unasserted string.
+    """
     mock_config_entry.add_to_hass(hass)
     patched_client.fail(failure)
 
@@ -195,7 +205,7 @@ async def test_dhcp_aborts_quietly_on_any_failure(
     )
 
     assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "cannot_connect"
+    assert result["reason"] == reason
     assert mock_config_entry.data == {CONF_HOST: REFERENCE_HOST}
 
 
