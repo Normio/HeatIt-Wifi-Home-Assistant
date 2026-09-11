@@ -132,10 +132,12 @@ Top level:
 | `parameters` | object | §2.4. |
 | `Network` | object | `SSID`, `mac`, `ipAddress`, `wifiSignalStrength`, `status`. |
 
-`Network` details: `mac` is **UPPERCASE** with colons (`E4:B3:23:6A:D9:08`) — normalise through
-`dr.format_mac` before it reaches `connections`. `wifiSignalStrength` is a **signed** string
-(`"-65dBm"`); no sign fix-up is needed or wanted. `status` reads `"ok"` on a connected panel; no
-other value is reachable without dropping WiFi. The OUI `E4:B3:23` is **Espressif**, not Heatit.
+`Network` details: `mac` is **UPPERCASE** with colons (`E4:B3:23:AA:BB:CC`, the device half redacted
+here as it is everywhere outside `.local/`) — normalise through `dr.format_mac` before it reaches
+`connections`. `wifiSignalStrength` is a **signed** string (`"-65dBm"`); no sign fix-up is needed or
+wanted. `status` reads `"ok"` on a connected panel; no other value is reachable without dropping
+WiFi. The observed OUI `E4:B3:23` is **Espressif**, not Heatit — which is the finding, and the only
+half of a MAC that carries one.
 
 **No status field has ever been `null`**, and the key set never changed across a 24-sample sweep. The
 integration therefore models no third state: `null` is treated exactly as absent (§6.3).
