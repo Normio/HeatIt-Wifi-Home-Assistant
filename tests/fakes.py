@@ -32,15 +32,25 @@ ABSENT = object()
 
 UNSCRUBBED: dict[str, str] = {
     "id": "AbCdEfGhIjKlMnOpQrStUv",
-    "Network.mac": "E4:B3:23:6A:D9:08",
-    "Network.SSID": "IOT 24",
-    "Network.ipAddress": "10.10.30.40",
+    "Network.mac": "E4:B3:23:AA:BB:CC",
+    "Network.SSID": "Example IoT 2.4",
+    "Network.ipAddress": "192.0.2.40",
 }
-"""The four scrubbed fields as a real panel would answer them.
+"""The four scrubbed fields in the *shape* a real panel answers them in.
 
 Every committed fixture carries the placeholders, so a test of the redaction
-has to put the real thing back first (§7.1). Shared by the client's scrub tests
-and the diagnostics rule test, which mean the same panel.
+has to put something unscrubbed back first (§7.1). Shared by the client's scrub
+tests and the diagnostics rule test, which mean the same panel.
+
+**Every value here is invented, and must stay invented.** Shape is all these
+tests need: 22 mixed-case alphanumerics, a MAC uppercase with colons, an SSID
+with a space in it, a dotted address. The OUI is Espressif's because that is a
+fact about the hardware (§2.3) and costs nothing to keep; the rest of the MAC
+is not a device's. The address is RFC 5737 TEST-NET-1, which is reserved for
+documentation and routes nowhere. AGENTS.md says never hardcode a panel's
+address and never commit one — the real one lives in `.local/device.json`,
+which is gitignored for exactly this reason, and a test that needs a plausible
+address has no business reading it.
 """
 
 
