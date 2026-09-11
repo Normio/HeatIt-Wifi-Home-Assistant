@@ -49,6 +49,7 @@ EXCEPTIONS = [
     "invalid_response",
     "missing_field",
     "foreign_panel",
+    "invalid_value",
     "parameter_rejected",
     "unexpected_response",
     "set_temperature_while_off",
@@ -58,6 +59,7 @@ EXCEPTIONS = [
 #: device's ``reason`` reaches the user verbatim, so the message has to have
 #: somewhere to put it.
 WRITE_PLACEHOLDERS = [
+    ("invalid_value", ["error"]),
     ("parameter_rejected", ["parameter", "reason"]),
     ("unexpected_response", ["status"]),
 ]

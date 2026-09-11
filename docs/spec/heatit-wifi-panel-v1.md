@@ -1843,3 +1843,32 @@ already does — the coordinator catches it, logs one error line and fails the p
 `ConfigEntryError` and the coordinator raises it at both moments from one site: the translation key,
 the placeholders and everything the user sees are unchanged, and the alternative was a
 `config_entry.state` check whose only effect would have been the wording of a core log line.
+
+**2026-09-11 — the climate ticket refines §3.5, §5.3, §6.4 and §6.5** ([#41](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/41)).
+Four refinements. (1) §3.5 requires every platform's entities to carry a frozen entity description
+with `value_fn` / `set_value_fn`. **The climate entity carries none**: it is the whole of its
+platform, `_attr_name = None` marks it the main feature, and a description holding one entity's key
+would be a table of one. It names itself with a class-level `_attr_translation_key`, which §5.2 makes
+its unique-id suffix too, and which `tests/test_readme.py` already reads it out of. The rule stands
+for the five description-driven platforms, and `entity.py` takes the key as an argument so both
+shapes reach one base. Reading and writing go through the coordinator's `parameter()` and
+`async_write_parameter()`, which is where the *write echo* and the *silent undo* have to live
+anyway — one per panel, not one per entity. (2) §5.3 has `min_temp` / `max_temp` come "from the
+device's limits", but both *temperature limits* are **optional parameters** under §5.4's
+presence-gating: a firmware returning neither still has a thermostat. They then report the registry's
+own bounds on a *setpoint bank*, 5.0 and 40.0 — the two numbers every setpoint write is already
+validated against, so the card offers exactly what the panel will accept. `registry.py` names them
+rather than `climate.py` repeating them. (3) §6.4's table gains a row: a **local `ValueError` from
+the registry** becomes `HomeAssistantError` with the key `invalid_value`, carrying the message
+verbatim. §6.4 says *all* write errors are translated, and this one is reachable — core validates a
+`climate.set_temperature` against `min_temp` and `max_temp` and **never** against
+`target_temperature_step`, so an off-grid value arrives as written and the client refuses it before a
+request exists (the amendment of #38). A Fahrenheit user meets this on most calls, 70 °F being
+21.11 °C: that is §8.5's client-side quantisation rule working as specified, and whether the entity
+should snap to the grid instead is left open rather than decided here. (4) §6.5's "**post-write**
+refresh" is pinned to §5.5's rule for the energy reset, the same question asked twice: the first
+status completing `POST_WRITE_REFRESH_DELAY` or later after the acknowledgement is the one that
+judges an echo, and an earlier one leaves it pending. Without that, a scheduled poll landing inside
+the 1.5 s a write needs to reach the status would report a *silent undo* that never happened — and
+`DataUpdateCoordinator` cancels the debounced refresh when a scheduled poll runs, so no later
+refresh would correct it before the next *poll interval*.

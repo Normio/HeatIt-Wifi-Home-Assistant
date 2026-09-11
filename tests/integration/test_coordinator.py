@@ -41,6 +41,7 @@ from tests.integration.conftest import (
 )
 
 if TYPE_CHECKING:
+    from freezegun.api import FrozenDateTimeFactory
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -460,6 +461,7 @@ async def test_a_silent_undo_warns_once_per_parameter(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """§6.5's one known instance: ``sensorMode`` with no sensor paired.
 
@@ -473,6 +475,7 @@ async def test_a_silent_undo_warns_once_per_parameter(
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
         for _ in range(2):
             await coordinator.async_write_parameter("sensorMode", value=True)
+            freezer.tick(timedelta(seconds=POST_WRITE_REFRESH_DELAY))
             await coordinator.async_refresh()
 
     lines = [
@@ -489,12 +492,14 @@ async def test_a_write_the_panel_applied_says_nothing(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     coordinator = await loaded(hass, mock_config_entry)
 
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
         await coordinator.async_write_parameter("heatingSetpoint", value=21.0)
         patched_client.set_status({"parameters.heatingSetpoint": 21.0})
+        freezer.tick(timedelta(seconds=POST_WRITE_REFRESH_DELAY))
         await coordinator.async_refresh()
 
     assert [
@@ -509,6 +514,7 @@ async def test_a_vanished_parameter_is_not_also_a_silent_undo(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """One absence is one anomaly: the vanishing, which §6.3 already named."""
     coordinator = await loaded(hass, mock_config_entry)
@@ -516,8 +522,61 @@ async def test_a_vanished_parameter_is_not_also_a_silent_undo(
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
         await coordinator.async_write_parameter("loadLimit", value=700)
         patched_client.set_status({"parameters.loadLimit": ABSENT})
+        freezer.tick(timedelta(seconds=POST_WRITE_REFRESH_DELAY))
         await coordinator.async_refresh()
 
     warnings = panel_lines(caplog, logging.WARNING)
     assert len(warnings) == 1
     assert "acknowledged" not in warnings[0].getMessage()
+
+
+async def test_a_poll_inside_the_window_neither_judges_nor_drops_the_echo(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A poll can land in the 1.5 s a write needs to reach the status (Q31).
+
+    Core cancels the debounced refresh when a scheduled poll runs, so that poll
+    is the only one coming. Judging it would report a *silent undo* that never
+    happened and drop the user's value back for a whole *poll interval*; §6.5
+    names the **post-write** refresh, and this is not yet it.
+    """
+    coordinator = await loaded(hass, mock_config_entry)
+
+    with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
+        await coordinator.async_write_parameter("heatingSetpoint", value=21.0)
+        # The panel has acknowledged it and has not committed it yet.
+        await coordinator.async_refresh()
+        assert coordinator.parameter("heatingSetpoint") == 21.0
+
+        patched_client.set_status({"parameters.heatingSetpoint": 21.0})
+        freezer.tick(timedelta(seconds=POST_WRITE_REFRESH_DELAY))
+        await coordinator.async_refresh()
+
+    assert coordinator.parameter("heatingSetpoint") == 21.0
+    assert panel_lines(caplog, logging.WARNING) == []
+
+
+async def test_a_value_the_registry_refuses_never_reaches_the_panel(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Off the 0.5 grid, refused locally — and §6.4 wants that translated too.
+
+    Core checks a ``climate.set_temperature`` against ``min_temp`` and
+    ``max_temp`` and never against ``target_temperature_step``, so an off-grid
+    value does reach the registry, which raises before a request exists.
+    """
+    coordinator = await loaded(hass, mock_config_entry)
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await coordinator.async_write_parameter("heatingSetpoint", value=21.3)
+
+    assert raised.value.translation_key == "invalid_value"
+    assert raised.value.translation_placeholders is not None
+    assert "21.3" in raised.value.translation_placeholders["error"]
+    assert patched_client.writes == []

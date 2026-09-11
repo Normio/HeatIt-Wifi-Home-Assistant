@@ -33,6 +33,13 @@ Kind = Literal["int", "float", "bool"]
 #: arithmetic (``0.1 * 3``) lands a hair off the grid; ``19.3`` does not.
 GRID_TOLERANCE = 1e-6
 
+#: The panel's own bounds on either *setpoint bank*, which hold whatever the
+#: *temperature limits* are narrowed to. They are what the climate entity
+#: reports as its minimum and maximum on a firmware that returns no limits at
+#: all, so they are named here rather than repeated there.
+SETPOINT_MINIMUM = 5.0
+SETPOINT_MAXIMUM = 40.0
+
 
 class StatusDocument(Protocol):
     """Anything that resolves a dotted read path — a parsed status."""
@@ -172,8 +179,8 @@ def _temperature(key: str, *, required: bool = False) -> ParameterDescriptor:
         read_path=f"parameters.{key}",
         serialise=serialise_temperature,
         step=0.5,
-        minimum=5.0,
-        maximum=40.0,
+        minimum=SETPOINT_MINIMUM,
+        maximum=SETPOINT_MAXIMUM,
         required=required,
     )
 

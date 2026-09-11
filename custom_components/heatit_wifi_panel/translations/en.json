@@ -75,6 +75,9 @@
     "foreign_panel": {
       "message": "A different panel answered at this address. This entry is for panel {expected_id}, but {actual_id} answered. Change the address with Reconfigure, or add the new panel as its own device."
     },
+    "invalid_value": {
+      "message": "Home Assistant did not send that to the panel: {error}"
+    },
     "parameter_rejected": {
       "message": "The panel refused {parameter}, saying: {reason}"
     },

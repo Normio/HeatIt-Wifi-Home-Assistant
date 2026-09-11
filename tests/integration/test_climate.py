@@ -44,17 +44,15 @@ from homeassistant.const import (
     SERVICE_TURN_ON,
     STATE_UNAVAILABLE,
 )
-from homeassistant.exceptions import ServiceValidationError
-from homeassistant.util import dt as dt_util
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
 
 from custom_components.heatit_wifi_panel.api import HeatitConnectionError
-from custom_components.heatit_wifi_panel.climate import PANEL_MAXIMUM, PANEL_MINIMUM
 from custom_components.heatit_wifi_panel.const import POST_WRITE_REFRESH_DELAY
-from custom_components.heatit_wifi_panel.registry import PARAMETERS
 from tests.integration.conftest import setup_entry
 
 if TYPE_CHECKING:
+    from freezegun.api import FrozenDateTimeFactory
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -83,14 +81,20 @@ def attributes(hass: HomeAssistant) -> dict[str, Any]:
     return dict(state.attributes)
 
 
-async def advance(hass: HomeAssistant, seconds: float) -> None:
-    """Move Home Assistant's clock on, and let what that fires run.
+async def advance(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float
+) -> None:
+    """Move every clock on by ``seconds``, and let what that fires run.
 
-    The *exact* variant: the ordinary one adds half a second to cover the
-    coordinator's own scheduling jitter, and half a second is a third of the
-    delay being asserted here.
+    Both clocks, which is why the freezer is here rather than a bare
+    ``async_fire_time_changed``: the refresh is scheduled against the event
+    loop's, and the *write echo* it judges is held against ``monotonic()``. The
+    *exact* variant fires nothing extra — the ordinary one adds half a second
+    to cover the coordinator's scheduling jitter, and half a second is a third
+    of the delay under test.
     """
-    async_fire_time_changed_exact(hass, dt_util.utcnow() + timedelta(seconds=seconds))
+    freezer.tick(timedelta(seconds=seconds))
+    async_fire_time_changed_exact(hass)
     await hass.async_block_till_done()
 
 
@@ -312,6 +316,26 @@ async def test_a_setpoint_write_lands_in_the_live_bank(
     assert patched_client.writes == [(bank, "21.0")]
 
 
+async def test_an_off_grid_temperature_is_refused_before_any_request(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The panel would snap 21.3 to the 0.5 grid; the registry refuses instead.
+
+    Core validates a service call against ``min_temp`` and ``max_temp`` but not
+    against ``target_temperature_step``, so the value arrives here as written
+    and the refusal is what the caller sees — translated, not a raw traceback.
+    """
+    await loaded(hass, mock_config_entry)
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await call(hass, SERVICE_SET_TEMPERATURE, temperature=21.3)
+
+    assert raised.value.translation_key == "invalid_value"
+    assert patched_client.writes == []
+
+
 async def test_a_setpoint_write_while_off_refuses_loudly(
     hass: HomeAssistant,
     patched_client: FakeHeatitClient,
@@ -401,12 +425,16 @@ async def test_the_limits_follow_the_device_with_no_clamping(
     assert attributes(hass)[ATTR_MAX_TEMP] == 24.0
 
 
-async def test_an_absent_limit_falls_back_to_the_panels_own_range(
+async def test_an_absent_limit_falls_back_to_the_panels_own_bounds(
     hass: HomeAssistant,
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """A limit is an *optional* parameter; the setpoint bounds are not."""
+    """A limit is an *optional parameter*; the bounds it narrows are not.
+
+    The registry validates every setpoint write against those same two numbers,
+    so a card offering them is offering exactly what the panel will accept.
+    """
     patched_client.set_status(
         {
             "parameters.minimumTemperatureLimit": None,
@@ -418,17 +446,6 @@ async def test_an_absent_limit_falls_back_to_the_panels_own_range(
 
     assert attributes(hass)[ATTR_MIN_TEMP] == 5.0
     assert attributes(hass)[ATTR_MAX_TEMP] == 40.0
-
-
-def test_the_fallback_range_is_the_registrys_own() -> None:
-    """The two copies of the panel's absolute range, held together.
-
-    ``climate.py`` names them so ``min_temp`` has something to report when a
-    firmware returns no limits; the registry names them because it validates
-    every setpoint write against them. They are the same two numbers.
-    """
-    assert PARAMETERS["heatingSetpoint"].minimum == PANEL_MINIMUM
-    assert PARAMETERS["heatingSetpoint"].maximum == PANEL_MAXIMUM
 
 
 # --- hvac_action, from the relay --------------------------------------------
@@ -474,6 +491,7 @@ async def test_the_echo_shows_at_once_and_the_refresh_is_the_authority(
     hass: HomeAssistant,
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """One refresh, at 1.5 s, asserted by advancing the clock (§8.6.5)."""
     await loaded(hass, mock_config_entry)
@@ -484,12 +502,12 @@ async def test_the_echo_shows_at_once_and_the_refresh_is_the_authority(
     assert attributes(hass)[ATTR_TEMPERATURE] == 21.0
     assert patched_client.status_reads == reads
 
-    await advance(hass, POST_WRITE_REFRESH_DELAY - 0.5)
+    await advance(hass, freezer, POST_WRITE_REFRESH_DELAY - 0.5)
     assert patched_client.status_reads == reads
 
     # The panel took the write; the refresh confirms it rather than trusting it.
     patched_client.set_status({"parameters.heatingSetpoint": 21.0})
-    await advance(hass, POST_WRITE_REFRESH_DELAY)
+    await advance(hass, freezer, POST_WRITE_REFRESH_DELAY)
 
     assert patched_client.status_reads == reads + 1
     assert attributes(hass)[ATTR_TEMPERATURE] == 21.0
@@ -499,6 +517,7 @@ async def test_the_echo_shows_at_once_and_the_refresh_is_the_authority(
 async def test_the_refresh_wins_over_the_echo(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """A write the panel acknowledged and did not apply ends up shown as it is."""
     await loaded(hass, mock_config_entry)
@@ -506,7 +525,7 @@ async def test_the_refresh_wins_over_the_echo(
     await call(hass, SERVICE_SET_PRESET_MODE, preset_mode=PRESET_ECO)
     assert attributes(hass)[ATTR_PRESET_MODE] == PRESET_ECO
 
-    await advance(hass, POST_WRITE_REFRESH_DELAY)
+    await advance(hass, freezer, POST_WRITE_REFRESH_DELAY)
 
     # The fake's status still reads mode 1: the panel did not apply it.
     assert attributes(hass)[ATTR_PRESET_MODE] == PRESET_COMFORT

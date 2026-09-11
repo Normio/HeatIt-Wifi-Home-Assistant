@@ -128,6 +128,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per entry lifetime. Write failures carry spec §6.4's translation keys with
   the device's `reason` verbatim.
 - `icons.json`, and the entity strings in `translations/en.json`.
+- A spec amendment (§15) for the four contract corrections this work forced:
+  the climate entity carries no entity description, `min_temp` / `max_temp`
+  fall back to the registry's own setpoint bounds when a firmware returns no
+  temperature limits, a locally refused value is a translated
+  `HomeAssistantError` like every other write error, and §6.5's *post-write*
+  refresh is the first status a write has had 1.5 s to reach.
 
 ### Changed
 

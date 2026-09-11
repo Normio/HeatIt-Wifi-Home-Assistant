@@ -30,7 +30,7 @@ from homeassistant.exceptions import ServiceValidationError
 
 from .const import DOMAIN
 from .entity import HeatitWifiPanelEntity
-from .registry import PARAMETERS
+from .registry import PARAMETERS, SETPOINT_MAXIMUM, SETPOINT_MINIMUM
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -54,7 +54,18 @@ MODE_OFF: Final = 0
 MODE_HEATING: Final = 1
 MODE_ECO: Final = 2
 
-PRESET_TO_MODE: Final = {PRESET_COMFORT: MODE_HEATING, PRESET_ECO: MODE_ECO}
+#: The two on-modes, and what each means to a climate entity: the preset it
+#: shows, and the *setpoint bank* it is regulating to. Off appears in neither,
+#: which is what makes both lookups answer ``None`` there.
+MODE_TO_PRESET: Final[dict[int, str]] = {
+    MODE_HEATING: PRESET_COMFORT,
+    MODE_ECO: PRESET_ECO,
+}
+MODE_TO_BANK: Final[dict[int, str]] = {
+    MODE_HEATING: COMFORT_SETPOINT,
+    MODE_ECO: ECO_SETPOINT,
+}
+PRESET_TO_MODE: Final = {preset: mode for mode, preset in MODE_TO_PRESET.items()}
 
 RELAY_HEATING: Final = "heating"
 """The *relay state* that means the element is on, matched case-insensitively.
@@ -63,13 +74,6 @@ The device sends ``Heating`` and ``Idle``; folding the case is the same
 robustness the client's success sentinel takes, and here it is the difference
 between reporting a running heater and reporting an idle one.
 """
-
-PANEL_MINIMUM: Final = 5.0
-PANEL_MAXIMUM: Final = 40.0
-"""The panel's own absolute setpoint range, which is what ``min_temp`` and
-``max_temp`` report on a firmware that returns no *temperature limits* at all.
-The registry declares the same two numbers for both banks, and a test holds the
-two copies together."""
 
 
 async def async_setup_entry(
@@ -118,23 +122,30 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
         super().__init__(coordinator, KEY, read_path=PARAMETERS[PANEL_MODE].read_path)
 
     @property
-    def _panel_mode(self) -> float:
+    def _panel_mode(self) -> int:
         """The *panel mode*, a pending *write echo* winning over the status.
 
         Read fresh on every use rather than cached, so that a mode written
         earlier in a service call is the mode the rest of that call sees.
+        ``panelMode`` is *required core* and an integer parameter, so the
+        status always yields one and the second half is unreachable in
+        practice; it is here because the registry's reading is typed for every
+        parameter rather than for this one.
         """
-        mode = self.coordinator.value_of(PANEL_MODE)
-        return self.coordinator.data.panel_mode if mode is None else mode
+        mode = self.coordinator.parameter(PANEL_MODE)
+        return mode if isinstance(mode, int) else self.coordinator.data.panel_mode
 
     @property
     def _live_bank(self) -> str | None:
         """Which *setpoint bank* the panel is regulating to; ``None`` while Off."""
-        if self._panel_mode == MODE_HEATING:
-            return COMFORT_SETPOINT
-        if self._panel_mode == MODE_ECO:
-            return ECO_SETPOINT
-        return None
+        return MODE_TO_BANK.get(self._panel_mode)
+
+    def _temperature(self, key: str) -> float | None:
+        """One temperature parameter as a number, the pending echo winning."""
+        value = self.coordinator.parameter(key)
+        if value is None or isinstance(value, bool):
+            return None
+        return float(value)
 
     @property
     @override
@@ -146,11 +157,7 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
     @override
     def preset_mode(self) -> str | None:
         """Comfort or Eco; ``None`` while Off, where neither is chosen."""
-        if self._panel_mode == MODE_HEATING:
-            return PRESET_COMFORT
-        if self._panel_mode == MODE_ECO:
-            return PRESET_ECO
-        return None
+        return MODE_TO_PRESET.get(self._panel_mode)
 
     @property
     @override
@@ -178,7 +185,7 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
     def target_temperature(self) -> float | None:
         """The *live setpoint*; ``None`` while Off, where there is none."""
         bank = self._live_bank
-        return None if bank is None else self.coordinator.value_of(bank)
+        return None if bank is None else self._temperature(bank)
 
     @property
     @override
@@ -190,17 +197,22 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
         out-of-bounds display to defend against: a limit change is followed by
         a refresh and the card agrees with the panel again.
         """
-        return self._limit(MINIMUM_LIMIT, PANEL_MINIMUM)
+        return self._limit(MINIMUM_LIMIT, SETPOINT_MINIMUM)
 
     @property
     @override
     def max_temp(self) -> float:
         """The device's maximum, on the same terms as :attr:`min_temp`."""
-        return self._limit(MAXIMUM_LIMIT, PANEL_MAXIMUM)
+        return self._limit(MAXIMUM_LIMIT, SETPOINT_MAXIMUM)
 
     def _limit(self, key: str, absolute: float) -> float:
-        """Return a *temperature limit*, or the panel's own bound when absent."""
-        limit = self.coordinator.value_of(key)
+        """Return a *temperature limit*, or the panel's own bound when absent.
+
+        Both limits are *optional parameters*: a firmware that returns neither
+        still has a thermostat, and the registry's own bounds — the ones every
+        setpoint write is validated against — are what the card then offers.
+        """
+        limit = self._temperature(key)
         return absolute if limit is None else limit
 
     @override

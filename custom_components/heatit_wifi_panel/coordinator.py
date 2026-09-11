@@ -22,7 +22,9 @@ written once rather than six times.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
+from time import monotonic
 from typing import TYPE_CHECKING, override
 
 from homeassistant.config_entries import ConfigEntry
@@ -56,6 +58,24 @@ if TYPE_CHECKING:
 
 type HeatitWifiPanelConfigEntry = ConfigEntry[HeatitWifiPanelCoordinator]
 """The entry with its runtime data typed. ``hass.data`` is untouched (§3.4)."""
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingEcho:
+    """A *write echo* shown to the user, waiting for the refresh that judges it."""
+
+    value: object
+    """What the panel said it applied, in user units."""
+
+    judge_after: float
+    """The ``monotonic()`` reading from which a status may judge this echo.
+
+    A status read *earlier* than this may still be showing the value the panel
+    held before the write — it commits in 305-632 ms (Q31) — so judging one
+    would report a *silent undo* that did not happen. This is §5.5's rule for
+    the energy reset, applied to the same question: which reading is late
+    enough to settle a write.
+    """
 
 
 def poll_interval(entry: ConfigEntry) -> timedelta:
@@ -109,12 +129,12 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         """Those of :attr:`observed_parameters` the panel has stopped returning."""
         self._appeared_parameters: set[str] = set()
         self._presence_recorded = False
-        self._echoes: dict[str, object] = {}
+        self._echoes: dict[str, _PendingEcho] = {}
         """The *write echo* of each write awaiting its refresh, by wire name."""
         self._undone_parameters: set[str] = set()
         """Those a *silent undo* has already been warned about (§6.5)."""
 
-    def value_of(self, key: str) -> float | None:
+    def parameter(self, key: str) -> int | float | bool | None:
         """One parameter's value in user units, a pending *write echo* winning.
 
         The echo is what the panel says it *applied*, so it is what an entity
@@ -122,18 +142,15 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         with what the panel actually reports (§5.4).
 
         ``None`` when this firmware does not return the parameter at all — the
-        entity is then unavailable rather than guessing. The view is numeric,
-        which covers every parameter behind a climate or number entity; a
-        boolean one reads as ``None`` here and wants its own accessor.
+        entity is then unavailable rather than guessing — and for anything the
+        registry's declared type cannot absorb, which is the same answer
+        :meth:`ParameterDescriptor.decode` gives and for the same reason.
         """
+        pending = self._echoes.get(key)
         value = (
-            self._echoes[key]
-            if key in self._echoes
-            else PARAMETERS[key].read(self.data)
+            pending.value if pending is not None else PARAMETERS[key].read(self.data)
         )
-        if isinstance(value, bool) or not isinstance(value, int | float):
-            return None
-        return float(value)
+        return value if isinstance(value, int | float | bool) else None
 
     async def async_write_parameter(self, key: str, *, value: float | bool) -> None:
         """Write one parameter: the echo shows now, the refresh decides (§5.4).
@@ -154,6 +171,17 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         """
         try:
             applied = await self.client.set_parameter(key, value)
+        except ValueError as err:
+            # The registry refused it before a request existed, so the panel
+            # never saw it. Core checks a service call against ``min_temp`` and
+            # ``max_temp`` but never against ``target_temperature_step``, so an
+            # off-grid value does reach here, and §6.4 wants every write error
+            # translated rather than raised raw at whoever called the service.
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_value",
+                translation_placeholders={"error": str(err)},
+            ) from err
         except HeatitParameterRejected as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -173,10 +201,15 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
                 translation_key="unexpected_response",
                 translation_placeholders={"status": str(err)},
             ) from err
+        else:
+            self._echoes[key] = _PendingEcho(
+                value=applied, judge_after=monotonic() + POST_WRITE_REFRESH_DELAY
+            )
+            self.async_update_listeners()
         finally:
+            # Ordered deliberately: the echo is recorded before the refresh is
+            # asked for, so no ordering of the two can show a stale value.
             await self.async_request_refresh()
-        self._echoes[key] = applied
-        self.async_update_listeners()
 
     @override
     async def _async_update_data(self) -> PanelStatus:
@@ -215,7 +248,7 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         return status
 
     def _judge_echoes(self, status: PanelStatus) -> None:
-        """Compare each pending *write echo* with what the panel now reports.
+        """Compare each *write echo* this status is late enough to judge.
 
         A mismatch is a *silent undo*: a write the panel acknowledged and then
         did not apply. Client-side quantisation has already removed the snap
@@ -224,10 +257,21 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
         (§6.5, §7.2). A parameter that has *vanished* reads as ``None`` and is
         not judged: :meth:`_note_presence` has already said so, and one absence
         is not two anomalies.
+
+        An echo the panel has not had :data:`POST_WRITE_REFRESH_DELAY` to
+        commit stays pending, and the entity goes on showing it. That is the
+        scheduled poll that lands inside the window — core cancels the
+        debounced refresh when one does, so without this the poll would both
+        report a *silent undo* that never happened and drop the user's value
+        back for a whole *poll interval*.
         """
-        for key, echoed in self._echoes.items():
+        now = monotonic()
+        for key, pending in list(self._echoes.items()):
+            if now < pending.judge_after:
+                continue
+            del self._echoes[key]
             applied = PARAMETERS[key].read(status)
-            if applied is None or applied == echoed:
+            if applied is None or applied == pending.value:
                 continue
             first = key not in self._undone_parameters
             self._undone_parameters.add(key)
@@ -236,10 +280,9 @@ class HeatitWifiPanelCoordinator(DataUpdateCoordinator[PanelStatus]):
                 "the panel acknowledged %s=%r and its status now reads %r; the "
                 "write was accepted and not applied",
                 key,
-                echoed,
+                pending.value,
                 applied,
             )
-        self._echoes.clear()
 
     def _note_presence(self, status: PanelStatus) -> None:
         """Fix the observed parameters at setup, then log every transition.
