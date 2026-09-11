@@ -64,6 +64,14 @@ EXCEPTIONS = [
 #: Every entity §5.2 names in ``translations/en.json``, by platform and key.
 #: The climate entity is deliberately absent: it sets ``_attr_name = None`` and
 #: takes the device's own name, so it has no ``name`` to resolve.
+#:
+#: This list is **not** made redundant by the entity table's own name column.
+#: Core falls back to the device class's name for an entity that has one and no
+#: resolvable translation, so a row whose §5.2 name *equals* its device class
+#: name — Temperature, Power, Energy, Signal strength — registers the same
+#: string either way, and the table cannot tell a translated name from a
+#: missing one. For those four rows this is the only assertion that the string
+#: a user reads was authored rather than inherited.
 ENTITY_NAMES = [
     ("number", "comfort_setpoint"),
     ("number", "eco_setpoint"),
@@ -77,6 +85,12 @@ ENTITY_NAMES = [
     ("switch", "external_sensor"),
     ("select", "standby_display"),
     ("select", "buttons"),
+    ("sensor", "temperature"),
+    ("sensor", "power"),
+    ("sensor", "energy"),
+    ("sensor", "signal_strength"),
+    ("sensor", "open_window_time_remaining"),
+    ("binary_sensor", "open_window_detected"),
 ]
 
 #: §5.2's two selects and the options each offers. A select's options are its
