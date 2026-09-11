@@ -60,9 +60,10 @@ Install what it needs with `pip install -r requirements_test.txt`.
 
 ## Changelog
 
-`CHANGELOG.md` records changes to the **shipped integration and the tooling
-around it** — behaviour, entities, configuration, scripts, workflows. Write the
-entry under `## [Unreleased]`.
+`CHANGELOG.md` records **what a user can see or interact with in Home
+Assistant** — behaviour, entities, configuration. Nothing else: not the scripts,
+not the workflows, not the tooling a contributor runs. Write the entry under
+`## [Unreleased]`.
 
 A documentation-only change earns no entry. A conformance-register row flipping
 to `verified`, a research note, a spec amendment, a README, this file: each is
@@ -78,6 +79,7 @@ recording a fix for it, and a reader sees the same sentence before and after. If
 the correction changes what the entry *claims*, edit the entry instead — that
 touches `CHANGELOG.md` and needs no label at all.
 
-The test: would a reader of the changelog have to go and *do* something
-differently? If the answer is only "read the document that changed", or "nothing
-— the entry already said this", it does not belong here.
+The test: would a **user of the integration** see or do something differently
+in Home Assistant? A contributor having to run a script differently is not that,
+and neither is "read the document that changed" or "nothing — the entry already
+said this". Those do not belong here.
