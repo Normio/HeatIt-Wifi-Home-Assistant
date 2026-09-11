@@ -44,6 +44,7 @@ CONFIG_ABORTS = [
     "already_configured",
     "already_in_progress",
     "cannot_connect",
+    "invalid_response",
     "not_configured",
     "reconfigure_successful",
     "wrong_panel",

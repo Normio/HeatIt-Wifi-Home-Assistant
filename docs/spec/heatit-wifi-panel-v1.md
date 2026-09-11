@@ -538,8 +538,9 @@ configured panel, zero false positives, no claim to new-device discovery, one ma
 1. `GET /api/status` at the discovered IP.
 2. `async_set_unique_id(id)`.
 3. `_abort_if_unique_id_configured(updates={CONF_HOST: ip})`.
-4. Any failure → **quiet abort**. Home Assistant re-fires on the next DHCP event, so a panel still
-   booting after a fresh lease is picked up shortly after.
+4. Any failure → **quiet abort**, carrying the reason step 1 computed — `cannot_connect` or
+   `invalid_response`, §4.2's own pair. Home Assistant re-fires on the next DHCP event, so a panel
+   still booting after a fresh lease is picked up shortly after.
 
 The status read is not optional: the *device id* is not in the DHCP packet, and matching on the
 packet's MAC alone would repoint an entry without the id verification that foreign-panel safety rests
@@ -1970,3 +1971,15 @@ surface, and a descriptor would make a never-written parameter writable. (3) #41
 **Both setpoint numbers need the same two readings on the same terms**, so the fallback moves to the
 coordinator as `minimum_temperature` / `maximum_temperature` and is written once rather than per
 platform.
+
+**2026-09-11 — §4.3's quiet abort carries the reason validation found** ([#60](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/60), PR pending).
+§4.3 asked for a quiet abort and named no reason, and `async_step_dhcp` picked `cannot_connect` for
+both branches — so a host answering at the discovered address without being a panel aborted with
+*Nothing answered at that address*, which is false of exactly that branch. The reason is now the one
+`_async_validate` already computed, and `config.abort` gains the `invalid_response` string it needs;
+`config.error` had it, `config.abort` did not. This is the shape core itself ships — Hue's discovery
+aborts `not_hue_bridge` rather than folding "not ours" into "no answer". Nothing gets louder, and
+nothing is now read that was not read before: core awaits a discovery flow and discards its result,
+so the reason reaches no card and no log line. It is corrected because a string that ships is a
+string that is true, not because anyone reads this one. Step 4 names the pair rather than leaving it
+to the code.

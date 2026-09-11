@@ -116,10 +116,18 @@ class HeatitWifiPanelConfigFlow(ConfigFlow, domain=DOMAIN):
         (ADR-0003). Any failure is a quiet abort — Home Assistant re-fires on
         the next DHCP event, so a panel still booting after a fresh lease is
         picked up shortly after.
+
+        The abort is quiet, not vague: it carries the reason validation
+        computed, so a host that answered at the discovered address without
+        being a panel does not abort saying nothing answered. Neither string
+        reaches anyone — core awaits a discovery flow and discards its result
+        (``helpers/discovery_flow.py``), rendering no card and logging no
+        reason. The reason is the true one anyway, because a string that ships
+        is a string that is true.
         """
-        status, _ = await self._async_validate(discovery_info.ip)
+        status, errors = await self._async_validate(discovery_info.ip)
         if status is None:
-            return self.async_abort(reason="cannot_connect")
+            return self.async_abort(reason=errors["base"])
         await self.async_set_unique_id(status.device_id)
         self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info.ip})
         return self.async_abort(reason="not_configured")
