@@ -8,6 +8,14 @@
         }
       }
     },
+    "button": {
+      "reset_energy": {
+        "default": "mdi:counter"
+      },
+      "restore_defaults": {
+        "default": "mdi:restore"
+      }
+    },
     "climate": {
       "panel": {
         "default": "mdi:radiator",

@@ -42,6 +42,16 @@ the longest lag observed, and the delay is a debounce — a burst of writes cost
 one refresh, not one each.
 """
 
+RESET_VERIFY_DELAY = 5.0
+"""Seconds after an *energy counter* reset before a poll may judge it.
+
+The counter reads ``0.00`` within 5 s of the acknowledgement (Q45), recorded as
+the upper bound it is rather than as a measurement. A reset has no *write echo*
+to compare against, so the only check available is whether the counter fell —
+and a poll landing sooner than this may still be reading the old value, which
+would report a reset that did not take when it merely had not landed (§5.5).
+"""
+
 MANUFACTURER = "Heatit"
 """``DeviceInfo.manufacturer``; the model comes from the device (§3.5)."""
 

@@ -126,6 +126,7 @@ class FakeHeatitClient:
         """Force a *write echo* for one parameter — the *silent undo* case."""
         self._failures: deque[Exception] = deque()
         self._refusals: deque[Exception] = deque()
+        self._reset_refusals: deque[Exception] = deque()
 
     def fail(self, error: Exception, times: int = 1) -> None:
         """Queue ``error`` for the next ``times`` status reads."""
@@ -134,6 +135,10 @@ class FakeHeatitClient:
     def refuse(self, error: Exception, times: int = 1) -> None:
         """Queue ``error`` for the next ``times`` parameter writes."""
         self._refusals.extend([error] * times)
+
+    def refuse_reset(self, error: Exception, times: int = 1) -> None:
+        """Queue ``error`` for the next ``times`` resets, either kind."""
+        self._reset_refusals.extend([error] * times)
 
     def set_status(self, changes: Mapping[str, object]) -> None:
         """Derive the status later reads return, by dotted path (:func:`mutated`)."""
@@ -167,9 +172,14 @@ class FakeHeatitClient:
         return descriptor.decode(wire_value)
 
     async def reset_kwh(self) -> None:
-        """Record an *energy counter* reset."""
-        self.resets.append("kwh")
+        """Record an *energy counter* reset, or raise the next scripted refusal."""
+        self._reset("kwh")
 
     async def reset_settings(self) -> None:
-        """Record a settings reset."""
-        self.resets.append("settings")
+        """Record a settings reset, on the same terms."""
+        self._reset("settings")
+
+    def _reset(self, kind: str) -> None:
+        if self._reset_refusals:
+            raise self._reset_refusals.popleft()
+        self.resets.append(kind)

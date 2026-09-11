@@ -56,6 +56,8 @@ Home Assistant from the device's name and its own.
 | Signal strength (`signal_strength`) | sensor | The panel's own WiFi signal, in dBm. A diagnostic, and **turned off until you turn it on** from the device page: it moves with every poll and most homes never need it. |
 | Open window time remaining (`open_window_time_remaining`) | sensor | How much longer the panel will hold its setpoint down for an open window it has detected. `0` whenever it has detected none. |
 | Open window detected (`open_window_detected`) | binary_sensor | Whether the panel is inferring an open window from a drop in room temperature. On or off rather than open or closed: the panel watches the temperature, not a window. |
+| Reset energy counter (`reset_energy`) | button | Zeroes the panel's energy counter, the same one the MyHeatit app and the panel's display show. **Turned off until you turn it on** from the device page. |
+| Restore default settings (`restore_defaults`) | button | Puts every setting on this page back to the panel's default. Your network and the panel's pairing are kept. **Turned off until you turn it on** from the device page. |
 
 Eco is a **preset**, not a second target temperature, and the target follows
 whichever setpoint the panel is regulating to — so it changes when the preset
@@ -72,11 +74,18 @@ The setpoints stop at the temperature limits, each limit stops half a degree
 short of the other, and the load limit stops at your model's rating — so Home
 Assistant does not offer a value the panel is going to refuse.
 
+The two buttons throw something away — the energy counter, or every setting —
+and Home Assistant has no "are you sure?" for a button, so both arrive turned
+off and stay that way until you enable them on the device page. Restoring the
+defaults keeps your network and the panel's pairing, and the panel applies it
+over about five seconds, so the settings on this page finish catching up a
+poll later.
+
 The panel publishes its energy counter in steps of roughly 0.04 kWh rather than
 continuously, so the Energy sensor sits flat for minutes and then jumps. That is
-the panel reporting, not Home Assistant waiting. Zeroing the counter — from the
-MyHeatit app, or from the panel — costs Home Assistant at most one of those
-steps, the energy banked since the last one having never been published;
+the panel reporting, not Home Assistant waiting. Zeroing the counter — from
+Home Assistant, the MyHeatit app or the panel itself — costs at most one of
+those steps, the energy banked since the last one having never been published;
 everything already recorded stays, because the sensor counts up and the panel
 zeroes to exactly nothing.
 

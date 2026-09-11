@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Buttons**
+
+- Reset the energy counter, off until you turn it on. Home Assistant says so
+  in the log, once, if the counter does not go to zero afterwards.
+- Restore the panel's default settings, off until you turn it on. The network
+  and the panel's pairing are kept.
+
 ## [0.2.0] - 2026-09-11
 
 Adds 8 numbers, 2 switches, 2 selects, 5 sensors and 1 binary sensor. The

@@ -312,6 +312,34 @@ ENTITY_TABLE = [
         state="0",
         read_path="parameters.OWD.activeTime",
     ),
+    # The two presses that discard device state, and so the other two rows
+    # §5.4 ships opt-in. Neither reads anything — a button only writes — so
+    # neither can be dropped by a firmware that returns one field less, and
+    # neither has a state until a user enables it.
+    Row(
+        platform=Platform.BUTTON,
+        key="reset_energy",
+        name="Reset energy counter",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=False,
+        state=None,
+        read_path=None,
+    ),
+    Row(
+        platform=Platform.BUTTON,
+        key="restore_defaults",
+        name="Restore default settings",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=False,
+        state=None,
+        read_path=None,
+    ),
     Row(
         platform=Platform.BINARY_SENSOR,
         key="open_window_detected",

@@ -92,6 +92,8 @@ ENTITY_NAMES = [
     ("sensor", "signal_strength"),
     ("sensor", "open_window_time_remaining"),
     ("binary_sensor", "open_window_detected"),
+    ("button", "reset_energy"),
+    ("button", "restore_defaults"),
 ]
 
 #: §5.2's two selects and the options each offers. A select's options are its

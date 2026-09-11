@@ -35,7 +35,7 @@ from homeassistant.const import (
     UnitOfTime,
 )
 
-from .api import WIFI_SIGNAL_STRENGTH
+from .api import TOTAL_CONSUMPTION, WIFI_SIGNAL_STRENGTH
 from .entity import HeatitWifiPanelEntity
 
 if TYPE_CHECKING:
@@ -52,7 +52,6 @@ PARALLEL_UPDATES = 0
 
 ROOM_TEMPERATURE: Final = "roomTemperature"
 CURRENT_POWER: Final = "currentPower"
-TOTAL_CONSUMPTION: Final = "totalConsumption"
 OPEN_WINDOW_ACTIVE_TIME: Final = "parameters.OWD.activeTime"
 
 
