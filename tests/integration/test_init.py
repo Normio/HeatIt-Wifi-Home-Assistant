@@ -89,19 +89,44 @@ async def test_setup_registers_one_device(
     assert device.configuration_url is None
 
 
-@pytest.mark.usefixtures("patched_client")
-async def test_the_assigned_room_becomes_an_area_suggestion(
+async def test_the_assigned_room_picks_an_area_the_user_already_has(
     hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """A suggestion only: Home Assistant's own area wins from then on (§4.4)."""
+    """A suggestion only: Home Assistant's own area wins from then on (§4.4).
+
+    Matched by the area registry's own normalisation, so the panel's "bedroom"
+    finds the user's "Bedroom".
+    """
+    existing = ar.async_get(hass).async_create("Bedroom")
+    patched_client.set_status({"room": "bedroom"})
+
     assert await setup_entry(hass, mock_config_entry)
 
     device = panel_device(hass, mock_config_entry)
-    assert device.area_id is not None
-    area = ar.async_get(hass).async_get_area(device.area_id)
-    assert area is not None
-    assert area.name == "Bedroom"
+    assert device.area_id == existing.id
+
+
+# An unassigned panel reports the room as the empty string, not as absent (Q27).
+@pytest.mark.parametrize("room", ["Bedroom", ""])
+async def test_a_room_with_no_area_of_that_name_creates_none(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    room: str,
+) -> None:
+    """The room suggests between the user's areas; it does not add one (§4.4).
+
+    With nothing to suggest the device is left unassigned, which is what has
+    Home Assistant offer its own area picker for it.
+    """
+    patched_client.set_status({"room": room})
+
+    assert await setup_entry(hass, mock_config_entry)
+
+    assert panel_device(hass, mock_config_entry).area_id is None
+    assert list(ar.async_get(hass).async_list_areas()) == []
 
 
 async def test_the_mac_is_normalised_by_core(
@@ -143,6 +168,9 @@ async def test_the_name_and_the_room_are_read_once_at_creation(
     way to tell "the user renamed this in Home Assistant" from "the user never
     touched it", and following the app would silently destroy the first.
     """
+    areas = ar.async_get(hass)
+    areas.async_create("Bedroom")
+    hallway = areas.async_create("Hallway")
     assert await setup_entry(hass, mock_config_entry)
     original_area = panel_device(hass, mock_config_entry)
     patched_client.set_status({"name": "Renamed in the app", "room": "Hallway"})
@@ -154,7 +182,7 @@ async def test_the_name_and_the_room_are_read_once_at_creation(
 
     device = panel_device(hass, mock_config_entry)
     assert device.name == "Näytehuone 1"
-    assert device.area_id == original_area.area_id
+    assert device.area_id == original_area.area_id != hallway.id
     assert mock_config_entry.title == "Näytehuone 1"
 
 

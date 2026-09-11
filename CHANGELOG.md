@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it is detecting one. WiFi signal strength joins them as a diagnostic, off
   until you turn it on.
 
+### Changed
+
+- The room a panel is assigned to in the MyHeatit app now only **picks between
+  the areas you already have** — matched by name, so `bedroom` finds `Bedroom`.
+  It no longer creates an area automatically.
+
 ## [0.1.0] - 2026-09-11
 
 First release: the **Heatit WiFi Panel** wall heater over its own HTTP API on
