@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Four of the panel's own settings, on its device page: **Open window
+  detection** and **External sensor** as switches, **Standby display**
+  (setpoint or measured temperature) and **Buttons** (enabled, disabled or menu
+  locked) as selects.
+- Turning **External sensor** on with no wireless sensor paired does nothing on
+  the panel, so the switch comes back off at the next reading and the log says
+  once that the panel accepted the change without applying it.
+
 ### Changed
 
 - The room a panel is assigned to in the MyHeatit app now only **picks between

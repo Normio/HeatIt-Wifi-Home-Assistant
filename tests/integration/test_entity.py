@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
 from homeassistant.components.climate.const import HVACMode
-from homeassistant.const import Platform
+from homeassistant.const import STATE_OFF, EntityCategory, Platform
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.heatit_wifi_panel.api import HeatitConnectionError
@@ -61,6 +61,50 @@ ENTITY_TABLE = [
         category=None,
         enabled=True,
         state=HVACMode.HEAT,
+    ),
+    Row(
+        platform=Platform.SWITCH,
+        key="open_window_detection",
+        name="Open window detection",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state=STATE_OFF,
+    ),
+    Row(
+        platform=Platform.SWITCH,
+        key="external_sensor",
+        name="External sensor",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state=STATE_OFF,
+    ),
+    Row(
+        platform=Platform.SELECT,
+        key="standby_display",
+        name="Standby display",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="measured_temperature",
+    ),
+    Row(
+        platform=Platform.SELECT,
+        key="buttons",
+        name="Buttons",
+        device_class=None,
+        unit=None,
+        state_class=None,
+        category=EntityCategory.CONFIG,
+        enabled=True,
+        state="disabled",
     ),
 ]
 
