@@ -30,6 +30,7 @@
       "already_configured": "This panel is already set up. To move a panel that has changed address, use Reconfigure on the existing entry instead of adding it again.",
       "already_in_progress": "This panel is already being set up.",
       "cannot_connect": "Nothing answered at that address.",
+      "invalid_response": "Something answered at that address, but it is not a Heatit WiFi Panel.",
       "not_configured": "The panel at that address is not set up in Home Assistant.",
       "reconfigure_successful": "The panel's address was updated.",
       "wrong_panel": "A different panel answered at that address. This entry is for panel {expected_id}, but {actual_id} answered. A panel that has been replaced must be added as a new device rather than adopted here — its history belongs to the old unit."
