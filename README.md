@@ -26,8 +26,9 @@ restart Home Assistant.
 
 With the restart done, add the panel: **Settings** → **Devices & services** →
 **Add integration** → **Heatit WiFi Panel**, then enter its address. Home
-Assistant reads the panel's status once to learn which unit it is. A panel your
-router already knows is offered for you to confirm rather than typed in.
+Assistant reads the panel's status once to learn which unit it is. If that
+address changes later — a new DHCP lease after a power cut, say — Home
+Assistant follows the panel to it without being asked.
 
 ## Entities
 
