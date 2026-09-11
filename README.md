@@ -39,7 +39,7 @@ Home Assistant from the device's name and its own.
 |---|---|---|
 | Heatit WiFi Panel (`panel`) | climate | The thermostat: off and heat, the comfort and eco presets, the temperature the panel is regulating to, and whether the element is on right now. It carries the panel's own name, because it *is* the panel. |
 | Open window detection (`open_window_detection`) | switch | Whether the panel drops to a low temperature when it senses a window opening. |
-| External sensor (`external_sensor`) | switch | Whether the panel regulates to a paired wireless sensor instead of its own. With no sensor paired the panel accepts the change and ignores it, so the switch comes back on its own within a couple of seconds. |
+| External sensor (`external_sensor`) | switch | Whether the panel regulates to a paired wireless sensor instead of its own. With no sensor paired the panel accepts the change and ignores it, so the switch turns itself back off a second or two later. |
 | Standby display (`standby_display`) | select | What the panel's display shows when nobody is touching it: the setpoint, or the measured temperature. |
 | Buttons (`buttons`) | select | The panel's physical buttons: enabled, disabled, or working with the menu locked. |
 

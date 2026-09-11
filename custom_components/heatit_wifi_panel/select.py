@@ -26,8 +26,7 @@ from typing import TYPE_CHECKING, override
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.const import EntityCategory
 
-from .entity import HeatitWifiPanelEntity
-from .registry import PARAMETERS
+from .entity import HeatitParameterEntity
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -104,7 +103,7 @@ async def async_setup_entry(
     )
 
 
-class HeatitPanelSelect(HeatitWifiPanelEntity, SelectEntity):
+class HeatitPanelSelect(HeatitParameterEntity, SelectEntity):
     """One enumerated setting on the panel."""
 
     entity_description: HeatitSelectDescription
@@ -114,13 +113,12 @@ class HeatitPanelSelect(HeatitWifiPanelEntity, SelectEntity):
         coordinator: HeatitWifiPanelCoordinator,
         description: HeatitSelectDescription,
     ) -> None:
-        """Bind to the parameter this select chooses, read at its own path."""
-        super().__init__(
-            coordinator,
-            description.key,
-            read_path=PARAMETERS[description.parameter].read_path,
-        )
+        """Bind to the parameter this select chooses."""
+        super().__init__(coordinator, description.key, parameter=description.parameter)
         self.entity_description = description
+        # Typed to what the coordinator *answers* with rather than to what the
+        # states hold, so a reading can be looked up without narrowing it first:
+        # ``bool | int`` collapses to ``int``, which no float would fit.
         self._options_by_value: dict[float | bool, str] = {
             value: option for option, value in description.states.items()
         }
@@ -135,13 +133,12 @@ class HeatitPanelSelect(HeatitWifiPanelEntity, SelectEntity):
         button state shows nothing rather than the wrong thing, and adding the
         option is then a deliberate edit with a fixture behind it.
         """
-        value = self.coordinator.parameter(self.entity_description.parameter)
+        value = self.coordinator.parameter(self._parameter)
         return None if value is None else self._options_by_value.get(value)
 
     @override
     async def async_select_option(self, option: str) -> None:
         """Write the value behind ``option``; the refresh at 1.5 s settles it."""
         await self.coordinator.async_write_parameter(
-            self.entity_description.parameter,
-            value=self.entity_description.states[option],
+            self._parameter, value=self.entity_description.states[option]
         )

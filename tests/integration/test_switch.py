@@ -27,15 +27,15 @@ from homeassistant.const import (
     STATE_ON,
 )
 
-from custom_components.heatit_wifi_panel import switch
 from custom_components.heatit_wifi_panel.const import DOMAIN, POST_WRITE_REFRESH_DELAY
-from tests.fakes import ABSENT, FakeHeatitClient
 from tests.integration.conftest import advance, entity_id, setup_entry
 
 if TYPE_CHECKING:
     from freezegun.api import FrozenDateTimeFactory
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from tests.fakes import FakeHeatitClient
 
 LOGGER_NAME = f"custom_components.{DOMAIN}"
 
@@ -86,11 +86,6 @@ async def call(hass: HomeAssistant, key: str, service: str) -> None:
         {ATTR_ENTITY_ID: switch_id(hass, key)},
         blocking=True,
     )
-
-
-def test_writes_within_the_platform_are_serialised() -> None:
-    """§3.5: one write at a time, on top of the client's own per-panel lock."""
-    assert switch.PARALLEL_UPDATES == 1
 
 
 @pytest.mark.parametrize("row", SWITCHES, ids=lambda row: row.key)
@@ -195,21 +190,3 @@ async def test_an_inert_external_sensor_write_flips_back_and_warns_once(
     ]
     assert [record.levelno for record in undone] == [logging.WARNING, logging.DEBUG]
     assert EXTERNAL_SENSOR.parameter in undone[0].getMessage()
-
-
-@pytest.mark.parametrize("row", SWITCHES, ids=lambda row: row.key)
-async def test_a_switch_whose_parameter_is_absent_is_never_created(
-    hass: HomeAssistant,
-    patched_client: FakeHeatitClient,
-    mock_config_entry: MockConfigEntry,
-    row: Switch,
-) -> None:
-    """§5.4's presence gate: no parameter at setup, no entity, and no error."""
-    patched_client.set_status({row.read_path: ABSENT})
-
-    assert await setup_entry(hass, mock_config_entry)
-
-    remaining = set(SWITCHES) - {row}
-    assert set(hass.states.async_entity_ids(SWITCH_DOMAIN)) == {
-        switch_id(hass, other.key) for other in remaining
-    }

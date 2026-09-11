@@ -25,15 +25,15 @@ from homeassistant.components.select import (
 )
 from homeassistant.const import ATTR_ENTITY_ID
 
-from custom_components.heatit_wifi_panel import select
 from custom_components.heatit_wifi_panel.const import POST_WRITE_REFRESH_DELAY
-from tests.fakes import ABSENT, FakeHeatitClient
 from tests.integration.conftest import advance, entity_id, setup_entry
 
 if TYPE_CHECKING:
     from freezegun.api import FrozenDateTimeFactory
     from homeassistant.core import HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from tests.fakes import FakeHeatitClient
 
 
 class Select(NamedTuple):
@@ -112,11 +112,6 @@ async def choose(hass: HomeAssistant, key: str, option: str) -> None:
     )
 
 
-def test_writes_within_the_platform_are_serialised() -> None:
-    """§3.5: one write at a time, on top of the client's own per-panel lock."""
-    assert select.PARALLEL_UPDATES == 1
-
-
 @pytest.mark.usefixtures("patched_client")
 @pytest.mark.parametrize("row", SELECTS, ids=lambda row: row.key)
 async def test_each_select_offers_its_options_and_reads_the_panel(
@@ -185,21 +180,3 @@ async def test_the_echo_shows_at_once_and_the_refresh_is_the_authority(
 
     assert patched_client.status_reads == reads + 1
     assert state_of(hass, BUTTONS.key) == "menu_locked"
-
-
-@pytest.mark.parametrize("row", SELECTS, ids=lambda row: row.key)
-async def test_a_select_whose_parameter_is_absent_is_never_created(
-    hass: HomeAssistant,
-    patched_client: FakeHeatitClient,
-    mock_config_entry: MockConfigEntry,
-    row: Select,
-) -> None:
-    """§5.4's presence gate: no parameter at setup, no entity, and no error."""
-    patched_client.set_status({row.read_path: ABSENT})
-
-    assert await setup_entry(hass, mock_config_entry)
-
-    remaining = set(SELECTS) - {row}
-    assert set(hass.states.async_entity_ids(SELECT_DOMAIN)) == {
-        select_id(hass, other.key) for other in remaining
-    }

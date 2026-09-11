@@ -11,6 +11,8 @@ two independent encodings, so a row is added here by hand when a platform
 ships. Its final form is 21 entities, of which 3 are disabled by default.
 """
 
+import importlib
+from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
@@ -32,6 +34,21 @@ if TYPE_CHECKING:
         HeatitWifiPanelCoordinator,
     )
 
+INTEGRATION_DIR = Path(__file__).parents[2] / "custom_components" / "heatit_wifi_panel"
+
+#: §9.2's ``parallel-updates`` rule, transcribed: ``0`` on the two read-only
+#: platforms, ``1`` on the five that write. A platform that has not shipped yet
+#: skips, so the sweep grows with the integration instead of being rewritten.
+PARALLEL_UPDATES = {
+    Platform.BINARY_SENSOR: 0,
+    Platform.BUTTON: 1,
+    Platform.CLIMATE: 1,
+    Platform.NUMBER: 1,
+    Platform.SELECT: 1,
+    Platform.SENSOR: 0,
+    Platform.SWITCH: 1,
+}
+
 
 class Row(NamedTuple):
     """One row of §5.2, as the user meets it."""
@@ -45,6 +62,13 @@ class Row(NamedTuple):
     category: str | None
     enabled: bool
     state: str
+    read_path: str | None
+    """§5.2's read path, or ``None`` for an entity nothing can drop.
+
+    The climate entity's is ``parameters.panelMode``, which is *required core*:
+    a status without it is not a status, so it never goes missing on its own and
+    the dropped-parameter sweep has nothing to try.
+    """
 
 
 #: §5.2, transcribed. The climate entity's name is ``None`` because it takes
@@ -61,6 +85,7 @@ ENTITY_TABLE = [
         category=None,
         enabled=True,
         state=HVACMode.HEAT,
+        read_path=None,
     ),
     Row(
         platform=Platform.SWITCH,
@@ -72,6 +97,7 @@ ENTITY_TABLE = [
         category=EntityCategory.CONFIG,
         enabled=True,
         state=STATE_OFF,
+        read_path="parameters.OWD.openWindowDetection",
     ),
     Row(
         platform=Platform.SWITCH,
@@ -83,6 +109,7 @@ ENTITY_TABLE = [
         category=EntityCategory.CONFIG,
         enabled=True,
         state=STATE_OFF,
+        read_path="parameters.sensorMode",
     ),
     Row(
         platform=Platform.SELECT,
@@ -94,6 +121,7 @@ ENTITY_TABLE = [
         category=EntityCategory.CONFIG,
         enabled=True,
         state="measured_temperature",
+        read_path="parameters.temperatureDisplay",
     ),
     Row(
         platform=Platform.SELECT,
@@ -105,8 +133,30 @@ ENTITY_TABLE = [
         category=EntityCategory.CONFIG,
         enabled=True,
         state="disabled",
+        read_path="parameters.disableButtons",
     ),
 ]
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected"), sorted(PARALLEL_UPDATES.items()), ids=lambda value: value
+)
+def test_every_platform_module_declares_parallel_updates(
+    platform: Platform, expected: int
+) -> None:
+    """§9.2's rule test, in one place rather than once per platform module.
+
+    ``PARALLEL_UPDATES`` has to be a module-level name in each platform — that
+    is how Home Assistant reads it — so the declaration cannot be shared; the
+    *assertion* can, and this is it.
+    """
+    if not (INTEGRATION_DIR / f"{platform}.py").is_file():
+        pytest.skip(f"the {platform} platform has not shipped yet")
+
+    module = importlib.import_module(f"custom_components.heatit_wifi_panel.{platform}")
+    declared = module.PARALLEL_UPDATES
+
+    assert declared == expected
 
 
 def registry_entries(
@@ -153,6 +203,37 @@ async def test_each_entity_is_the_one_the_table_describes(
     assert state.attributes.get("device_class") == row.device_class
     assert state.attributes.get("unit_of_measurement") == row.unit
     assert state.attributes.get("state_class") == row.state_class
+
+
+@pytest.mark.parametrize(
+    "row",
+    [row for row in ENTITY_TABLE if row.read_path is not None],
+    ids=lambda row: row.key,
+)
+async def test_a_dropped_parameter_costs_only_its_own_entity(
+    hass: HomeAssistant,
+    patched_client: FakeHeatitClient,
+    mock_config_entry: MockConfigEntry,
+    row: Row,
+) -> None:
+    """§8.5, over the whole table: setup succeeds, and one entity is missing.
+
+    §5.4 gates creation on the **first** status, so a firmware that never
+    returns a parameter costs exactly that parameter's entity — and the check
+    that matters is the other half, that every other entity is still there. A
+    per-platform version of this test could not see a dropped switch taking the
+    climate entity with it.
+    """
+    assert row.read_path is not None, "the parametrisation dropped the None rows"
+    patched_client.set_status({row.read_path: ABSENT})
+
+    assert await setup_entry(hass, mock_config_entry)
+
+    assert set(registry_entries(hass, mock_config_entry)) == {
+        f"{REFERENCE_DEVICE_ID}-{other.key}"
+        for other in ENTITY_TABLE
+        if other.key != row.key
+    }
 
 
 # --- the base entity's rules ------------------------------------------------

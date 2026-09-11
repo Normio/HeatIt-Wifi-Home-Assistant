@@ -22,8 +22,7 @@ from typing import TYPE_CHECKING, Any, override
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import EntityCategory
 
-from .entity import HeatitWifiPanelEntity
-from .registry import PARAMETERS
+from .entity import HeatitParameterEntity
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -71,7 +70,7 @@ async def async_setup_entry(
     )
 
 
-class HeatitPanelSwitch(HeatitWifiPanelEntity, SwitchEntity):
+class HeatitPanelSwitch(HeatitParameterEntity, SwitchEntity):
     """One boolean setting on the panel."""
 
     entity_description: HeatitSwitchDescription
@@ -81,12 +80,8 @@ class HeatitPanelSwitch(HeatitWifiPanelEntity, SwitchEntity):
         coordinator: HeatitWifiPanelCoordinator,
         description: HeatitSwitchDescription,
     ) -> None:
-        """Bind to the parameter this switch flips, read at its own path."""
-        super().__init__(
-            coordinator,
-            description.key,
-            read_path=PARAMETERS[description.parameter].read_path,
-        )
+        """Bind to the parameter this switch flips."""
+        super().__init__(coordinator, description.key, parameter=description.parameter)
         self.entity_description = description
 
     @property
@@ -98,19 +93,15 @@ class HeatitPanelSwitch(HeatitWifiPanelEntity, SwitchEntity):
         is also when the entity is unavailable; the two answers agree because
         both come from the same read.
         """
-        value = self.coordinator.parameter(self.entity_description.parameter)
+        value = self.coordinator.parameter(self._parameter)
         return value if isinstance(value, bool) else None
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Write ``true``; the refresh at 1.5 s is what settles it (§5.4)."""
-        await self.coordinator.async_write_parameter(
-            self.entity_description.parameter, value=True
-        )
+        await self.coordinator.async_write_parameter(self._parameter, value=True)
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Write ``false``, on the same terms."""
-        await self.coordinator.async_write_parameter(
-            self.entity_description.parameter, value=False
-        )
+        await self.coordinator.async_write_parameter(self._parameter, value=False)

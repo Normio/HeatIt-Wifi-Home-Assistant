@@ -1929,3 +1929,23 @@ judges an echo, and an earlier one leaves it pending. Without that, a scheduled 
 the 1.5 s a write needs to reach the status would report a *silent undo* that never happened — and
 `DataUpdateCoordinator` cancels the debounced refresh when a scheduled poll runs, so no later
 refresh would correct it before the next *poll interval*.
+
+**2026-09-11 — the switch and select platforms refine §3.5** ([#43](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/43)).
+§3.5 has every entity description carry `value_fn` / `set_value_fn` callables, and the amendment of
+[#41](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/41) let the climate entity out of
+descriptions altogether while holding the rule for "the five description-driven platforms". The two
+that landed here are description-driven and carry **no callables**: `HeatitSwitchDescription` holds
+the parameter's wire name, and `HeatitSelectDescription` holds that plus the option names and the
+device value behind each. A `value_fn` here could only be `lambda c: c.parameter("sensorMode")` —
+the same call with the same argument the description already names — and a `set_value_fn` the
+matching `async_write_parameter`, so the pair would restate the wire name twice more per entity and
+give a reviewer three places to check that a switch writes what it reads. §3.5's point is that the
+*table* holds what varies between entities rather than a class per entity, and a description naming
+one registry parameter holds exactly that. The callables stay available for a platform whose reading
+is **not** one parameter — `sensor.py`'s signal-strength parse and its top-level reads are the
+expected first use ([#44](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/44)) — so the
+rule is narrowed to "where the value is not one *observed parameter*" rather than dropped. The
+binding that every parameter-backed platform does share, the registry lookup that turns a wire name
+into a read path, moves to a second base class in `entity.py`, `HeatitParameterEntity`, so §3.5's
+"a base `CoordinatorEntity` supplying `DeviceInfo` and the availability rule" now describes two
+classes: that one and the parameter binding on top of it.
