@@ -667,7 +667,7 @@ the `translation_key` and the `{id}-{key}` unique-id suffix. "On" = `entity_regi
 | sensor | `open_window_time_remaining` | Open window time remaining | `parameters.OWD.activeTime` | duration · s · **no state class** | DIAGNOSTIC | yes | `0` when inactive (observed). Whether it counts down is register Q47 |
 | binary_sensor | `open_window_detected` | Open window detected | `parameters.OWD.activeNow` | **no device class** | — | yes | On/Off, not Open/Closed: it is an inference, not a contact. Icons `mdi:window-open-variant` (on) / `mdi:window-closed-variant` (off) |
 | button | `reset_energy` | Reset energy counter | `DELETE /api/reset/kwh?resetKwh=Reset` | — | CONFIG | **no** | §5.5. Never retried. Icon `mdi:counter` |
-| button | `restore_defaults` | Restore default settings | `DELETE /api/reset/settings` | — | CONFIG | **no** | Keeps network and pairing; applies **staggered over ~5 s**, so the 1.5 s refresh sees a partial reset and the next poll completes it. Icon `mdi:restore` |
+| button | `restore_defaults` | Restore default settings | `DELETE /api/reset/settings` | — | CONFIG | **no** | Keeps network and pairing; applies **staggered over ~5 s**, so the 1.5 s refresh may see a partial reset — or none of it yet — and a later poll completes it. Icon `mdi:restore` |
 
 Counts: 1 climate, 8 numbers, 2 switches, 2 selects, 5 sensors, 1 binary sensor, 2 buttons.
 
@@ -1983,3 +1983,19 @@ nothing is now read that was not read before: core awaits a discovery flow and d
 so the reason reaches no card and no log line. It is corrected because a string that ships is a
 string that is true, not because anyone reads this one. Step 4 names the pair rather than leaving it
 to the code.
+
+**2026-09-11 — what the 1.5 s refresh sees after a settings reset, and where the load limit lands** ([#73](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/73)).
+§5.2 said the reset "applies staggered over ~5 s, so the 1.5 s refresh sees a partial reset and the
+next poll completes it". The outcome is right and the mechanism was an assumption: on the #45
+hardware run, at **1.8 s** after the acknowledgement **no parameter had moved at all**, and all four
+that the reset changed were present by **8.0 s**. So the refresh may equally see the panel as it was.
+Nothing operational follows — there is still nothing to retry and nothing to fix, and a later poll
+carries the change — and the cell now says "may see a partial reset, or none of it yet". That run
+sampled at 1.8 s and 8.0 s and nowhere between, so it says nothing about the ~5 s settle itself:
+register row Q34 stands, and `scripts/probe.py`, which polls twice a second, is what can time it.
+
+The same run answered **Q53**: every parameter lands on the vendor document's stated default except
+`loadLimit`, which lands on the unit's own `maxLoad` — 6 on the 600 W panel, against the document's
+fixed 15, which that unit rejects anyway (Q17). The row is `verified fw 1.21` and `disagrees`, and
+the probe's check compares the load limit against `maxLoad` so that a firmware honouring the
+document would fail it.

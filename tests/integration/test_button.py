@@ -199,12 +199,15 @@ async def test_a_settings_reset_lets_the_staggered_state_settle_itself(
     freezer: FrozenDateTimeFactory,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """It applies over ~5 s, so the 1.5 s refresh sees a partial reset (§5.2).
+    """It applies over ~5 s, so the 1.5 s refresh catches it mid-way (§5.2).
 
     There is nothing to retry and nothing to fix: the refresh reports whatever
-    the panel says at that moment and the next poll completes it. What this
-    asserts is that the partial state costs no warning and no second request —
-    a reset is one request, and the poll goes on being the sole judge.
+    the panel says at that moment and a later poll carries the rest. What this
+    asserts is that a half-applied state costs no warning and no second
+    request — a reset is one request, and the poll goes on being the sole
+    judge. A partial state is the *hardest* case for that and so the one worth
+    staging; on the panel itself the 1.5 s refresh saw the pre-reset state
+    instead (§15, 2026-09-11), which is the easier half of the same rule.
     """
     coordinator = await press(hass, mock_config_entry, RESTORE_DEFAULTS.key)
     reads = patched_client.status_reads
