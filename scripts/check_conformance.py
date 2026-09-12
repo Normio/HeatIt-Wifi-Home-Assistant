@@ -11,9 +11,20 @@ nowhere:
 - evidence that does not resolve
 - a dependents cell with no resolvable reference
 - a manual row without its procedure
+- a summary line whose figures no longer match the table
 - a set of automated ids the probe does not register exactly
 
 The last one is the one place the two files can drift apart unnoticed.
+
+The summary line under the table is written by hand, but its figures are
+part of the check. It must be one bold sentence of exactly this shape, on its
+own line::
+
+    **48 verified at firmware 1.21, 10 open, 12 `disagrees`.**
+
+Any prose may follow it. The three counts are held to the table: rows whose
+status is ``verified fw <that firmware>``, rows whose status is ``open`` and
+rows whose ``vs spec`` is ``disagrees``.
 
 Run from ``scripts/check.sh``. Silent when the register is clean. Otherwise
 prints one line per problem and exits non-zero. The escape hatch is the
@@ -43,6 +54,11 @@ PROCEDURE_LINK = re.compile(r"\[(?P<name>P-\d+)\]\(#(?P<anchor>p-\d+)\)")
 BACKTICKED = re.compile(r"`([^`]+)`")
 PROCEDURE_HEADING = re.compile(r"^### (P-\d+)\b", re.MULTILINE)
 PROCEDURE_ANCHOR = re.compile(r'<a id="(p-\d+)"></a>')
+SUMMARY_LINE = re.compile(
+    r"^\*\*(?P<verified>\d+) verified at firmware (?P<firmware>\S+), "
+    r"(?P<open>\d+) open, (?P<disagrees>\d+) `disagrees`\.\*\*",
+    re.MULTILINE,
+)
 NO_EVIDENCE = "—"
 
 
@@ -191,6 +207,30 @@ def check_probe_ids(rows: list[probe.Row], probe_ids: frozenset[str]) -> list[st
     return problems
 
 
+def check_summary(text: str, rows: list[probe.Row]) -> list[str]:
+    """Condition 7: the summary line's three figures match the table."""
+    match = SUMMARY_LINE.search(text)
+    if match is None:
+        return [
+            (
+                "summary line: none found in the form "
+                "**<n> verified at firmware <v>, <n> open, <n> `disagrees`.**"
+            )
+        ]
+    firmware = match.group("firmware")
+    counted = {
+        "verified": sum(row.status == f"verified fw {firmware}" for row in rows),
+        "open": sum(row.status == "open" for row in rows),
+        "disagrees": sum(row.vs_spec == "disagrees" for row in rows),
+    }
+    return [
+        f"summary line: says {match.group(figure)} {figure}, "
+        f"the table has {counted[figure]}"
+        for figure in ("verified", "open", "disagrees")
+        if int(match.group(figure)) != counted[figure]
+    ]
+
+
 def problems(
     text: str,
     *,
@@ -217,6 +257,7 @@ def problems(
         found += check_dependents(row, repo_root=repo_root, procedures=procedures)
     found += check_procedures(rows, procedures)
     found += check_probe_ids(rows, probe_ids)
+    found += check_summary(text, rows)
     return found
 
 

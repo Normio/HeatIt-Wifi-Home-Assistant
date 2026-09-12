@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The setup dialog, the options dialog and the log lines use plainer
-  wording. Nothing behaves differently
+wording.
 
 ## [0.3.0] - 2026-09-11
 
@@ -22,7 +22,7 @@ Adds 2 buttons: a reset and a restore. Both are off until you turn them on.
 
 - Reset the energy counter
 - Restore the panel's default settings. Your network and the panel's pairing
-  are kept
+are kept
 
 ## [0.2.0] - 2026-09-11
 
@@ -66,8 +66,8 @@ have, instead of creating one.
 ### Changed
 
 - The room a panel is assigned to in the MyHeatit app now only **picks between
-  the areas you already have**. It matches by name, so `bedroom` finds
-  `Bedroom`. It no longer creates an area automatically.
+the areas you already have**. It matches by name, so `bedroom` finds
+`Bedroom`. It no longer creates an area automatically.
 
 ## [0.1.0] - 2026-09-11
 
@@ -78,16 +78,17 @@ ships here. The remaining entities follow in later releases.
 ### Added
 
 - The panel is added as a **device**. It has one **climate entity**, polled
-  every 60 seconds by default, and a **diagnostics download** on its device
-  page. The download replaces the panel's identifiers and its address with
-  placeholders.
+every 60 seconds by default, and a **diagnostics download** on its device
+page. The download replaces the panel's identifiers and its address with
+placeholders.
 - The climate entity has off and heat, with **comfort and eco as presets**. The
-  target temperature follows whichever setpoint the panel is heating to. So it
-  moves with the preset, and it is blank while the panel is off
-  ([ADR-0004](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/blob/main/docs/adr/0004-eco-as-a-climate-preset.md)). Whether the
-  element is on comes from the panel's relay, not from its reported power.
+target temperature follows whichever setpoint the panel is heating to. So it
+moves with the preset, and it is blank while the panel is off
+([ADR-0004](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/blob/main/docs/adr/0004-eco-as-a-climate-preset.md)). Whether the
+element is on comes from the panel's relay, not from its reported power.
 
 ### Verified
 
 - Firmware **1.21** on a 600 W panel. The evidence is recorded in the
-  [conformance register](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/blob/main/docs/conformance/checklist.md).
+[conformance register](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/blob/main/docs/conformance/checklist.md).
+
