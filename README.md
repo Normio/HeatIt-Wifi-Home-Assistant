@@ -24,7 +24,7 @@ same by hand:
 
 1. In HACS, open the menu in the top right and choose **Custom repositories**.
 2. Paste this repository's address:
- `https://github.com/Normio/HeatIt-Wifi-Home-Assistant`.
+ `https://github.com/Normio/HeatIt-Wifi-Panel`.
 3. Pick the type **Integration** and add it.
 4. Download **Heatit WiFi Panel** from HACS and restart Home Assistant.
 
