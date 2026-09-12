@@ -2077,3 +2077,10 @@ read back from a state, because the frontend resolves icon translations, not the
 condition 3 gains a clause. `common-modules` names two modules, and a second path in a `done`
 comment's free text was evidence in name only. So every word starting with a top-level directory
 of the tree is checked to exist, not the first alone.
+
+**2026-09-12 — the README no longer has to recommend a static DHCP reservation** ([#82](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/pull/82)).
+§4.5 says the README recommends a static DHCP reservation, and §11.3 lists it as a required README
+item. `tests/test_readme.py` held that promise. The owner dropped the sentence from the README, and
+the test with it. The host is still not an options field. The DHCP IP-follow of §4.3 is what keeps
+the entry pointed at the panel when its address changes, and a reservation is now only a user's
+own choice, not a promise the README makes.

@@ -7,9 +7,8 @@ them is asserted against the artifact that owns it, so the README cannot
 describe an integration that is not the one in the tree: all copies of a fact
 or none.
 
-One further assertion guards a promise made elsewhere and payable only here,
-the static DHCP reservation of §4.5, and one guards the rule that sank a real
-``hacs/default`` submission: no disclaimers.
+One further assertion guards the rule that sank a real ``hacs/default``
+submission: no disclaimers.
 """
 
 import importlib
@@ -237,13 +236,6 @@ def test_the_install_section_waits_for_the_release_that_makes_it_true() -> None:
         "no floor gate at all. The release pull request is the commit that "
         "first gives CHANGELOG.md a released version section, so the two "
         "arrive together or neither has"
-    )
-
-
-def test_the_readme_recommends_a_static_dhcp_reservation() -> None:
-    assert "DHCP reservation" in README.read_text(encoding="utf-8"), (
-        "README: §4.5 leaves the host out of the options flow, so a static "
-        "DHCP reservation is the answer the README owes the user"
     )
 
 
