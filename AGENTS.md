@@ -33,6 +33,15 @@ scrubbing on the way. Run it by hand, never from CI; a new firmware means a new
 directory, and `VERIFIED_FIRMWARES` in `const.py` and the README's
 `## Verified firmware` table must both grow with it, in that same pull request.
 
+## Quality scale
+
+`custom_components/heatit_wifi_panel/quality_scale.yaml` is the checklist,
+and `scripts/check_quality_scale.py` is what makes it one: a `done` rule's
+comment starts with the repo-relative path that is its evidence, and deleting
+that file fails the check until the yaml says otherwise. Moving or renaming a
+test a rule points at means editing the yaml in the same pull request. The
+escape hatch is the format itself: `exempt`, with a reason.
+
 ## README
 
 `tests/test_readme.py` is what keeps the README from describing an integration
@@ -51,9 +60,9 @@ this file's: see `docs/releasing.md`.
 
 Run `scripts/check.sh`. It is the one shared entry point — ruff,
 `ruff format --check`, the repository-layout check, the conformance-register
-check, mypy strict and pytest — and `.github/workflows/test.yml` calls the same
-file, so local and CI cannot drift. `scripts/check.sh lint` and
-`scripts/check.sh test` run either half.
+check, mypy strict, the quality-scale check and pytest — and
+`.github/workflows/test.yml` calls the same file, so local and CI cannot
+drift. `scripts/check.sh lint` and `scripts/check.sh test` run either half.
 There are deliberately no git hooks and no pre-commit framework.
 
 Install what it needs with `pip install -r requirements_test.txt`.

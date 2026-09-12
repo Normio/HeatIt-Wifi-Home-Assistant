@@ -1,0 +1,277 @@
+# The quality scale as a checklist we enforce ourselves (§9). hassfest never
+# parses this file for a custom integration, so scripts/check_quality_scale.py
+# does: every `done` comment starts with the repo-relative path that is its
+# evidence — a test, a module or a directory — and deleting that evidence
+# breaks the build until this file is updated. The exemptions are §9.1's,
+# verbatim. The manifest deliberately carries no `quality_scale` key: this file
+# says what we hold ourselves to, and the manifest makes no claim a reviewer
+# never graded.
+rules:
+  # bronze
+  action-setup:
+    status: exempt
+    comment: no custom service actions in v1
+  appropriate-polling:
+    status: done
+    comment: >-
+      custom_components/heatit_wifi_panel/const.py sets DEFAULT_POLL_INTERVAL
+      at 60 s and MIN_POLL_INTERVAL at 30 s, for a local panel answering one
+      GET; tests/integration/test_config_flow.py holds the floor
+  brands:
+    status: done
+    comment: >-
+      custom_components/heatit_wifi_panel/brand/ holds the 256 px icon and its
+      2x variant, and scripts/check_layout.py holds their sizes and that they
+      live nowhere else
+  common-modules:
+    status: done
+    comment: >-
+      custom_components/heatit_wifi_panel/coordinator.py holds the coordinator
+      and custom_components/heatit_wifi_panel/entity.py the base entity; the
+      path is the module, and existence is the check
+  config-flow:
+    status: done
+    comment: >-
+      tests/integration/test_config_flow.py — the host alone, validated before
+      the entry is created, every string in translations/en.json
+  config-flow-test-coverage:
+    status: done
+    comment: scripts/check.sh gates config_flow.py at 100 % line coverage
+  dependency-transparency:
+    status: exempt
+    comment: >-
+      assume a published PyPI requirement; the client is a module inside the
+      integration. Typing itself is enforced by mypy strict below, not by this
+      rule
+  docs-actions:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-conditions:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-high-level-description:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-installation-instructions:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-removal-instructions:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-triggers:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  entity-event-setup:
+    status: done
+    comment: >-
+      custom_components/heatit_wifi_panel/entity.py — every entity is a
+      CoordinatorEntity, whose listener core subscribes in async_added_to_hass
+      and removes on the way out; nothing subscribes in __init__
+  entity-unique-id:
+    status: done
+    comment: >-
+      tests/integration/test_quality_scale.py — {id}-{key} on every entity,
+      stable across a reload
+  has-entity-name:
+    status: done
+    comment: tests/integration/test_quality_scale.py — has_entity_name on every entity
+  runtime-data:
+    status: done
+    comment: >-
+      custom_components/heatit_wifi_panel/coordinator.py types
+      HeatitWifiPanelConfigEntry; tests/integration/test_init.py asserts
+      hass.data is untouched
+  test-before-configure:
+    status: done
+    comment: >-
+      tests/integration/test_config_flow.py — the user step reads the status
+      before creating the entry, and reports cannot_connect and
+      invalid_response
+  test-before-setup:
+    status: done
+    comment: >-
+      tests/integration/test_init.py — setup retries every failure but a
+      foreign panel, which fails permanently
+  unique-config-entry:
+    status: done
+    comment: >-
+      tests/integration/test_config_flow.py — a second entry for the same
+      device id aborts already_configured
+  # silver
+  action-exceptions:
+    status: done
+    comment: >-
+      tests/integration/test_coordinator.py — every write failure is a
+      HomeAssistantError carrying a translation key, and a value the registry
+      refuses is invalid_value
+  config-entry-unloading:
+    status: done
+    comment: >-
+      tests/integration/test_init.py — unload returns true, runtime_data is
+      gone, and neither hass.data nor the shared session holds anything
+      afterwards
+  docs-configuration-parameters:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-installation-parameters:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  entity-unavailable:
+    status: done
+    comment: >-
+      tests/integration/test_entity.py — the base entity every platform builds
+      on is unavailable while the poll is failing, and a vanished parameter
+      takes only its own entity
+  integration-owner:
+    status: done
+    comment: custom_components/heatit_wifi_panel/manifest.json names @Normio in codeowners
+  log-when-unavailable:
+    status: done
+    comment: >-
+      custom_components/heatit_wifi_panel/coordinator.py raises UpdateFailed
+      and adds no lines of its own, so core logs one error on failure and one
+      info on recovery (§6.1); tests/integration/test_coordinator.py holds the
+      two transitions
+  parallel-updates:
+    status: done
+    comment: >-
+      tests/integration/test_entity.py — 0 on sensor and binary_sensor, 1 on
+      the five write platforms
+  reauthentication-flow:
+    status: exempt
+    comment: the local API has no authentication
+  test-coverage:
+    status: done
+    comment: >-
+      scripts/check.sh — coverage is adopted as reported, not gated: measured
+      on every pytest run and printed, never failed under 95 %
+  # gold
+  devices:
+    status: done
+    comment: tests/integration/test_init.py — one device per entry, from the first status
+  diagnostics:
+    status: done
+    comment: >-
+      tests/integration/test_diagnostics.py — no id, MAC, SSID or IP survives
+      in either the parsed or the raw section
+  discovery:
+    status: exempt
+    comment: >-
+      the panel advertises no mDNS or SSDP response to unicast probing;
+      link-local multicast was untestable across the VLAN boundary; the
+      Espressif OUI makes a MAC-prefix matcher unusable (§4.3)
+  discovery-update-info:
+    status: done
+    comment: >-
+      tests/integration/test_config_flow.py — async_step_dhcp follows a
+      configured panel to its new address
+  docs-data-update:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-examples:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-known-limitations:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-supported-devices:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-supported-functions:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-troubleshooting:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  docs-use-cases:
+    status: exempt
+    comment: >-
+      require a `home-assistant.io` page; HACS-only integration, the README
+      carries the facts
+  dynamic-devices:
+    status: exempt
+    comment: one config entry is one fixed device
+  entity-category:
+    status: done
+    comment: tests/integration/test_entity.py holds the category column of §5.2
+  entity-device-class:
+    status: done
+    comment: tests/integration/test_entity.py holds the device-class column of §5.2
+  entity-disabled-by-default:
+    status: done
+    comment: >-
+      tests/integration/test_entity.py holds the On column of §5.2 — the noisy
+      diagnostic and the two reset buttons ship disabled
+  entity-translations:
+    status: done
+    comment: >-
+      tests/integration/test_quality_scale.py — every translation_key resolves
+      in translations/en.json, and no entity carries an _attr_name literal
+  exception-translations:
+    status: done
+    comment: >-
+      tests/integration/test_translations.py — every key the flow and the
+      coordinator raise under resolves in translations/en.json
+  icon-translations:
+    status: done
+    comment: >-
+      tests/integration/test_quality_scale.py — icons.json is keyed by the same
+      translation keys and nothing else, and no entity carries an icon literal
+  reconfiguration-flow:
+    status: done
+    comment: >-
+      tests/integration/test_config_flow.py — the host alone, and it never
+      adopts a replacement panel
+  repair-issues:
+    status: exempt
+    comment: no repairs platform in v1
+  stale-devices:
+    status: exempt
+    comment: one config entry is one fixed device
+  # platinum
+  async-dependency:
+    status: exempt
+    comment: >-
+      assume a published PyPI requirement; the client is a module inside the
+      integration. Typing itself is enforced by mypy strict below, not by this
+      rule
+  inject-websession:
+    status: done
+    comment: >-
+      custom_components/heatit_wifi_panel/__init__.py hands the client
+      async_get_clientsession(hass); tests/integration/test_init.py asserts
+      unload leaves that session open
+  strict-typing:
+    status: exempt
+    comment: >-
+      assume a published PyPI requirement; the client is a module inside the
+      integration. Typing itself is enforced by mypy strict below, not by this
+      rule
