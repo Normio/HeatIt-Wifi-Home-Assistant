@@ -7,10 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-12
+
+No new entities and no new settings. The words Home Assistant puts in front of
+you are plainer, and a second panel model has been tested.
+
 ### Changed
 
-- The setup dialog, the options dialog and the log lines use plainer
-wording.
+- The setup dialog and the dialog that changes a panel's address, including
+what they say when nothing answers at an address, or a different panel does
+- The poll interval's description in the options dialog
+- The message raised when the panel's status is missing a field
+- The log lines about an unverified firmware, a parameter the panel has
+stopped sending, and an energy counter reset that could not be checked
+
+### Verified
+
+- A **1000 W panel** at firmware **1.21**. It answered the automated register,
+the way the 600 W panel did at 0.1.0. What was tested is recorded in the
+[conformance register](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/blob/main/docs/conformance/checklist.md).
 
 ## [0.3.0] - 2026-09-11
 
