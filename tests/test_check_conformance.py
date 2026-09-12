@@ -1,4 +1,4 @@
-"""``scripts/check_conformance.py`` fails on each of the spec's six conditions."""
+"""``scripts/check_conformance.py`` fails on each of the spec's seven conditions."""
 
 from pathlib import Path
 
@@ -9,7 +9,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 REGISTER = REPO_ROOT / "docs" / "conformance" / "checklist.md"
 
 ISSUE = "[#7](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/7)"
-FIRMWARES = frozenset({"1.21"})
+FIRMWARE = "1.21"
+FIRMWARES = frozenset({FIRMWARE})
 
 HEADER = (
     "## The register\n\n"
@@ -22,9 +23,43 @@ APPENDIX = (
 )
 
 
-def register(rows: str, *, appendix: str = APPENDIX) -> str:
-    """Assemble a register document from table rows."""
-    return HEADER + rows + appendix
+def summary(verified: int, open_: int, disagrees: int) -> str:
+    """Write a summary line in the one form the check reads."""
+    return (
+        f"\n**{verified} verified at firmware {FIRMWARE}, {open_} open, "
+        f"{disagrees} `disagrees`.** Nothing is `contradicted`.\n"
+    )
+
+
+def counted_summary(rows: str) -> str:
+    """Write a summary line that agrees with the well-formed rows it follows.
+
+    This counts the way the script does, so it is no oracle for condition 7.
+    It only keeps the other conditions' fixtures from tripping it. The
+    condition 7 test states its expected figures by hand.
+    """
+    parsed = [
+        probe.row_from_cells(cells)
+        for cells in probe.parse_register_cells(HEADER + rows)
+        if len(cells) == len(probe.REGISTER_COLUMNS)
+    ]
+    return summary(
+        sum(row.status == f"verified fw {FIRMWARE}" for row in parsed),
+        sum(row.status == "open" for row in parsed),
+        sum(row.vs_spec == "disagrees" for row in parsed),
+    )
+
+
+def register(
+    rows: str, *, summary_line: str | None = None, appendix: str = APPENDIX
+) -> str:
+    """Assemble a register document: table, summary line, appendix.
+
+    The summary line agrees with the table unless one is given.
+    """
+    if summary_line is None:
+        summary_line = counted_summary(rows)
+    return HEADER + rows + summary_line + appendix
 
 
 def problems(text: str, *, probe_ids: frozenset[str]) -> list[str]:
@@ -135,6 +170,32 @@ def test_condition_6_the_register_and_the_probe_disagree() -> None:
     assert any("Q99" in p and "probe.py" in p for p in found)
     found = problems(register(GOOD_ROWS), probe_ids=frozenset())
     assert any("Q1" in p and "probe.py" in p for p in found)
+
+
+def test_condition_7_the_summary_line_disagrees_with_the_table() -> None:
+    """Each of the three figures is held to the table, and the message names both."""
+    rows = (
+        f"| Q1 | A | agrees | write | verified fw 1.21 | {ISSUE} | {ISSUE} |\n"
+        f"| Q2 | B | disagrees | write | verified fw 1.21 | {ISSUE} | {ISSUE} |\n"
+        "| Q3 | C | silent | manual | open | [P-1](#p-1) | "
+        "`docs/adr/0003-device-id-as-unique-id.md` |\n"
+    )
+    ids = frozenset({"Q1", "Q2"})
+    assert problems(register(rows, summary_line=summary(2, 1, 1)), probe_ids=ids) == []
+    for line, message in (
+        (summary(3, 1, 1), "says 3 verified, the table has 2"),
+        (summary(2, 2, 1), "says 2 open, the table has 1"),
+        (summary(2, 1, 0), "says 0 disagrees, the table has 1"),
+    ):
+        found = problems(register(rows, summary_line=line), probe_ids=ids)
+        assert len(found) == 1, found
+        assert message in found[0]
+
+
+def test_condition_7_a_missing_summary_line_is_a_problem() -> None:
+    """Deleting the line is not a way to stop it drifting."""
+    found = problems(register(GOOD_ROWS, summary_line=""), probe_ids=frozenset({"Q1"}))
+    assert any("summary line" in p for p in found)
 
 
 def test_a_missing_register_table_is_a_problem() -> None:

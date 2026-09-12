@@ -134,9 +134,10 @@ v1 claimed, with its corrections added at the end and dated.
 | Q57 | A reset returns `{"status":"Success"}` with the `status` key, the same as parameter writes, not the documented `reset` key | disagrees | destructive | verified fw 1.21 | [#7](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/7) | [#7](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/7) client response parser |
 | Q58 | `sensorMode=true` on a panel with no external sensor paired returns a success echo but is not applied: a silent undo | silent | write | verified fw 1.21 | [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) | [#14](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/14) silent-undo warning, [#11](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/11) switch entity |
 
-**45 verified at firmware 1.21, 13 open.** Nothing is `contradicted`. The ten places where the vendor
-document is simply wrong are recorded as `disagrees`, which is a different thing. Those claims were
-never true. They did not stop being true.
+**48 verified at firmware 1.21, 10 open, 12 `disagrees`.** Nothing is `contradicted`. The places
+where the vendor document is simply wrong are recorded as `disagrees`, which is a different thing.
+Those claims were never true. They did not stop being true. CI holds the three figures in the bold
+sentence to the table.
 
 ## Appendix: manual procedures
 
@@ -183,8 +184,8 @@ That is the MAC-prefix matcher's false positive, seen live.
 **Still open.** SSDP: the same run's multicast `M-SEARCH` got nothing from any device. So SSDP
 reflection is unproven, and the `:1900` negative is still only the unicast one. The DHCP lease
 hostname: the router exposes no admin surface off-segment. Neither changes the row, because Home
-Assistant's zeroconf is the mDNS half. But whoever sits on the segment should still run steps 3
-and 4 below.
+Assistant's zeroconf is the mDNS half. But whoever sits on the segment should still run the SSDP
+`M-SEARCH` and read the DHCP lease hostname, as the checklist below says.
 
 The full checklist, including what off-segment runs have already ruled out, is in
 [#32](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/32). In short: a ~30 s
