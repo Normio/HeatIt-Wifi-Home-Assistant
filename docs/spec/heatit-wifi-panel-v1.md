@@ -1714,7 +1714,7 @@ rather than a surprise.
 Corrections to this document after v1 was frozen. Each entry names the register row or issue that
 forced it, and the PR that carried it.
 
-**2026-09-12 — §3.4 had `config_entry=` both ignored and wired; the register's summary line is CI-checked** ([#79](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/79), PR pending).
+**2026-09-12 — §3.4 had `config_entry=` both ignored and wired; the register's summary line is CI-checked** ([#79](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/79), [PR #83](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/pull/83)).
 §3.4 said the coordinator's `config_entry=` argument "is ignored for custom integrations" and, in
 the same sentence, that it wires the shutdown on unload and honours `pref_disable_polling`. Both
 could not be true, and the first was wrong. Core only leaves the *omission* unenforced for custom
