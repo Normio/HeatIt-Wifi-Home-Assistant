@@ -9,7 +9,8 @@
 #
 #   scripts/check.sh        everything, in order — what a developer runs
 #   scripts/check.sh lint   ruff, ruff format --check, the layout check
-#   scripts/check.sh test   mypy strict and pytest, against the installed HA
+#   scripts/check.sh test   mypy strict, the quality-scale check and pytest,
+#                           against the installed HA
 #
 # scripts/check_release.py is not run here: it needs a pushed tag, and only
 # .github/workflows/release.yml has one. Its tests run with the rest.
@@ -28,6 +29,10 @@ run_lint() {
 
 run_tests() {
   mypy custom_components scripts tests
+  # In this half rather than the lint half because it parses the yaml with the
+  # loader hassfest uses, which is Home Assistant's (§9.2). Every `done` rule
+  # names the file that proves it, so a deleted test fails here.
+  python3 scripts/check_quality_scale.py
   # Overall coverage is measured and reported, not gated (§8.7): core's silver
   # 95 % is not inherited.
   python3 -m pytest \

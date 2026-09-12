@@ -34,6 +34,15 @@ Run it by hand, never from CI. A new firmware means a new directory. In the
 same pull request, add the version to `VERIFIED_FIRMWARES` in `const.py` and
 to the README's `## Verified firmware` table.
 
+## Quality scale
+
+`custom_components/heatit_wifi_panel/quality_scale.yaml` is the checklist.
+`scripts/check_quality_scale.py` is what makes it one. A `done` rule's comment
+starts with the repo-relative path that is its evidence. Deleting that file
+fails the check until the yaml says otherwise. Moving or renaming a test a
+rule points at means editing the yaml in the same pull request. The escape
+hatch is the format itself: `exempt`, with a reason.
+
 ## README
 
 Read `tests/test_readme.py` before editing `README.md`. It keeps the README in
@@ -56,8 +65,9 @@ The install section belongs to the release runbook, not to this file. See
 
 Run `scripts/check.sh`. It is the one shared entry point. It runs ruff,
 `ruff format --check`, the repository layout check, the conformance register
-check, mypy strict and pytest. `.github/workflows/test.yml` calls the same
-file, so local and CI cannot drift. `scripts/check.sh lint` and
+check, mypy strict, the quality-scale check and pytest.
+`.github/workflows/test.yml` calls the same file, so local and CI cannot
+drift. `scripts/check.sh lint` and
 `scripts/check.sh test` run either half on its own. There are no git hooks and
 no pre-commit framework, on purpose.
 

@@ -1263,8 +1263,10 @@ checks it. The script runs from `test.yml`, so it also gates releases. It fails 
    the yaml gains a `todo`;
 2. a `done` or `exempt` entry has no comment;
 3. a **`done` comment does not start with a repo-relative path that exists**. The path is a test
-   file, a module, or a directory that is the evidence. Free text may follow the path. Deleting the
-   test that proved a rule breaks the build until the yaml is updated;
+   file, a module, or a directory that is the evidence. Free text may follow the path. Any later
+   word in that text that starts with a top-level directory of the tree is a path too, and must
+   exist as well (amended 2026-09-11, #47). Deleting the test that proved a rule breaks the build
+   until the yaml is updated;
 4. `manifest.json` carries a `quality_scale` key. **The key is deliberately omitted.** The yaml says
    what we hold ourselves to. The manifest makes no claim that a reviewer never graded;
 5. **any rule is `todo` and the version under check is `v1.0.0` or later.** On PRs and 0.x tags,
@@ -1279,7 +1281,7 @@ points at it:
 |---|---|
 | `entity-unique-id` | every entity has a unique id of the form `{id}-{key}`, stable across a reload |
 | `has-entity-name` | `_attr_has_entity_name` is true on every entity |
-| `entity-translations`, `icon-translations` | every `translation_key` resolves in `translations/en.json` and `icons.json`. No `_attr_name` literal |
+| `entity-translations`, `icon-translations` | every `translation_key` resolves in `translations/en.json`, and every key in `icons.json` names a shipping entity. No `_attr_name` or icon literal (amended 2026-09-11, #47) |
 | `parallel-updates` | every platform module declares `PARALLEL_UPDATES`: `0` on `sensor` and `binary_sensor`, `1` on the five write platforms |
 | `config-entry-unloading` | unload returns true and the client/session hold nothing afterwards |
 | `unique-config-entry` | a second entry for the same status `id` aborts |
@@ -2043,3 +2045,35 @@ except `loadLimit`. That lands on the unit's own `maxLoad`: 6 on the 600 W panel
 document's fixed 15, which that unit rejects anyway (Q17). The row is `verified fw 1.21` and
 `disagrees`. The probe's check compares the load limit against `maxLoad`, so a firmware that
 honours the document would fail it.
+
+**2026-09-11 — the quality-scale gate runs in the test stage, reads the manifest's version, and holds the icon rule one way** ([#47](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/47)).
+Three refinements.
+
+(1) §9.2 says `scripts/check_quality_scale.py` is "run from `test.yml`", and §9.4 groups it with
+the check scripts. Those run in `check.sh`'s lint half, which needs no Home Assistant. It runs in
+the **test half** instead. The yaml is parsed with `homeassistant.util.yaml.load_yaml_dict`, the
+loader hassfest itself uses. So a file hassfest would refuse is one this refuses too. PyYAML also
+ships no stubs, so mypy strict would not accept a direct import. The cost is one run per matrix row
+of a script that takes a moment. Failure condition 4 stays with `check_layout.py`, as the amendment
+of PR #49 promised. That script now skips a `quality_scale` key rather than naming it, so one
+problem has one line.
+
+(2) "The version under check" in condition 5 is the manifest's `version`. `check_release.py` holds
+the tag equal to it, so on a tag they are one number. On a pull request the manifest is the only
+version there is. So the pull request that bumps it to `1.0.0` is the one that fails on a leftover
+`todo`, before any tag exists. No rule is `todo` today. Every row of §9.1's "everything else"
+shipped by 0.3.0. The `discovery` comment is §9.1's text word for word while register row Q28
+stays open. When [#32](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/32) closes it,
+the comment moves with the table.
+
+(3) §9.2's table has `icon-translations` assert that every `translation_key` "resolves in
+`translations/en.json` and `icons.json`". §5.2 has icons "only where a device class does not supply
+one". Four entities, the two switches and the two selects, have neither and take their domain's
+icon, as §5.2 lists them. So the test holds `icons.json` **one way**: every key in it names a
+shipping entity and every value is an `mdi:` name. It holds the literal ban on both sides: no
+`_attr_name` string and no `_attr_icon` or description `icon` on any entity. The icon cannot be
+read back from a state, because the frontend resolves icon translations, not the state machine.
+`translations/en.json` is held both ways: every entity resolves and there is no orphan key. And
+condition 3 gains a clause. `common-modules` names two modules, and a second path in a `done`
+comment's free text was evidence in name only. So every word starting with a top-level directory
+of the tree is checked to exist, not the first alone.
