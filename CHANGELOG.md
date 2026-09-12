@@ -7,10 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-12
+
+The setup dialog, the options dialog and the log lines use plainer wording.
+
 ### Changed
 
-- The setup dialog, the options dialog and the log lines use plainer
-wording.
+- The setup dialog wording
+- The options dialog wording
+
+### Verified
+
+- A **1000 W panel** at firmware **1.21**.
 
 ## [0.3.0] - 2026-09-11
 
