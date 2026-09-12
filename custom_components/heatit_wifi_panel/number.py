@@ -1,17 +1,17 @@
 """The config numbers: every panel setting that is a quantity (§5.2, §5.4).
 
-Eight rows, and what makes them more than a table is the second rule of §5.4:
+Eight rows. What makes them more than a table is the second rule of §5.4:
 **bounds are dynamic wherever they come from device state**. Both *setpoint
-banks* are bounded by the *temperature limits*, each limit is bounded by the
-other one, and the *load limit* is bounded by the *rated load* — all read from
-coordinator data on every access and never cached at setup, so Home Assistant
-never offers a value the panel is going to refuse.
+banks* are bounded by the *temperature limits*. Each limit is bounded by the
+other one. The *load limit* is bounded by the *rated load*. All of these are
+read from coordinator data on every access and never cached at setup. So Home
+Assistant never offers a value the panel will refuse.
 
-The rest of each row is the registry's (§3.3): the step — per parameter, not
-per type — the bounds that do not move, and the scale that turns the device's
-units of 100 W and 10 % into the watts and percent a user sees. Nothing
-dimensionless is exposed, and no range is restated here that the client already
-validates every write against.
+The rest of each row comes from the registry (§3.3). The step is per
+parameter, not per type. The bounds that do not move are the registry's. The
+scale turns the device's units of 100 W and 10 % into the watts and percent a
+user sees. Nothing without a unit is exposed. No range is restated here that
+the client already checks every write against.
 """
 
 from __future__ import annotations
@@ -49,22 +49,22 @@ PARALLEL_UPDATES = 1
 LOAD_LIMIT: Final = "loadLimit"
 
 RATED_LOAD_PATH: Final = "parameters.maxLoad"
-"""Where the *rated load* is read, spelled here rather than in the registry.
+"""Where the *rated load* is read, spelled here and not in the registry.
 
-The registry is the client's **write** surface — every descriptor carries a
-serialiser, a step and the bounds one write is validated against — and the
-rated load is never written: it is the model's own rating, not a setting. Given
-a descriptor it would become writable, which is worse than naming its one read
-path at its one reader. §5.1 keeps it off the entity surface as well; it
-surfaces as the *load limit*'s maximum and nowhere else.
+The registry is the client's **write** side. Every descriptor carries a
+serialiser, a step and the bounds one write is checked against. The rated load
+is never written: it is the model's own rating, not a setting. A descriptor
+would make it writable, which is worse than naming its one read path at its
+one reader. §5.1 keeps it out of the entities as well. It shows up as the
+*load limit*'s maximum and nowhere else.
 """
 
 LIMIT_GAP: Final = 0.5
 """How far apart the two *temperature limits* must stay.
 
-One step of the 0.5 °C grid both limits sit on, which is the smallest gap that
-leaves ``min < max`` — the rule the device itself enforces — true with both
-values still on the grid the device accepts.
+One step of the 0.5 °C grid both limits sit on. That is the smallest gap that
+keeps ``min < max`` true, the rule the device itself enforces. Both values stay
+on the grid the device accepts.
 """
 
 type Bound = Callable[[HeatitWifiPanelCoordinator], float]
@@ -76,17 +76,16 @@ def _registry_bound(
 ) -> float:
     """Return one of the registry's own bounds, refusing a row that has none.
 
-    The registry types a bound as optional because its enumerated parameters —
-    the *panel mode*, the buttons — carry a closed set of choices instead. A
+    The registry types a bound as optional because its enumerated parameters
+    (the *panel mode*, the buttons) carry a fixed list of choices instead. A
     ``number`` row for one of those is a mistake, and this is where it is
-    caught: ``NUMBERS`` is written by hand, and the alternative to refusing it
-    is silently offering a user core's default 0 .. 100 range in place of the
-    panel's own.
+    caught. ``NUMBERS`` is written by hand. Without this refusal, a user would
+    silently get core's default 0 .. 100 range in place of the panel's own.
     """
     if bound is None:
         msg = (
             f"{descriptor.key} has no {which} in the registry, so it cannot be "
-            f"a number: an enumerated parameter belongs on a select"
+            f"a number: a parameter with a fixed list of choices belongs on a select"
         )
         raise ValueError(msg)
     return bound
@@ -95,9 +94,9 @@ def _registry_bound(
 def _standing(bound: float) -> Bound:
     """Adapt a bound that does not move to the signature of one that does.
 
-    Ten of the sixteen bounds in §5.2's number rows are the registry's and stay
-    put; answering them through the same call as the six that move is what
-    keeps the entity free of a static case to branch on.
+    Ten of the sixteen bounds in §5.2's number rows come from the registry and
+    stay put. Answering them through the same call as the six that move keeps
+    the entity free of a static case to branch on.
     """
     return lambda _coordinator: bound
 
@@ -126,15 +125,15 @@ def _rated_load(coordinator: HeatitWifiPanelCoordinator) -> float:
     """Return the *rated load* in watts: the most the *load limit* may be set to.
 
     ``maxLoad`` is reported in the same units of 100 W the load limit is
-    written in, so the registry's scale is what turns it into watts. A firmware
-    that does not report it falls back to the registry's own ceiling; the
+    written in. So the registry's scale turns it into watts. A firmware
+    that does not report it falls back to the registry's own ceiling. The
     device refuses anything above its model's rating either way (Q17).
     """
     descriptor = PARAMETERS[LOAD_LIMIT]
-    # Read from the status rather than through ``coordinator.numeric``, which
-    # keys a parameter by its descriptor: this one has none, by the reasoning
-    # at :data:`RATED_LOAD_PATH`. Nothing writes it, so there is no *write
-    # echo* to prefer either.
+    # Read from the status, not through ``coordinator.numeric``. That keys a
+    # parameter by its descriptor, and this one has none, for the reason
+    # given at :data:`RATED_LOAD_PATH`. Nothing writes it, so there is no
+    # *write echo* to prefer either.
     rated = coordinator.data.get_int(RATED_LOAD_PATH)
     if rated is None:
         return _registry_bound(descriptor, descriptor.maximum, "maximum")
@@ -195,7 +194,7 @@ NUMBERS: tuple[HeatitNumberDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
     ),
     # No device class, on purpose: this is an *offset*, and converting an
-    # offset to °F is wrong — one degree Celsius of calibration is 1.8 °F of
+    # offset to °F is wrong. One degree Celsius of calibration is 1.8 °F of
     # calibration, not 33.8. Its icon comes from icons.json, which is what a
     # row with no device class to supply one is for.
     HeatitNumberDescription(
@@ -228,15 +227,15 @@ NUMBERS: tuple[HeatitNumberDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 - the platform signature is core's
+    hass: HomeAssistant,  # noqa: ARG001  # the platform signature is core's
     entry: HeatitWifiPanelConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add a number per row whose parameter the panel returned at setup (§5.4).
 
-    Presence is decided once, from the **first** status: a parameter this
-    firmware does not return has no entity at all, and one that appears later
-    is picked up on reload rather than live.
+    Presence is decided once, from the **first** status. A parameter this
+    firmware does not return has no entity at all. One that appears later is
+    picked up on reload, not live.
     """
     coordinator = entry.runtime_data
     async_add_entities(
@@ -247,7 +246,7 @@ async def async_setup_entry(
 
 
 class HeatitPanelNumber(HeatitParameterEntity, NumberEntity):
-    """One panel setting a user gives a value to rather than chooses."""
+    """One panel setting that takes a value, not a choice."""
 
     entity_description: HeatitNumberDescription
 
@@ -258,10 +257,10 @@ class HeatitPanelNumber(HeatitParameterEntity, NumberEntity):
     ) -> None:
         """Bind to the parameter this row reads and writes.
 
-        The two bounds are resolved to callables here so that every access
-        afterwards is one call: a row §5.2 marks dynamic brought its own, and
-        every other row takes the registry's, which is the same range the
-        client will accept the write against.
+        The two bounds are turned into callables here so that every access
+        afterwards is one call. A row §5.2 marks dynamic brought its own. Every
+        other row takes the registry's, which is the same range the client will
+        check the write against.
         """
         super().__init__(coordinator, description.key, parameter=description.parameter)
         self.entity_description = description
@@ -307,8 +306,8 @@ class HeatitPanelNumber(HeatitParameterEntity, NumberEntity):
         """Write this row's parameter, and only ever this row's parameter.
 
         For the two *setpoint banks* that means the named bank is written
-        **unconditionally, in any panel mode**: no mode is read and none is
-        changed. Verified safe — a comfort write made in Eco is stored and does
+        **always, in any panel mode**: no mode is read and none is changed.
+        This is checked safe: a comfort write made in Eco is stored and does
         not change what the panel is regulating to (Q14). That is why these two
         exist alongside the climate entity, which can only reach the *live*
         bank.

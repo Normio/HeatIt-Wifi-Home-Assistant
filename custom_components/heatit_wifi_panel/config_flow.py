@@ -1,16 +1,16 @@
 """Config flow for the Heatit WiFi Panel integration (§4).
 
-Three steps and an options flow, all host-only. Every one of them validates by
-reading a *status* through the client's own parser — 200, decodable, and the
-*required core* present — because the *device id* is the identity and it lives
-nowhere else, not in a DHCP packet and not in a form field.
+Three steps and an options flow, all host-only. Every one of them validates
+by reading a *status* through the client's own parser: 200, decodable and the
+*required core* present. That is because the *device id* is the identity and
+it lives nowhere else, not in a DHCP packet and not in a form field.
 
-Validation here is deliberately stricter than setup (§6.2): someone typing an
-address gets an immediate answer rather than a retry loop. ``model`` never
-gates anything; it is spent on ``DeviceInfo.model``, where its absence costs
+Validation here is stricter than setup on purpose (§6.2): someone typing an
+address gets an immediate answer, not a retry loop. ``model`` never
+gates anything. It is used for ``DeviceInfo.model``, where its absence costs
 nothing.
 
-This module is held at **100 % line coverage** by ``scripts/check.sh`` — it is
+This module is held at **100 % line coverage** by ``scripts/check.sh``. It is
 small, and a missed path here is a user-facing bug.
 """
 
@@ -94,7 +94,7 @@ class HeatitWifiPanelConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(status.device_id)
                 # Bare, without ``updates=``: changing an address is the
                 # reconfigure step's job, so re-adding a moved panel aborts
-                # rather than silently rewriting an existing entry (§4.2).
+                # instead of silently rewriting an existing entry (§4.2).
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=status.name or FALLBACK_DEVICE_NAME,
@@ -109,20 +109,20 @@ class HeatitWifiPanelConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Follow a configured panel to a new address.
 
-        The manifest matches ``registered_devices`` alone, so this only ever
-        fires for hardware Home Assistant already knows. The status read is not
-        optional: the *device id* is not in the packet, and repointing on the
-        packet's MAC alone would skip the check foreign-panel safety rests on
-        (ADR-0003). Any failure is a quiet abort — Home Assistant re-fires on
-        the next DHCP event, so a panel still booting after a fresh lease is
-        picked up shortly after.
+        The manifest matches ``registered_devices`` only, so this only fires
+        for hardware Home Assistant already knows. The status read is not
+        optional. The *device id* is not in the packet, and repointing on the
+        packet's MAC alone would skip the check that foreign-panel safety
+        rests on (ADR-0003). Any failure is a quiet abort. Home Assistant
+        fires this again on the next DHCP event, so a panel still booting
+        after a fresh lease is picked up soon after.
 
         The abort is quiet, not vague: it carries the reason validation
-        computed, so a host that answered at the discovered address without
+        computed. So a host that answered at the discovered address without
         being a panel does not abort saying nothing answered. Neither string
-        reaches anyone — core awaits a discovery flow and discards its result
+        reaches anyone. Core awaits a discovery flow and discards its result
         (``helpers/discovery_flow.py``), rendering no card and logging no
-        reason. The reason is the true one anyway, because a string that ships
+        reason. The reason is still the true one, because a string that ships
         is a string that is true.
         """
         status, errors = await self._async_validate(discovery_info.ip)
@@ -137,9 +137,9 @@ class HeatitWifiPanelConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Point an existing entry at a new address, and never adopt.
 
-        A unit that replaced another is refused rather than silently adopted:
-        the reconfigure step updates the entry it was opened for or aborts, and
-        there is no documented route to adopting a different device.
+        A unit that replaced another is refused, not silently adopted.
+        The reconfigure step updates the entry it was opened for or aborts,
+        and there is no documented route to adopting a different device.
         """
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
@@ -166,7 +166,7 @@ class HeatitWifiPanelConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> tuple[PanelStatus | None, dict[str, str]]:
         """Read a status at ``host``: the panel, or the error to show.
 
-        Must be a ``GET`` — ``HEAD /api/status`` returns 405 — and it goes
+        Must be a ``GET``, because ``HEAD /api/status`` returns 405. It goes
         through the client's real parser, so the *required core* is what
         decides. This client is a separate instance sharing no lock with a
         running entry's, which the device tolerates (§3.2).
@@ -187,7 +187,7 @@ class HeatitWifiPanelConfigFlow(ConfigFlow, domain=DOMAIN):
         """Return the options flow: the *poll interval*, alone.
 
         Core passes the entry positionally and ``OptionsFlow.config_entry``
-        hands it back, so the argument is named away rather than carried.
+        hands it back, so the argument gets an unused name and is not kept.
         """
         return HeatitWifiPanelOptionsFlow()
 
@@ -196,12 +196,12 @@ class HeatitWifiPanelOptionsFlow(OptionsFlowWithReload):
     """The *poll interval* and nothing else (§4.6).
 
     Every other user preference is a CONFIG-category entity, and the host is
-    connection data — so ``data`` is ``{CONF_HOST}`` and ``options`` is
+    connection data. So ``data`` is ``{CONF_HOST}`` and ``options`` is
     ``{poll interval}``. ``OptionsFlowWithReload`` reloads the entry when the
-    options change, which is how a new interval is applied: ``update_interval``
+    options change, which is how a new interval is applied. ``update_interval``
     is never retimed in place, and all of the panel's entities go briefly
-    unavailable. That is a rare, deliberate action and a fair price for never
-    shipping a stale-config bug.
+    unavailable. That is a rare action taken on purpose, and a fair price for
+    never shipping a stale-config bug.
     """
 
     async def async_step_init(

@@ -6,15 +6,15 @@ on:
   pull_request:
   workflow_dispatch:
   # release.yml runs this whole file against a tagged commit as part of its
-  # gate, so whatever this workflow grows into is what a release must pass.
-  # A job that is continue-on-error here must not be on a tag — the gate would
-  # pass over its failure; guard every such value with
+  # gate. Whatever this workflow grows into is what a release must pass.
+  # A job that is continue-on-error here must not be so on a tag: the gate
+  # would pass over its failure. Guard every such value with
   # `&& !startsWith(github.ref, 'refs/tags/')`.
   # tests/scripts/test_release_gate.py fails on an unguarded one.
   workflow_call:
   schedule:
-    # Monthly: the latest row is the early warning for a Home Assistant
-    # release deprecating something we use, and a month without a pull
+    # Monthly. The latest row is the early warning for a Home Assistant
+    # release that deprecates something we use. A month without a pull
     # request must still produce that signal.
     - cron: "0 5 2 * *"
 
@@ -37,10 +37,10 @@ jobs:
 
   tests:
     # Two rows (§8.7). The floor row is what a developer installs locally and
-    # blocks a merge; the latest row is a signal, not a blocker — except on a
+    # blocks a merge. The latest row is a signal, not a blocker, except on a
     # tag, where §10.2 makes both rows block the release. release.yml calls this
-    # file, and a continue-on-error job fails a called workflow without failing
-    # the caller, so the tag guard is what stops the gate passing over a red row.
+    # file. A continue-on-error job fails a called workflow without failing the
+    # caller, so the tag guard is what stops the gate passing over a red row.
     name: Tests (${{ matrix.row }})
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.row == 'latest' && !startsWith(github.ref, 'refs/tags/') }}

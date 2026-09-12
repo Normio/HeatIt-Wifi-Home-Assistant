@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The setup dialog, the options dialog and the log lines use plainer
+  wording. Nothing behaves differently
+
 ## [0.3.0] - 2026-09-11
 
 Adds 2 buttons: a reset and a restore. Both are off until you turn them on.

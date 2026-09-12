@@ -1,7 +1,7 @@
-"""``scripts/capture_fixtures.py`` is read-only by construction (§8.1).
+"""``scripts/capture_fixtures.py`` is read-only by the way it is written (§8.1).
 
-Asserted by reading the file: the only request it can issue is the client's
-status read, and nothing in CI invokes it.
+Checked by reading the file: the only request it can send is the client's
+status read, and nothing in CI runs it.
 """
 
 from pathlib import Path

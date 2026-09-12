@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# The one shared entry point. Run this before a push; .github/workflows/test.yml
-# calls this file rather than listing the commands, so local and CI cannot
-# drift. There are deliberately no git hooks and no pre-commit framework — a
+# The one shared entry point. Run this before a push. .github/workflows/test.yml
+# calls this file instead of listing the commands, so local and CI cannot
+# drift. There are no git hooks and no pre-commit framework, on purpose: a
 # fresh worktree without hooks installed is exactly the drift we design against.
 #
 # Two stages, so CI can run the row-independent half once and the
 # Home-Assistant-dependent half once per matrix row (§8.7, §9.3):
 #
-#   scripts/check.sh        everything, in order — what a developer runs
+#   scripts/check.sh        everything, in order; what a developer runs
 #   scripts/check.sh lint   ruff, ruff format --check, the layout check
 #   scripts/check.sh test   mypy strict, the quality-scale check and pytest,
 #                           against the installed HA
@@ -23,25 +23,25 @@ run_lint() {
   ruff format --check .
   python3 scripts/check_layout.py
   # Stdlib only, like the layout check, so it belongs to the row-independent
-  # half rather than running once per Home Assistant row.
+  # half instead of running once per Home Assistant row.
   python3 scripts/check_conformance.py
 }
 
 run_tests() {
   mypy custom_components scripts tests
-  # In this half rather than the lint half because it parses the yaml with the
+  # In this half, not the lint half, because it parses the yaml with the
   # loader hassfest uses, which is Home Assistant's (§9.2). Every `done` rule
   # names the file that proves it, so a deleted test fails here.
   python3 scripts/check_quality_scale.py
-  # Overall coverage is measured and reported, not gated (§8.7): core's silver
+  # Overall coverage is measured and reported, not gated (§8.7). Core's silver
   # 95 % is not inherited.
   python3 -m pytest \
     --quiet \
     --cov=custom_components/heatit_wifi_panel \
     --cov-report=term-missing
   # The one gate. config_flow.py is small and every line of it is a path a user
-  # can walk, so a missed line there is a user-facing bug rather than a
-  # coverage statistic. Reads the run above's .coverage.
+  # can walk. A missed line there is a user-facing bug, not a coverage
+  # statistic. Reads the .coverage file the run above wrote.
   python3 -m coverage report \
     --fail-under=100 \
     --include='*/config_flow.py'

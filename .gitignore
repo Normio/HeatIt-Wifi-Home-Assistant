@@ -1,14 +1,11 @@
-# Orca workspace state — tooling, not project content
+# Orca workspace state: tooling, not project content
 .orca/
 
-# Local, machine-specific device pointer — never committed.
-# The example file is tracked so the shape stays discoverable.
+# Local, machine-specific device pointer. Never committed.
+# The example file is tracked so the shape stays easy to find.
 /.local/*
 !/.local/device.example.json
 
-# Python: a local virtualenv for requirements_test.txt, and bytecode.
-# scripts/check_layout.py asks git what is in the repository, so an untracked
-# virtualenv full of strings.json cannot trip it — but keep it out of sight.
 .venv/
 __pycache__/
 
@@ -20,7 +17,4 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# uv's lock file. The floor row is pinned by requirements_test.txt and CI
-# installs from that, so a lock file here would be a second, unread answer to
-# the same question — and a local `uv` run writes one whether asked to or not.
 uv.lock

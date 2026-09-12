@@ -1,5 +1,5 @@
 {
-  "$comment": "Write-path responses transcribed from what the panel returned at firmware 1.21 (spec §2.5, issue #7, register Q29/Q36/Q37/Q56/Q57). Each file is the body as it would come off the wire. The conformance probe, run with writes enabled, saves the real responses into observed/fw-<version>/ and those replace these.",
+  "$comment": "Write-path responses copied by hand from what the panel returned at firmware 1.21 (spec §2.5, issue #7, register Q29/Q36/Q37/Q56/Q57). Each file is the body as it would come off the wire. The conformance probe, run with writes enabled, saves the real responses into observed/fw-<version>/ and those replace these.",
   "files": {
     "write-echo-heatingSetpoint.json": {
       "kind": "write-echo",
@@ -23,11 +23,11 @@
       "kind": "write-echo",
       "parameter": "sensorMode",
       "applied": true,
-      "source": "§2.5, Q58: echoes true while the device keeps false — the silent undo. The client returns the echo; the coordinator's refresh is the authority"
+      "source": "§2.5, Q58: echoes true while the device keeps false, the silent undo. The client returns the echo. The coordinator's refresh decides"
     },
     "reset-envelope.json": {
       "kind": "reset",
-      "source": "Q57: a reset returns the uniform status envelope, capitalised Success; no reset key"
+      "source": "Q57: a reset returns the same status wrapper as a write, with Success capitalised; no reset key"
     },
     "error-400-invalid.txt": {
       "kind": "rejection",

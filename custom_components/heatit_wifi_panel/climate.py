@@ -1,15 +1,15 @@
 """The climate entity: the panel as a thermostat (§5.3, ADR-0004).
 
 The panel has one three-way *panel mode* and two *setpoint banks*; a climate
-entity has one target temperature. The decision, recorded in ADR-0004, is that
-``hvac_modes`` stays ``[OFF, HEAT]``, Eco is a **preset**, and
-``target_temperature`` follows the *live setpoint* — jumping when the preset
-changes, and blank while the panel is Off. Eco could not be a third
-``HVACMode`` in any case: the enum is closed, core coerces ``set_hvac_mode`` to
-it, and the entity's ``state`` property raises on a non-member.
+entity has one target temperature. The decision, recorded in ADR-0004, is
+that ``hvac_modes`` stays ``[OFF, HEAT]``, Eco is a **preset** and
+``target_temperature`` follows the *live setpoint*. It jumps when the preset
+changes and is blank while the panel is Off. Eco could not be a third
+``HVACMode`` in any case. The enum is closed, core converts ``set_hvac_mode``
+to it and the entity's ``state`` property raises on a non-member.
 
 Both banks are *also* config ``number`` entities, which is where the honest
-per-bank history lives; this entity only ever writes the live one.
+per-bank history lives. This entity only ever writes the live one.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ MODE_ECO: Final = 2
 
 #: The two on-modes, and what each means to a climate entity: the preset it
 #: shows, and the *setpoint bank* it is regulating to. Off appears in neither,
-#: which is what makes both lookups answer ``None`` there.
+#: so both lookups answer ``None`` there.
 MODE_TO_PRESET: Final[dict[int, str]] = {
     MODE_HEATING: PRESET_COMFORT,
     MODE_ECO: PRESET_ECO,
@@ -68,21 +68,21 @@ PRESET_TO_MODE: Final = {preset: mode for mode, preset in MODE_TO_PRESET.items()
 RELAY_HEATING: Final = "heating"
 """The *relay state* that means the element is on, matched case-insensitively.
 
-The device sends ``Heating`` and ``Idle``; folding the case is the same
-robustness the client's success sentinel takes, and here it is the difference
-between reporting a running heater and reporting an idle one.
+The device sends ``Heating`` and ``Idle``. Ignoring case is the same care the
+client takes with its success marker. Here it is the difference between
+reporting a running heater and reporting an idle one.
 """
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 - the platform signature is core's
+    hass: HomeAssistant,  # noqa: ARG001  # the platform signature is core's
     entry: HeatitWifiPanelConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add the one climate entity.
 
-    Never presence-gated away: the *panel mode* is *required core*, so a status
-    without it is not a status at all (§5.4).
+    Never gated away by presence: the *panel mode* is *required core*, so a
+    status without it is not a status at all (§5.4).
     """
     async_add_entities([HeatitPanelClimate(entry.runtime_data)])
 
@@ -93,24 +93,25 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
     _attr_name = None
     """This entity *is* the panel, so it takes the device's name (§5.2).
 
-    Its ``translation_key`` therefore serves state and icon translations only —
+    So its ``translation_key`` serves state and icon translations only.
     ``_attr_name`` is resolved first, and ``None`` counts as set.
     """
 
     _attr_translation_key = KEY
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    # Core types both of these as lists, and both are read-only in practice:
-    # fixed, never computed from live state, so the capability list cannot flap.
+    # Core types both of these as lists, and both are read-only in practice.
+    # They are fixed and never computed from live state, so the capability
+    # list cannot change from poll to poll.
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]  # noqa: RUF012
     _attr_preset_modes = [PRESET_COMFORT, PRESET_ECO]  # noqa: RUF012
     _attr_target_temperature_step = 0.5
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
-        # Mandatory and explicit: the shim that inferred these from
-        # ``HVACMode.OFF in hvac_modes`` was deleted in Home Assistant 2025.1,
-        # and an area-targeted service call now silently skips an entity that
-        # does not declare them.
+        # Required and explicit: the compatibility code that worked these out
+        # from ``HVACMode.OFF in hvac_modes`` was deleted in Home Assistant
+        # 2025.1. An area-targeted service call now silently skips an entity
+        # that does not declare them.
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
@@ -123,12 +124,11 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
     def _panel_mode(self) -> int:
         """The *panel mode*, a pending *write echo* winning over the status.
 
-        Read fresh on every use rather than cached, so that a mode written
-        earlier in a service call is the mode the rest of that call sees.
-        ``panelMode`` is *required core* and an integer parameter, so the
-        status always yields one and the second half is unreachable in
-        practice; it is here because the registry's reading is typed for every
-        parameter rather than for this one.
+        Read fresh on every use, not cached, so a mode written earlier in a
+        service call is the mode the rest of that call sees. ``panelMode`` is
+        *required core* and an integer parameter, so the status always yields
+        one and the fallback is unreachable in practice. It is here because
+        the registry's reading is typed for every parameter, not for this one.
         """
         mode = self.coordinator.parameter(PANEL_MODE)
         return mode if isinstance(mode, int) else self.coordinator.data.panel_mode
@@ -153,13 +153,13 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
     @property
     @override
     def hvac_action(self) -> HVACAction:
-        """From the *relay state*, never from power, which trails it by ~15 s.
+        """From the *relay state*, never from power, which trails it by about 15 s.
 
-        ``Heating`` is ``HEATING`` in every mode — the element is on, and that
+        ``Heating`` is ``HEATING`` in every mode: the element is on, and that
         stays true if a future firmware's frost protection heats while Off.
-        ``Idle`` while Off is ``OFF``, which the device has no value for and we
-        synthesise; core's convention, and the one place this deliberately
-        differs from the dev's floor thermostats.
+        ``Idle`` while Off is ``OFF``. The device has no value for that, so we
+        make one up. That is core's convention, and the one place this differs
+        on purpose from the dev's floor thermostats.
         """
         if self.coordinator.data.relay_state.casefold() == RELAY_HEATING:
             return HVACAction.HEATING
@@ -181,12 +181,12 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
     @property
     @override
     def min_temp(self) -> float:
-        """The device's minimum, reported truthfully — no client-side clamping.
+        """The device's minimum, reported as is, with no clamping on our side.
 
-        The device bounds both banks itself, enforces min < max and clamps a
-        stored setpoint when a limit narrows past it, so there is no
-        out-of-bounds display to defend against: a limit change is followed by
-        a refresh and the card agrees with the panel again.
+        The device bounds both banks itself, enforces min < max and pulls a
+        stored setpoint back inside when a limit narrows past it. So there is
+        no out-of-bounds display to defend against: a limit change is followed
+        by a refresh and the card agrees with the panel again.
         """
         return self.coordinator.minimum_temperature
 
@@ -201,9 +201,9 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
         """Off writes Off; Heat from Off lands in Heating and never leaves Eco.
 
         Turning on means comfort: the panel has no "on" verb and remembers
-        nothing, so Home Assistant invents no memory either. Heat while already
-        Heating **or Eco** is a no-op, because both already *are* Heat — the
-        alternative silently drags a user out of Eco.
+        nothing, so Home Assistant invents no memory either. Heat while
+        already Heating **or Eco** does nothing, because both already *are*
+        Heat. The alternative silently drags a user out of Eco.
         """
         if hvac_mode is HVACMode.OFF:
             await self.coordinator.async_write_parameter(PANEL_MODE, value=MODE_OFF)
@@ -212,7 +212,7 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
 
     @override
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        """Send the mode, and only the mode — never a temperature with it.
+        """Send the mode, and only the mode, never a temperature with it.
 
         Chosen while Off, this turns the panel on in that mode: a preset is an
         explicit choice of on-mode.
@@ -226,15 +226,15 @@ class HeatitPanelClimate(HeatitWifiPanelEntity, ClimateEntity):
         """Write the *live bank*, re-read from device state inside this call.
 
         A cached bank would write the wrong one when the panel's mode changed
-        under us — from the app, from its own buttons, or from the
-        ``hvac_mode`` this very call carries, which core passes through
-        unvalidated and unapplied. So the mode is applied first and the bank is
-        asked for afterwards.
+        under us. That can happen from the app, from its own buttons or from
+        the ``hvac_mode`` this call carries, which core passes through
+        unvalidated and unapplied. So the mode is applied first and the bank
+        is asked for afterwards.
 
-        While Off there is no live bank and no target to move, and this refuses
-        loudly rather than guessing one, so an automation learns it did nothing.
-        The signature takes ``**kwargs`` because core leaks ``entity_id`` into
-        them.
+        While Off there is no live bank and no target to move. This refuses
+        loudly instead of guessing one, so an automation learns it did
+        nothing. The signature takes ``**kwargs`` because core leaks
+        ``entity_id`` into them.
         """
         hvac_mode: HVACMode | None = kwargs.get(ATTR_HVAC_MODE)
         if hvac_mode is not None:

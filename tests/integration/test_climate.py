@@ -1,14 +1,14 @@
-"""The climate entity: §5.3's table, row by row, and ADR-0004's consequences.
+"""The climate entity: §5.3's table row by row, and what follows from ADR-0004.
 
-The panel has one three-way *panel mode* and two *setpoint banks*; Home
+The panel has one three-way *panel mode* and two *setpoint banks*. Home
 Assistant's climate entity has one target temperature. What that costs is
-asserted here: ``hvac_modes`` is fixed at ``[OFF, HEAT]``, Eco is a preset, and
-``target_temperature`` follows the *live setpoint* — which means it jumps when
+asserted here: ``hvac_modes`` is fixed at ``[OFF, HEAT]``, Eco is a preset and
+``target_temperature`` follows the *live setpoint*. That means it jumps when
 the preset changes and is ``None`` while the panel is Off.
 
 The *live bank* is re-read from device state **inside** every call, so a mode
-change racing a ``set_temperature`` cannot write the wrong bank; the tests that
-pass ``hvac_mode`` alongside a temperature are what pin that order.
+change racing a ``set_temperature`` cannot write the wrong bank. The tests that
+pass ``hvac_mode`` alongside a temperature pin that order.
 """
 
 from typing import TYPE_CHECKING, Any
@@ -93,7 +93,7 @@ async def call(hass: HomeAssistant, service: str, **data: object) -> None:
 async def test_the_capability_list_is_fixed_and_never_computed(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry
 ) -> None:
-    """A list computed from live state would flap; ADR-0004 forbids it."""
+    """A list computed from live state would keep changing; ADR-0004 forbids it."""
     await loaded(hass, mock_config_entry)
 
     assert attributes(hass)[ATTR_HVAC_MODES] == [HVACMode.OFF, HVACMode.HEAT]
@@ -104,7 +104,7 @@ async def test_the_capability_list_is_fixed_and_never_computed(
 async def test_turn_on_and_turn_off_are_declared_explicitly(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry
 ) -> None:
-    """The 2024.2 shim that inferred them was deleted in 2025.1 (§5.3).
+    """The 2024.2 core code that guessed them was deleted in 2025.1 (§5.3).
 
     Without them an area-targeted ``climate.turn_on`` silently skips this
     entity, with no warning anywhere.
@@ -150,7 +150,7 @@ async def test_eco_is_a_preset_and_never_a_third_hvac_mode(
     mode: int,
     expected: HVACMode,
 ) -> None:
-    """The enum is closed and the state property raises on a non-member."""
+    """The enum is closed. The state property raises on a value outside it."""
     patched_client.set_status({"parameters.panelMode": mode})
 
     await loaded(hass, mock_config_entry)
@@ -250,7 +250,7 @@ async def test_a_preset_chosen_while_off_turns_the_panel_on_in_it(
     preset: str,
     written: str,
 ) -> None:
-    """A preset is an explicit choice of on-mode (ADR-0004)."""
+    """A preset is a clear choice of an on mode (ADR-0004)."""
     patched_client.set_status({"parameters.panelMode": 0})
     await loaded(hass, mock_config_entry)
 
@@ -302,8 +302,8 @@ async def test_an_off_grid_temperature_is_refused_before_any_request(
     """The panel would snap 21.3 to the 0.5 grid; the registry refuses instead.
 
     Core validates a service call against ``min_temp`` and ``max_temp`` but not
-    against ``target_temperature_step``, so the value arrives here as written
-    and the refusal is what the caller sees — translated, not a raw traceback.
+    against ``target_temperature_step``, so the value arrives here as written.
+    The refusal is what the caller sees: translated, not a raw traceback.
     """
     await loaded(hass, mock_config_entry)
 
@@ -342,8 +342,8 @@ async def test_a_mode_passed_with_the_temperature_switches_first(
 ) -> None:
     """Core passes ``hvac_mode`` through unvalidated and unapplied (§5.3).
 
-    From Off the mode write is the one that makes the bank live; from Eco
-    ``HEAT`` is a no-op and the *live bank* is still eco — so this is also the
+    From Off the mode write is the one that makes the bank live. From Eco
+    ``HEAT`` is a no-op and the *live bank* is still eco. So this is also the
     case that would write the wrong bank if the bank were cached.
     """
     patched_client.set_status({"parameters.panelMode": mode})
@@ -387,7 +387,7 @@ async def test_the_limits_follow_the_device_with_no_clamping(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The device bounds both banks itself; narrowing clamps on the device."""
+    """The device bounds both banks itself; a narrower limit clamps on the device."""
     await loaded(hass, mock_config_entry)
     patched_client.set_status(
         {
@@ -448,7 +448,7 @@ async def test_the_action_comes_from_the_relay_and_never_from_power(
     mode: int,
     expected: HVACAction,
 ) -> None:
-    """``state`` leads ``currentPower`` by ~15 s (Q20), so power cannot say it.
+    """``state`` leads ``currentPower`` by about 15 s (Q20); power cannot say it.
 
     ``Heating`` while Off stays ``HEATING``: the element is on, and that has to
     survive a future firmware whose frost protection heats in any mode.
@@ -483,7 +483,7 @@ async def test_the_echo_shows_at_once_and_the_refresh_is_the_authority(
     await advance(hass, freezer, POST_WRITE_REFRESH_DELAY - 0.5)
     assert patched_client.status_reads == reads
 
-    # The panel took the write; the refresh confirms it rather than trusting it.
+    # The panel took the write; the refresh confirms it instead of trusting it.
     patched_client.set_status({"parameters.heatingSetpoint": 21.0})
     await advance(hass, freezer, POST_WRITE_REFRESH_DELAY)
 
@@ -517,7 +517,7 @@ async def test_the_entity_goes_unavailable_on_the_first_failed_poll(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The poll is the sole judge (§6.1); a failed write never decides."""
+    """Only the poll decides (§6.1); a failed write never does."""
     await loaded(hass, mock_config_entry)
     patched_client.fail(HeatitConnectionError("timed out"))
 

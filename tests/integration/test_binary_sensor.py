@@ -1,10 +1,10 @@
 """The open-window detection of §5.2, as On and Off.
 
 The entity table in ``test_entity.py`` pins the row itself, including the
-**absent** device class — the panel infers an open window from a temperature
-drop rather than watching a contact, so Open/Closed would claim something it
-does not know. What is asserted here is that the inference follows the panel
-and that a firmware without it simply has no such entity.
+**absent** device class. The panel infers an open window from a temperature
+drop, not from a contact, so Open/Closed would claim something it does not
+know. This file asserts that the detection follows the panel and that a
+firmware without it has no such entity.
 """
 
 from typing import TYPE_CHECKING

@@ -1,18 +1,24 @@
 """The panel's readings as history (§5.2, §5.5).
 
-Five sensors, and nothing else: the room temperature, the instantaneous draw,
-the *energy counter* that feeds the Energy dashboard, the WiFi signal as a
-diagnostic, and the *open window detection* countdown. **The temperature sensor
-is the one mirror of climate state** — there is no heating sensor, because the
-power reading and ``hvac_action`` already say it, and no setpoint sensors,
-because the config ``number`` entities record that history (§5.4). Anything not
-in §5.2's table is omitted, not created disabled.
+Five sensors, and nothing else:
 
-Each row reads a path straight out of the *status*: none of these is a
-*parameter* the panel accepts a write for, so the registry has no descriptor
-for any of them and the read path lives in the description here. Presence is
-still §5.4's rule — a path the first status does not resolve makes no entity,
-and one that vanishes later makes its own entity unavailable (§6.3).
+- the room temperature
+- the power draw right now
+- the *energy counter* that feeds the Energy dashboard
+- the WiFi signal, as a diagnostic
+- the *open window detection* countdown
+
+**The temperature sensor is the one mirror of climate state.** There is no
+heating sensor, because the power reading and ``hvac_action`` already say it.
+There are no setpoint sensors, because the config ``number`` entities record
+that history (§5.4). Anything not in §5.2's table is left out, not created
+disabled.
+
+Each row reads a path straight out of the *status*. None of these is a
+*parameter* the panel accepts a write for. So the registry has no descriptor
+for any of them, and the read path lives in the description here. Presence is
+still §5.4's rule. A path the first status does not have makes no entity, and
+one that vanishes later makes its own entity unavailable (§6.3).
 """
 
 from __future__ import annotations
@@ -48,7 +54,7 @@ if TYPE_CHECKING:
     from .coordinator import HeatitWifiPanelConfigEntry, HeatitWifiPanelCoordinator
 
 PARALLEL_UPDATES = 0
-"""Read-only: nothing here writes, so there is nothing to serialise (§3.5)."""
+"""Read-only: nothing here writes, so there is nothing to run one at a time (§3.5)."""
 
 ROOM_TEMPERATURE: Final = "roomTemperature"
 CURRENT_POWER: Final = "currentPower"
@@ -60,7 +66,7 @@ class HeatitSensorEntityDescription(SensorEntityDescription):
     """One §5.2 sensor row: where it reads, and what that reading becomes."""
 
     read_path: str
-    """The dotted path in the *status*, and so the presence and availability test."""
+    """The dotted path in the *status*, also the presence and availability test."""
 
     value_fn: Callable[[PanelStatus], int | float | None]
     """The reading as a state. ``None`` is *unknown*, never an exception."""
@@ -85,7 +91,7 @@ SENSORS: Final[tuple[HeatitSensorEntityDescription, ...]] = (
     ),
     # ``total_increasing`` and never ``total`` with ``last_reset``: the counter
     # can be zeroed from the MyHeatit app, and Home Assistant can never learn
-    # when, so a ``last_reset`` would be wrong the first time anyone else
+    # when. So a ``last_reset`` would be wrong the first time anyone else
     # pressed it. The 10 % dip tolerance is safe because a reset lands the
     # counter at exactly 0.00 (Q21). §5.5.
     HeatitSensorEntityDescription(
@@ -96,11 +102,11 @@ SENSORS: Final[tuple[HeatitSensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
-    # Disabled by default as a noisy diagnostic, which with the two
-    # reset-shaped buttons is one of the only two things that marker means
-    # (§5.4). The parse is the client's, and it does **no sign fix-up**: the
-    # device emits a signed value, so an unsigned one is reported as it came
-    # rather than corrected. An unreadable one is ``None`` plus a debug line.
+    # Disabled by default as a noisy diagnostic. With the two reset-shaped
+    # buttons, that is one of the only two things the marker means (§5.4).
+    # The parse is the client's, and it does **no sign fix-up**. The device
+    # sends a signed value, so an unsigned one is reported as it came, not
+    # corrected. An unreadable one is ``None`` plus a debug line.
     HeatitSensorEntityDescription(
         key="signal_strength",
         read_path=WIFI_SIGNAL_STRENGTH,
@@ -111,9 +117,10 @@ SENSORS: Final[tuple[HeatitSensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
-    # No state class: this is a countdown, and neither a measurement to average
-    # nor a total to sum. It reads 0 whenever no open window is detected (Q25);
-    # whether it counts down while one is is register row Q47, still open.
+    # No state class: this is a countdown, neither a measurement to average
+    # nor a total to sum. It reads 0 whenever no open window is detected (Q25).
+    # Whether it counts down while one is detected is register row Q47, still
+    # open.
     HeatitSensorEntityDescription(
         key="open_window_time_remaining",
         read_path=OPEN_WINDOW_ACTIVE_TIME,
@@ -126,11 +133,11 @@ SENSORS: Final[tuple[HeatitSensorEntityDescription, ...]] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 - the platform signature is core's
+    hass: HomeAssistant,  # noqa: ARG001  # the platform signature is core's
     entry: HeatitWifiPanelConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Add every sensor whose read path the **first** status resolved (§5.4)."""
+    """Add every sensor whose read path is in the **first** status (§5.4)."""
     coordinator = entry.runtime_data
     async_add_entities(
         HeatitPanelSensor(coordinator, description)
@@ -156,11 +163,11 @@ class HeatitPanelSensor(HeatitWifiPanelEntity, SensorEntity):
     @property
     @override
     def native_value(self) -> int | float | None:
-        """The current reading, or ``None`` — which Home Assistant shows as unknown.
+        """The current reading, or ``None``, which Home Assistant shows as unknown.
 
         A reading the panel stopped returning never reaches here: the base
         entity has already made this entity unavailable (§6.3). ``None`` from a
-        path that *does* resolve is a value we could not read, which for the
-        signal strength is the documented outcome and never an exception.
+        path that *is* there is a value we could not read. For the signal
+        strength that is the documented outcome and never an exception.
         """
         return self.entity_description.value_fn(self.coordinator.data)

@@ -1,7 +1,7 @@
 """Status reads and parsing at the HTTP seam, over the observed bytes.
 
-The reference fixture's values are transcribed here as literals, so the test
-compares two independent encodings of what the panel sent.
+The reference fixture's values are copied here by hand as literals, so the
+test compares two independent encodings of what the panel sent.
 """
 
 import asyncio
@@ -38,7 +38,7 @@ STATUS_URL = f"http://{HOST}/api/status"
 
 OBSERVED = observed_directories()
 
-#: Transcribed from tests/fixtures/observed/fw-1.21/status.json by hand.
+#: Copied by hand from tests/fixtures/observed/fw-1.21/status.json.
 REFERENCE_READINGS: dict[str, object] = {
     "panelMode": 1,
     "heatingSetpoint": 19.0,
@@ -377,8 +377,8 @@ async def test_get_status_gives_up_after_two_attempts(
         await client.get_status()
 
     assert len(mocked.requests[("GET", URL(STATUS_URL))]) == 2
-    # The retry fired; it just did not help. A diagnostics download from a
-    # panel that goes away has to be able to say so (§7.3).
+    # The retry ran and did not help. A diagnostics download from a panel
+    # that goes away has to be able to say so (§7.3).
     assert client.last_status_retried is True
 
 

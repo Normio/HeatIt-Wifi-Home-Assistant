@@ -1,12 +1,12 @@
 """The diagnostics download: everything a bug report needs, no network (§7.3).
 
-Fetched over the real HTTP endpoint rather than by calling the module, so the
-platform is proved to be wired and the payload to be JSON — a ``bytes`` in it
-would 500 here and pass a direct call.
+The download is fetched over the real HTTP endpoint, not by calling the module.
+That proves the platform is wired and the payload is JSON. A ``bytes`` in the
+payload would fail with a 500 here and pass a direct call.
 
-The leak test is the rule test §9.2 names for ``diagnostics``: a status carrying
-a real panel's four identifiers goes in, and neither the parsed nor the raw
-section may carry any of them out.
+The leak test is the rule test §9.2 names for ``diagnostics``. A status carrying
+a real panel's four identifiers goes in. Neither the parsed nor the raw section
+may carry any of them out.
 """
 
 import json
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
 REAL_HOST = "192.168.1.77"
-"""A host that is nobody's placeholder: the reference capture's is ``10.0.0.2``."""
+"""A host that is not a placeholder. The reference capture uses ``10.0.0.2``."""
 
 
 async def fetch(
@@ -91,11 +91,11 @@ async def test_the_options_are_the_poll_interval(
     hass_client: ClientSessionGenerator,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The one option key there is, at a value nothing defaults to.
+    """The only option key there is, set to a value that is not a default.
 
-    Both keys are here because an empty ``options`` is the common case — the
-    user who never opened the options flow — and the interval in force is what
-    a bug report needs either way.
+    Both keys are here because an empty ``options`` is the common case: the
+    user never opened the options flow. A bug report needs the interval in
+    force either way.
     """
     mock_config_entry.add_to_hass(hass)
     hass.config_entries.async_update_entry(
@@ -116,15 +116,15 @@ async def test_no_identifier_of_the_users_network_survives(
 ) -> None:
     """§9.2's ``diagnostics`` rule test, over what a real panel would send.
 
-    The committed fixture carries the placeholders already, so scrubbing it
-    proves nothing; the four identifiers go back in at the **wire** level
-    first, which leaves every other byte where the panel put it. The raw
+    The committed fixture already carries the placeholders, so scrubbing it
+    proves nothing. The four identifiers go back in at the **wire** level
+    first. That leaves every other byte where the panel put it. The raw
     section must then come back byte-equal to the fixture.
     """
     patched_client.raw = unscrubbed(reference_status_bytes)
     # A header that names nothing and carries an address anyway. No observed
-    # firmware sends one — which is exactly why the scrub cannot be skipped on
-    # the strength of the two headers this one does send.
+    # firmware sends one. So knowing the two headers this firmware does send
+    # is no reason to skip the scrub.
     patched_client.headers["Location"] = f"http://{UNSCRUBBED['Network.ipAddress']}/"
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -143,7 +143,7 @@ async def test_no_identifier_of_the_users_network_survives(
     assert payload["status"]["Network"]["SSID"] == "SSID-REDACTED"
     assert payload["raw"]["body"].encode("utf-8") == reference_status_bytes
     assert payload["raw"]["headers"]["Location"] == "http://10.0.0.2/"
-    # ``name`` is a label, not an identifier, and it is what proves the
+    # ``name`` is a label, not an identifier. It is also what proves the
     # charset-less UTF-8 decode: logging and diagnostics keep it (§8.3).
     assert payload["status"]["name"] == "Näytehuone 1"
 
@@ -171,7 +171,7 @@ async def test_a_retried_poll_says_the_retry_was_used(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The one dropped-packet tolerance there is, visible in the download."""
+    """The only dropped-packet tolerance there is, shown in the download."""
     patched_client.retries = True
 
     payload = await download(hass, hass_client, mock_config_entry)
@@ -215,7 +215,7 @@ async def test_a_vanished_parameter_reaches_the_download(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Which is the point of shipping both lists: the difference is the report."""
+    """Both lists ship for one reason: the difference between them is the report."""
     assert await setup_entry(hass, mock_config_entry)
     patched_client.set_status({"parameters.disableButtons": ABSENT})
     await mock_config_entry.runtime_data.async_refresh()
@@ -232,7 +232,7 @@ async def test_a_client_holding_no_bytes_still_produces_a_download(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The raw section is the one part that can be missing, never an error."""
+    """The raw section is the only part that can be missing. It is never an error."""
     assert await setup_entry(hass, mock_config_entry)
     patched_client.last_raw_body = None
 

@@ -45,7 +45,7 @@ GOOD_ROWS = (
 
 
 def test_a_well_formed_register_passes() -> None:
-    """The happy path: nothing to say."""
+    """The good case: nothing to report."""
     assert problems(register(GOOD_ROWS), probe_ids=frozenset({"Q1"})) == []
 
 
@@ -106,7 +106,7 @@ def test_condition_3_missing_or_unresolvable_evidence() -> None:
 
 
 def test_condition_4_dependents_without_a_resolvable_reference() -> None:
-    """Prose alone is not a blast radius."""
+    """Prose alone does not count as a dependents list."""
     rows = (
         f"| Q1 | A | agrees | write | verified fw 1.21 | {ISSUE} | "
         "the climate entity, probably |\n"
@@ -119,7 +119,7 @@ def test_condition_4_dependents_without_a_resolvable_reference() -> None:
 
 
 def test_condition_5_manual_rows_and_procedures_cite_each_other() -> None:
-    """An open manual row cites a procedure; every procedure is cited."""
+    """An open manual row must cite a procedure, and every procedure must be cited."""
     rows = (
         "| Q1 | A | silent | manual | open | — | "
         "`docs/adr/0003-device-id-as-unique-id.md` |\n"

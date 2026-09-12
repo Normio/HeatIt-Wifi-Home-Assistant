@@ -1,19 +1,19 @@
 """The two presses that discard device state (§5.2, §5.5).
 
-One zeroes the *energy counter*, the other puts every setting back to its
-default. Neither reads anything from the *status*: a button only writes, which
-is why these are the two entities on the panel that no firmware returning one
-field less can take away.
+One zeroes the *energy counter*. The other puts every setting back to its
+default. Neither reads anything from the *status*: a button only writes. So
+these are the two entities on the panel that no firmware can take away by
+returning one field less.
 
 **Both ship disabled by default**, and that is the whole of §5.4's opt-in rule:
 a *noisy diagnostic*, or a button whose press discards device state. Home
-Assistant offers a button entity no confirmation dialog, so opt-in is the only
-guard there is — and a mis-tap is bounded either way, at one unpublished energy
-step lost in Home Assistant and the panel's own counter zeroed (§5.5).
+Assistant gives a button entity no confirmation dialog, so opt-in is the only
+guard there is. A mis-tap is bounded either way: one unpublished energy step
+lost in Home Assistant, and the panel's own counter zeroed (§5.5).
 
 Neither press is retried and neither touches availability. Both go through the
-coordinator, which is where §6.4's translated failures and — for the energy
-reset — the verification that the counter actually fell already live.
+coordinator. That is where §6.4's translated failures already live, and so
+does the check that the counter fell after an energy reset.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class HeatitButtonDescription(ButtonEntityDescription):
     """One §5.2 button row: what a press asks the panel to throw away."""
 
     press_fn: Callable[[HeatitWifiPanelCoordinator], Awaitable[None]]
-    """What one press does. The coordinator owns the request and its verdict."""
+    """What one press does. The coordinator owns the request and its result."""
 
 
 BUTTONS: Final[tuple[HeatitButtonDescription, ...]] = (
@@ -63,14 +63,14 @@ BUTTONS: Final[tuple[HeatitButtonDescription, ...]] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 - the platform signature is core's
+    hass: HomeAssistant,  # noqa: ARG001  # the platform signature is core's
     entry: HeatitWifiPanelConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Add both buttons: neither is gated on a reading, because neither has one.
+    """Add both buttons: neither depends on a reading, because neither has one.
 
     §5.4's presence rule is about a parameter a firmware may not return. These
-    two are endpoints, not parameters — a panel that answers a *status* at all
+    two are endpoints, not parameters. A panel that answers a *status* at all
     is a panel both requests can be sent to.
     """
     coordinator = entry.runtime_data

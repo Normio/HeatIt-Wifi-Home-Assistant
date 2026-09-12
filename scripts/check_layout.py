@@ -1,13 +1,14 @@
-"""Assert the repository-layout invariants that nothing upstream enforces.
+"""Check the repository-layout rules that nothing upstream enforces.
 
-hassfest validates ``strings.json`` only when the file is present, and the HACS
-Action never looks past ``hacs.json`` and the manifest. The parts of the spec
-that say what must *not* be in the tree — no ``strings.json``, brand assets in
-one place, ``hacs.json`` holding exactly three keys — are therefore checked
-here or nowhere. The manifest's other absence, a ``quality_scale`` key, is
-``scripts/check_quality_scale.py``'s to assert, beside the yaml it concerns.
+hassfest validates ``strings.json`` only when the file is present. The HACS
+Action never looks past ``hacs.json`` and the manifest. So the parts of the
+spec that say what must *not* be in the tree are checked here or nowhere.
+They are: no ``strings.json``, brand assets in one place and ``hacs.json``
+holding exactly three keys. The manifest's other absence, a ``quality_scale``
+key, is checked by ``scripts/check_quality_scale.py``, beside the yaml it
+concerns.
 
-Run from ``scripts/check.sh``. Silent when the tree is clean; otherwise prints
+Run from ``scripts/check.sh``. Silent when the tree is clean. Otherwise prints
 one line per problem and exits non-zero.
 """
 
@@ -22,11 +23,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION_DIR = REPO_ROOT / "custom_components" / "heatit_wifi_panel"
 BRAND_DIR = INTEGRATION_DIR / "brand"
 
-#: ``hacs.json`` holds these and nothing else — the schema rejects unknown keys.
+#: ``hacs.json`` holds these and nothing else. The schema rejects unknown keys.
 HACS_JSON_KEYS = frozenset({"name", "homeassistant", "hide_default_branch"})
 
 #: The manifest's fixed keys, in their fixed order: domain, name, then
-#: alphabetical. A key added or dropped here is a deliberate edit, not a drift.
+#: alphabetical. A key added or dropped here is an edit made on purpose, not a
+#: drift.
 MANIFEST_KEYS = [
     "domain",
     "name",
@@ -45,8 +47,8 @@ MANIFEST_KEYS = [
 #: The brand assets, and the square edge each must have.
 BRAND_ICONS = {"icon.png": 256, "icon@2x.png": 512}
 
-#: A logo is rejected by the brands validator when it is byte-identical to the
-#: icon, and no dark variant is shipped. Neither may appear anywhere.
+#: The brands validator rejects a logo that is byte-identical to the icon, and
+#: no dark variant is shipped. Neither may appear anywhere.
 FORBIDDEN_IMAGE_PREFIXES = ("logo", "dark_")
 IMAGE_SUFFIXES = frozenset({".png", ".svg", ".jpg", ".jpeg", ".webp"})
 
@@ -61,11 +63,12 @@ def rel(path: Path) -> str:
 
 
 def tracked_files() -> list[Path]:
-    """Return every file git tracks — the definition of "in the repository".
+    """Return every file git tracks. That is the definition of "in the repository".
 
-    Asking git rather than walking the tree keeps an untracked virtualenv, with
-    a Home Assistant install and its hundreds of ``strings.json``, out of the
-    answer, and keeps dot-directories like ``.github`` in it.
+    Asking git instead of walking the tree keeps an untracked virtualenv out
+    of the answer. Such a virtualenv holds a Home Assistant install and its
+    hundreds of ``strings.json``. Asking git also keeps dot-directories like
+    ``.github`` in the answer.
     """
     listing = subprocess.run(  # noqa: S603
         ["git", "-C", str(REPO_ROOT), "ls-files", "-z"],  # noqa: S607
@@ -94,26 +97,26 @@ def json_document(path: Path) -> dict[str, Any] | None:
 
 
 def check_no_strings_json(files: list[Path]) -> list[str]:
-    """Assert no ``strings.json`` exists anywhere in the repository."""
+    """Check that no ``strings.json`` exists anywhere in the repository."""
     return [
-        f"{rel(path)}: strings.json is never shipped — its [%key:...%] syntax "
-        f"is a build-time feature nothing resolves at runtime, so a custom "
-        f"integration shipping one shows raw keys. The authored artifact is a "
-        f"fully-expanded translations/en.json."
+        f"{rel(path)}: strings.json is never shipped. Its [%key:...%] syntax "
+        f"is a build-time feature that nothing resolves at runtime, so a custom "
+        f"integration shipping one shows raw keys. The file we write by hand is "
+        f"a fully-expanded translations/en.json."
         for path in files
         if path.name == "strings.json"
     ]
 
 
 def check_brand_assets(files: list[Path]) -> list[str]:
-    """Assert the brand assets exist, are the right size, and stand alone."""
+    """Check that the brand assets exist, are the right size and stand alone."""
     problems = [
         f"{rel(path)}: brand assets live in {rel(BRAND_DIR)} and nowhere else"
         for path in files
         if path.name in BRAND_ICONS and path.parent != BRAND_DIR
     ]
     problems += [
-        f"{rel(path)}: no logo* and no dark_* image anywhere — the icon is the "
+        f"{rel(path)}: no logo* and no dark_* image anywhere. The icon is the "
         f"logo fallback, and a byte-identical logo is rejected"
         for path in files
         if path.name.startswith(FORBIDDEN_IMAGE_PREFIXES)
@@ -138,7 +141,7 @@ def check_brand_assets(files: list[Path]) -> list[str]:
 
 
 def check_hacs_json(path: Path) -> list[str]:
-    """Assert ``hacs.json`` holds exactly its three keys, with the gate on."""
+    """Check that ``hacs.json`` holds exactly its three keys, with the gate on."""
     hacs = json_document(path)
     if hacs is None:
         return [f"{rel(path)}: missing"]
@@ -151,16 +154,16 @@ def check_hacs_json(path: Path) -> list[str]:
         )
     if hacs.get("hide_default_branch") is not True:
         problems.append(
-            f"{rel(path)}: hide_default_branch must be true — without it an "
+            f"{rel(path)}: hide_default_branch must be true. Without it an "
             f"install falls back to the default branch, past the floor gate"
         )
     return problems
 
 
 def check_manifest(path: Path) -> list[str]:
-    """Assert the manifest's fixed keys and their order.
+    """Check the manifest's fixed keys and their order.
 
-    A ``quality_scale`` key is skipped rather than named here: it is
+    A ``quality_scale`` key is skipped here, not reported. It is
     ``check_quality_scale.py``'s failure condition, and one problem should have
     one line.
     """
@@ -175,7 +178,7 @@ def check_manifest(path: Path) -> list[str]:
 
 
 def main() -> None:
-    """Run every layout check and exit non-zero when any of them speaks."""
+    """Run every layout check and exit non-zero when any of them finds a problem."""
     files = tracked_files()
     problems = [
         *check_no_strings_json(files),

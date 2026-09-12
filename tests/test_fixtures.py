@@ -1,8 +1,8 @@
-"""Fixture hygiene and the three-way firmware consistency (§8.3, §8.5).
+"""Fixture checks and the three-way firmware agreement (§8.3, §8.5).
 
 Every observed fixture carries exactly the five placeholders, so an unscrubbed
-capture cannot merge; and ``VERIFIED_FIRMWARES`` equals the set of observed
-directories. The README table joins the assertion with the README ticket.
+capture cannot merge. ``VERIFIED_FIRMWARES`` equals the set of observed
+directories. The README table joins the check with the README ticket.
 """
 
 import json

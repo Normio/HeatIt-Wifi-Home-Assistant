@@ -1,7 +1,8 @@
-"""The release gate's lockstep script: every failure mode red, the clean case green.
+"""The release gate script: every failure mode red, the clean case green.
 
-Each test builds a throwaway repository with ``main`` and a tag, breaks one
-invariant, and asserts the script names exactly that problem.
+The script checks that the tag, the manifest and the changelog agree. Each test
+builds a throwaway repository with ``main`` and a tag, breaks one rule and
+asserts the script names exactly that problem.
 """
 
 import json
@@ -121,7 +122,7 @@ def problems(root: Path, tag: str = TAG, main_ref: str = "main") -> list[str]:
 
 
 def test_clean_tree_passes_and_yields_the_section(repo: Path) -> None:
-    """The fixture repository is exactly a releasable one; the notes are the section."""
+    """The fixture repository is releasable as it is. The notes are the section."""
     result = check_release.check_release(repo, TAG, "main")
     assert result.problems == []
     assert result.notes == "### Added\n\n- The first release.\n"
@@ -137,7 +138,7 @@ def test_tag_must_be_v_prefixed_semver(repo: Path, tag: str) -> None:
 
 
 def test_tag_must_equal_manifest_version(repo: Path) -> None:
-    """The manifest is the single source of the version; the tag must repeat it."""
+    """The manifest is the only source of the version. The tag must repeat it."""
     git(repo, "tag", "v0.2.0")
     found = problems(repo, "v0.2.0")
     assert any("manifest.json" in p and "0.1.0" in p and "0.2.0" in p for p in found)
@@ -161,7 +162,7 @@ def test_tagged_commit_must_be_an_ancestor_of_main(repo: Path) -> None:
 
 
 def test_main_ref_must_resolve(repo: Path) -> None:
-    """A gate that cannot see main cannot answer, and says so rather than passing."""
+    """A gate that cannot see main cannot answer. It says so instead of passing."""
     found = problems(repo, main_ref="origin/main")
     assert found == ["origin/main: does not resolve to a commit"]
 
@@ -198,7 +199,7 @@ def retag(root: Path, version: str) -> str:
 
 
 def test_a_release_readme_must_carry_an_install_section(repo: Path) -> None:
-    """§11.3 defers the install docs to v0.1.0; the gate stops them slipping past."""
+    """§11.3 leaves the install docs to v0.1.0. The gate stops them slipping past."""
     write(repo, "README.md", "# x\n")
     found = problems(repo)
     assert any("no '## Installation' section" in p for p in found)
@@ -212,14 +213,14 @@ def test_a_0_x_release_installs_from_a_custom_repository(repo: Path) -> None:
 
 
 def test_the_install_heading_is_installation_and_nothing_else(repo: Path) -> None:
-    """Every problem line and the runbook name one heading; so does the regex."""
+    """Every problem line and the runbook name one heading. So does the regex."""
     write(repo, "README.md", README.replace("## Installation", "## Installing"))
     found = problems(repo)
     assert any("no '## Installation' section" in p for p in found)
 
 
 def test_the_install_section_offers_no_manual_copy_route(repo: Path) -> None:
-    """A copy into custom_components/ bypasses the floor gate, at every version."""
+    """A copy into custom_components/ skips the floor gate, at every version."""
     write(
         repo,
         "README.md",

@@ -24,19 +24,19 @@ async def session() -> AsyncIterator[aiohttp.ClientSession]:
 
 
 class _DrainedWriter:
-    """The one attribute aiohttp reads off a ``stream_writer`` already sent."""
+    """The one attribute aiohttp reads from a ``stream_writer`` that has sent."""
 
     output_size = 0
 
 
-#: aiohttp 3.14 made ``stream_writer`` a required keyword on ``ClientResponse``.
-#: aioresponses builds that object itself, and 0.7.9 — its newest release — does
-#: not pass it, so every test on the ``mocked`` fixture raises ``TypeError`` on
-#: the latest row. Read off the signature rather than pinned to a version, so
-#: the floor row is left alone; and called through an unchecked ``Callable``,
-#: because the keyword mypy must accept on one row does not exist on the other
-#: and a ``type: ignore`` would then be unused on that one. Delete all three
-#: names once aioresponses passes the keyword itself.
+#: aioresponses 0.7.9, its newest release, builds ``ClientResponse`` without
+#: the ``stream_writer`` keyword that aiohttp 3.14 made required. Without this
+#: patch every test on the ``mocked`` fixture raises ``TypeError`` on the
+#: latest row. The check reads the signature instead of pinning a version, so
+#: the floor row is left alone. The call goes through an unchecked
+#: ``Callable`` because the keyword exists on one row and not the other, so a
+#: ``type: ignore`` would be unused on one of them. Delete all three names
+#: once aioresponses passes the keyword itself.
 _NEEDS_STREAM_WRITER = (
     "stream_writer" in inspect.signature(aiohttp.ClientResponse.__init__).parameters
 )

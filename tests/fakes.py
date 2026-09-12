@@ -1,15 +1,15 @@
 """Builders for synthesised fixtures, derived from observed bytes (§8.3).
 
-Off mode, a dropped parameter, an unknown key, a ``null`` — nobody is turning
-on a bedroom heater to capture these. They are produced here by mutating an
-observed fixture: parse the reference bytes, change the named paths, re-encode.
-Every unobserved part of a synthesised status is therefore real, and no
-synthesised fixture may introduce a field no observed fixture contains.
+A synthesised status is made by parsing the reference bytes, changing the
+named paths and encoding again. Every part that was not changed is real.
+Nobody is going to turn on a bedroom heater to capture off mode, a dropped
+parameter, an unknown key or a ``null``, so those cases are made this way.
+No synthesised fixture may add a field that no observed fixture holds.
 
-Alongside them: :class:`FakeHeatitClient`, the seam the config flow, the
-coordinator and the entities are tested at (§8.4). It is built from observed
-bytes and parses them with the **real** parser, so its status shape can never
-drift from what the client produces.
+This module also holds :class:`FakeHeatitClient`, the seam where the config
+flow, the coordinator and the entities are tested (§8.4). It is built from
+observed bytes and parses them with the **real** parser, so its status shape
+cannot drift from what the client produces.
 """
 
 import json
@@ -36,29 +36,29 @@ UNSCRUBBED: dict[str, str] = {
     "Network.SSID": "Example IoT 2.4",
     "Network.ipAddress": "192.0.2.40",
 }
-"""The four scrubbed fields in the *shape* a real panel answers them in.
+"""The four scrubbed fields, in the *shape* a real panel answers them in.
 
 Every committed fixture carries the placeholders, so a test of the redaction
-has to put something unscrubbed back first (§7.1). Shared by the client's scrub
-tests and the diagnostics rule test, which mean the same panel.
+has to put something unscrubbed back first (§7.1). The client's scrub tests
+and the diagnostics rule test share this because they mean the same panel.
 
-**Every value here is invented, and must stay invented.** Shape is all these
-tests need: 22 mixed-case alphanumerics, a MAC uppercase with colons, an SSID
-with a space in it, a dotted address. The OUI is Espressif's because that is a
-fact about the hardware (§2.3) and costs nothing to keep; the rest of the MAC
-is not a device's. The address is RFC 5737 TEST-NET-1, which is reserved for
-documentation and routes nowhere. AGENTS.md says never hardcode a panel's
-address and never commit one — the real one lives in `.local/device.json`,
-which is gitignored for exactly this reason, and a test that needs a plausible
-address has no business reading it.
+**Every value here is invented, and must stay invented.** The tests only
+need the shape: 22 letters and digits in mixed case, an uppercase MAC with
+colons, an SSID with a space in it, a dotted address. The OUI is Espressif's
+because that is a fact about the hardware (§2.3) and costs nothing to keep.
+The rest of the MAC belongs to no device. The address is RFC 5737 TEST-NET-1,
+which is reserved for documentation and routes nowhere. AGENTS.md says never
+hardcode a panel's address and never commit one. The real one lives in
+`.local/device.json`, which is gitignored for this reason. A test that needs
+a believable address must not read it.
 """
 
 
 def mutated(raw: bytes, changes: Mapping[str, object]) -> bytes:
     """Derive a status from observed bytes by setting or dropping dotted paths.
 
-    An intermediate object that does not exist is created, so a nested key can
-    be introduced — only ever for a test of *unknown keys are ignored*.
+    A missing intermediate object is created, so a nested key can be added.
+    Only the *unknown keys are ignored* test uses that.
     """
     document: dict[str, Any] = json.loads(raw.decode("utf-8"))
     for path, value in changes.items():
@@ -76,11 +76,11 @@ def mutated(raw: bytes, changes: Mapping[str, object]) -> bytes:
 def unscrubbed(raw: bytes) -> bytes:
     """Put a real panel's four identifiers back into a committed fixture.
 
-    The inverse of the shared wire-level scrub, and done the same way: only the
-    quoted values move, so ``0.00`` stays ``0.00`` and the result is what the
-    panel *actually* sent, byte for byte. :func:`mutated` cannot be used for
-    this — it re-serialises through ``json.dumps`` — and a test that scrubs a
-    fixture that is already scrubbed proves only that nothing was mangled.
+    This is the inverse of the shared wire-level scrub, done the same way. Only
+    the quoted values change, so ``0.00`` stays ``0.00`` and the result is what
+    the panel sent, byte for byte. :func:`mutated` cannot do this because it
+    encodes again through ``json.dumps``. And a test that scrubs a fixture
+    that is already scrubbed proves only that nothing was damaged.
     """
     for path, real in UNSCRUBBED.items():
         raw = substitute_string_field(raw, path.rsplit(".", 1)[-1], real)
@@ -100,13 +100,13 @@ def synthesised_manifest() -> dict[str, dict[str, Any]]:
 
 
 class FakeHeatitClient:
-    """The real client's four methods over observed bytes, and a ledger.
+    """The real client's four methods over observed bytes, plus a record of calls.
 
-    Reads answer from :attr:`raw`, parsed by the real parser; writes are
-    recorded and echoed the way the device echoes — the *applied* value, type
-    normalised — so an optimistic update is exercised against real behaviour.
-    Failures are scripted rather than simulated: :meth:`fail` queues the
-    exceptions the next reads raise, and :meth:`set_status` mutates the status
+    Reads answer from :attr:`raw`, parsed by the real parser. Writes are
+    recorded and echoed the way the device echoes them: the *applied* value,
+    with its type normalised. So an optimistic update is tested against real
+    behaviour. Failures are scripted, not simulated: :meth:`fail` queues the
+    exceptions the next reads raise, and :meth:`set_status` changes the status
     a later poll returns.
     """
 
@@ -117,13 +117,13 @@ class FakeHeatitClient:
         self.last_raw_body: bytes | None = None
         self.last_raw_headers: Mapping[str, str] | None = None
         self.retries = False
-        """Set this to script reads whose status took the retry (§3.6)."""
+        """Set this to make reads report that the status took the retry (§3.6)."""
         self.last_status_retried = False
         self.status_reads = 0
         self.writes: list[tuple[str, object]] = []
         self.resets: list[str] = []
         self.echoes: dict[str, object] = {}
-        """Force a *write echo* for one parameter — the *silent undo* case."""
+        """Force a *write echo* for one parameter: the *silent undo* case."""
         self._failures: deque[Exception] = deque()
         self._refusals: deque[Exception] = deque()
         self._reset_refusals: deque[Exception] = deque()
@@ -147,10 +147,10 @@ class FakeHeatitClient:
     async def get_status(self) -> PanelStatus:
         """Read the whole status, or raise the next scripted failure.
 
-        The raw body and headers are retained the way the real client retains
-        them — set before the parse, and untouched by a read that failed — and
-        the retry flag is decided per read the way the real one decides it,
-        rather than staying wherever a test last put it.
+        The raw body and headers are kept the way the real client keeps them:
+        set before the parse, and untouched by a read that failed. The retry
+        flag is decided per read, the way the real client decides it, instead
+        of staying wherever a test last put it.
         """
         self.status_reads += 1
         self.last_status_retried = self.retries
@@ -176,7 +176,7 @@ class FakeHeatitClient:
         self._reset("kwh")
 
     async def reset_settings(self) -> None:
-        """Record a settings reset, on the same terms."""
+        """Record a settings reset, with the same refusal rule."""
         self._reset("settings")
 
     def _reset(self, kind: str) -> None:

@@ -13,7 +13,7 @@
       },
       "reconfigure": {
         "title": "Change the panel's address",
-        "description": "Enter the panel's new address. This only moves this panel; a unit that replaced it has to be added as a new device.",
+        "description": "Enter the panel's new address. This only moves this panel. A unit that replaced it must be added as a new device.",
         "data": {
           "host": "Host"
         },
@@ -23,7 +23,7 @@
       }
     },
     "error": {
-      "cannot_connect": "Nothing answered at that address. Check that the panel is powered on and on your network, and that the address is right.",
+      "cannot_connect": "Nothing answered at that address. Check that the panel is powered on and on your network. Check that the address is right.",
       "invalid_response": "Something answered at that address, but it is not a Heatit WiFi Panel."
     },
     "abort": {
@@ -33,7 +33,7 @@
       "invalid_response": "Something answered at that address, but it is not a Heatit WiFi Panel.",
       "not_configured": "The panel at that address is not set up in Home Assistant.",
       "reconfigure_successful": "The panel's address was updated.",
-      "wrong_panel": "A different panel answered at that address. This entry is for panel {expected_id}, but {actual_id} answered. A panel that has been replaced must be added as a new device rather than adopted here — its history belongs to the old unit."
+      "wrong_panel": "A different panel answered at that address. This entry is for panel {expected_id}, but {actual_id} answered. A replaced panel must be added as a new device, not adopted here. Its history belongs to the old unit."
     }
   },
   "options": {
@@ -44,7 +44,7 @@
           "poll_interval": "Poll interval"
         },
         "data_description": {
-          "poll_interval": "How often Home Assistant reads the panel's status, in seconds. Minimum 30. Changes you make in Home Assistant show up immediately; this governs how quickly changes made on the panel itself, in the MyHeatit app, or by open window detection are noticed. Changing it reloads the panel."
+          "poll_interval": "How often Home Assistant reads the panel's status, in seconds. Minimum 30. Changes you make in Home Assistant show up at once. This setting decides how quickly changes made on the panel itself, in the MyHeatit app or by open window detection are noticed. Changing it reloads the panel."
         }
       }
     }
@@ -152,7 +152,7 @@
       "message": "The panel's answer could not be read: {error}"
     },
     "missing_field": {
-      "message": "The panel's status is missing {field}, without which its state cannot be described."
+      "message": "The panel's status is missing {field}. Without it the panel's state cannot be described."
     },
     "foreign_panel": {
       "message": "A different panel answered at this address. This entry is for panel {expected_id}, but {actual_id} answered. Change the address with Reconfigure, or add the new panel as its own device."

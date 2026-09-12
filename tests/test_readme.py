@@ -1,14 +1,14 @@
 """The README's facts, each of which CI keeps from drifting (§11.3).
 
-The README is one of three copies of the verified-firmware set — the others
-are ``VERIFIED_FIRMWARES`` and ``tests/fixtures/observed/fw-*/`` — and the only
-prose copy of the entity surface and the Home Assistant floor. Every one of
-them is asserted against the artifact that owns it, so the README cannot
-describe an integration that is not the one in the tree: all copies of a fact
-or none.
+Every fact the README states is checked against the artifact that owns it,
+so the README cannot describe an integration that is not the one in the tree.
+The README is one of three copies of the verified-firmware set; the others
+are ``VERIFIED_FIRMWARES`` and ``tests/fixtures/observed/fw-*/``. It is also
+the only prose copy of the entity list and the Home Assistant floor. All
+copies of a fact agree, or none exist.
 
-One further assertion guards the rule that sank a real ``hacs/default``
-submission: no disclaimers.
+One more check guards the rule that sank a real ``hacs/default`` submission:
+no disclaimers.
 """
 
 import importlib
@@ -37,12 +37,12 @@ INTEGRATION_DIR = REPO_ROOT / "custom_components" / DOMAIN
 PACKAGE = f"custom_components.{DOMAIN}"
 
 #: Prose a `hacs/default` reviewer reads as "come back later". The 0.x version
-#: number carries that message already, and hacs/default#8819 rejected a
-#: submission for the README saying it in words. Matched case-insensitively
-#: against the whole file with its whitespace flattened, so a phrase broken
-#: across two lines is still one phrase. Hyphens are left alone and spelled out
-#: where a pattern needs them: flattening those too would read "alpha-numeric"
-#: as "alpha".
+#: number already carries that message, and hacs/default#8819 rejected a
+#: submission because its README said it in words. Matched without regard to
+#: case against the whole file with its whitespace flattened, so a phrase
+#: broken across two lines is still one phrase. Hyphens are left alone and
+#: spelled out where a pattern needs them. Flattening those too would read
+#: "alpha-numeric" as "alpha".
 DISCLAIMERS = (
     r"alpha",
     r"beta",
@@ -59,17 +59,18 @@ DISCLAIMERS = (
 )
 
 #: ``Entity``'s metaclass rewrites a class-level ``_attr_translation_key``
-#: into a property and keeps the literal it was given under the second of these
-#: names, so an entity class that names itself is read out of the class
-#: dictionary rather than off the class.
+#: into a property. It keeps the literal it was given under the second of these
+#: names. So an entity class that names itself is read out of the class
+#: dictionary, not off the class.
 TRANSLATION_KEY_ATTRIBUTES = ("_attr_translation_key", "__attr_translation_key")
 
 #: A cell in the entity table's first column: the name a user sees, then the
 #: key that names it in the translations and ends its unique id.
 ENTITY_CELL = re.compile(r"^(?P<name>.+?)\s*\(`(?P<key>[a-z0-9_]+)`\)$")
 
-#: A released changelog section, ``## [0.1.0] - 2026-09-09``. Its arrival is
-#: the release pull request, and so the moment the install section may exist.
+#: A released changelog section, ``## [0.1.0] - 2026-09-09``. It arrives in
+#: the release pull request, and that is the moment the install section may
+#: exist.
 RELEASED_VERSION = re.compile(r"^## \[\d+\.\d+\.\d+\]", re.MULTILINE)
 
 
@@ -85,7 +86,7 @@ def section(title: str) -> str | None:
 
 
 def table_rows(body: str | None) -> list[list[str]]:
-    """Return a Markdown table's data rows, header and rule dropped."""
+    """Return a Markdown table's data rows, with the header and rule dropped."""
     if body is None:
         return []
     rows = [
@@ -103,14 +104,14 @@ def table_rows(body: str | None) -> list[list[str]]:
 def is_entity_description(item: object) -> bool:
     """Report whether this is a description, however core built its class.
 
-    ``isinstance`` alone is not enough. Instantiating one of core's own
-    description classes directly returns an instance of a *rebuilt* class under
-    ``homeassistant.util.frozen_dataclass_compat`` which is not a subclass of
-    ``EntityDescription`` at all; only a locally declared subclass is. Missing
-    the first kind would let this guard pass over a whole platform in silence,
-    which is the one failure a drift check must not have, so the ancestry is
-    matched by name as well. A rename upstream reddens
-    ``test_a_description_built_by_core_itself_is_recognised`` rather than
+    ``isinstance`` alone is not enough. Creating an instance of one of core's
+    own description classes returns an instance of a *rebuilt* class under
+    ``homeassistant.util.frozen_dataclass_compat``. That class is not a
+    subclass of ``EntityDescription``; only a locally declared subclass is.
+    Missing the first kind would let this guard skip a whole platform in
+    silence, the one failure a drift check must not have. So the ancestry is
+    matched by name as well. A rename upstream then turns
+    ``test_a_description_built_by_core_itself_is_recognised`` red instead of
     quietly emptying the set.
     """
     return isinstance(item, EntityDescription) or any(
@@ -131,9 +132,9 @@ def class_translation_key(entity: type[Entity]) -> str | None:
 def value_and_members(value: object) -> Iterator[object]:
     """Yield a value and, when it is a plain container, the members inside it.
 
-    A platform declares its descriptions in whatever container reads best — a
-    tuple, a single name, a mapping — and this test has no business dictating
-    which, so it looks one level into any of them.
+    A platform declares its descriptions in whatever container reads best: a
+    tuple, a single name, a mapping. This test should not dictate which, so it
+    looks one level into any of them.
     """
     yield value
     if isinstance(value, tuple | list | set | frozenset):
@@ -143,12 +144,12 @@ def value_and_members(value: object) -> Iterator[object]:
 
 
 def declared_keys(module: ModuleType) -> set[str]:
-    """Every entity key a platform module declares, however it declares it.
+    """Return every entity key a platform module declares, however it declares it.
 
     The description-driven platforms carry one ``EntityDescription`` per
     entity, in whatever container they choose. The climate entity has no
-    description and names itself with a class-level ``_attr_translation_key``,
-    which §5.2 makes the same string as its unique-id suffix.
+    description and names itself with a class-level ``_attr_translation_key``.
+    §5.2 makes that the same string as its unique-id suffix.
     """
     keys: set[str] = set()
     for value in vars(module).values():
@@ -167,7 +168,7 @@ def declared_keys(module: ModuleType) -> set[str]:
 
 
 def shipped_entities() -> set[tuple[str, str]]:
-    """Every ``(platform, key)`` the integration ships, read from the modules."""
+    """Return each ``(platform, key)`` the integration ships, read from the modules."""
     found: set[tuple[str, str]] = set()
     for platform in Platform:
         if not (INTEGRATION_DIR / f"{platform.value}.py").is_file():
@@ -178,7 +179,7 @@ def shipped_entities() -> set[tuple[str, str]]:
 
 
 def documented_entities() -> set[tuple[str, str]]:
-    """Every ``(platform, key)`` the README's ``## Entities`` table lists."""
+    """Return every ``(platform, key)`` the README's ``## Entities`` table lists."""
     documented: set[tuple[str, str]] = set()
     for row in table_rows(section("Entities")):
         assert len(row) >= 2, (
@@ -187,7 +188,7 @@ def documented_entities() -> set[tuple[str, str]]:
         match = ENTITY_CELL.match(row[0])
         assert match, (
             f"README entity row {row[0]!r}: the first cell is the name a user "
-            f"sees followed by the entity's key in backticks, as in "
+            f"sees, then the entity's key in backticks, as in "
             f"'Comfort setpoint (`comfort_setpoint`)'"
         )
         documented.add((row[1], match["key"]))
@@ -223,7 +224,7 @@ def test_the_home_assistant_floor_matches_hacs_json() -> None:
     floor = hacs["homeassistant"]
     assert floor in README.read_text(encoding="utf-8"), (
         f"README: the Home Assistant floor reads {floor}, as hacs.json declares "
-        f"it — HACS refuses the download below that version"
+        f"it. HACS refuses the download below that version"
     )
 
 
@@ -231,11 +232,11 @@ def test_the_install_section_waits_for_the_release_that_makes_it_true() -> None:
     released = RELEASED_VERSION.search(CHANGELOG.read_text(encoding="utf-8"))
     assert (section("Installation") is not None) == (released is not None), (
         "README: §11.3 writes the install section in the v0.1.0 release pull "
-        "request and not before, because §11.1 forbids sharing the "
-        "custom-repository URL until a release exists — without one HACS has "
-        "no floor gate at all. The release pull request is the commit that "
-        "first gives CHANGELOG.md a released version section, so the two "
-        "arrive together or neither has"
+        "request and not before. §11.1 forbids sharing the custom-repository "
+        "URL until a release exists, because without one HACS has no floor "
+        "gate. The release pull request is the commit that first gives "
+        "CHANGELOG.md a released version section, so the two arrive together "
+        "or not at all"
     )
 
 
@@ -299,7 +300,7 @@ def test_declared_keys_finds_a_description_in_any_container() -> None:
 
 
 def test_declared_keys_reads_the_key_an_entity_class_names_itself_with() -> None:
-    """The literal survives ``Entity``'s metaclass; a rename upstream reddens here."""
+    """The literal survives ``Entity``'s metaclass. A rename upstream turns this red."""
     assert declared_keys(module_holding(HeatitClimate=NamedEntity)) == {"panel"}
 
 

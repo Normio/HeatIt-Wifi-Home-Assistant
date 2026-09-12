@@ -1,9 +1,9 @@
 """Suite-wide fixtures: the observed directories and the reference capture.
 
-The reference fixture is the newest observed directory by version, named here
-explicitly. State assertions pin to it; the parse-only sweep runs over every
-observed directory, so a second panel's capture extends the suite with no test
-edits.
+The reference fixture is the observed directory with the newest version. It
+is named here by hand. Tests that check state values use it. The parse-only
+sweep runs over every observed directory, so a capture from a second panel
+extends the suite with no test edits.
 """
 
 from pathlib import Path
@@ -19,13 +19,13 @@ REFERENCE_DIR = OBSERVED_DIR / f"fw-{REFERENCE_FIRMWARE}"
 
 
 def observed_directories() -> list[Path]:
-    """Every ``fw-<version>/`` directory a real panel produced."""
+    """Return every ``fw-<version>/`` directory a real panel produced."""
     return sorted(path for path in OBSERVED_DIR.glob("fw-*") if path.is_dir())
 
 
 @pytest.fixture(scope="session")
 def reference_status_bytes() -> bytes:
-    """Read the reference capture's raw wire bytes: scrubbed, never re-serialised."""
+    """Read the reference capture's raw wire bytes: scrubbed, never re-encoded."""
     return (REFERENCE_DIR / "status.json").read_bytes()
 
 

@@ -1,12 +1,12 @@
 """The base entity's three rules, and the entity table of §5.2.
 
-The rules are the ones every platform would otherwise get subtly different:
-which device an entity belongs to, what its unique id is, and when it is
-unavailable. They are asserted here once, against the base class itself, rather
-than six times against six platforms.
+The rules are the ones every platform would otherwise get slightly different.
+They say which device an entity belongs to, what its unique id is and when it
+is unavailable. They are asserted here once, against the base class itself,
+not six times against six platforms.
 
-The table is §8.5's: a **test-side literal** transcribed from §5.2 and, by rule,
-never derived from the integration's own descriptors — the point is to compare
+The table is §8.5's: a **test-side literal** copied from §5.2. By rule it is
+never derived from the integration's own descriptors. The point is to compare
 two independent encodings, so a row is added here by hand when a platform
 ships. Its final form is 21 entities, of which 3 are disabled by default.
 """
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 INTEGRATION_DIR = Path(__file__).parents[2] / "custom_components" / "heatit_wifi_panel"
 
-#: §9.2's ``parallel-updates`` rule, transcribed: ``0`` on the two read-only
+#: §9.2's ``parallel-updates`` rule, copied: ``0`` on the two read-only
 #: platforms, ``1`` on the five that write. A platform that has not shipped yet
 #: skips, so the sweep grows with the integration instead of being rewritten.
 PARALLEL_UPDATES = {
@@ -59,7 +59,7 @@ PARALLEL_UPDATES = {
 
 
 class Row(NamedTuple):
-    """One row of §5.2, as the user meets it."""
+    """One row of §5.2, as the user sees it."""
 
     platform: Platform
     key: str
@@ -71,21 +71,21 @@ class Row(NamedTuple):
     enabled: bool
     state: str | None
     """The state against the reference capture, or ``None`` when the entity is
-    disabled by default and so has none until a user enables it."""
+    disabled by default and so has no state until a user enables it."""
 
     read_path: str | None
     """§5.2's read path, or ``None`` for an entity nothing can drop.
 
     Two kinds of row carry ``None``. The climate entity reads
     ``parameters.panelMode`` and the temperature sensor reads
-    ``roomTemperature``, both *required core*: a status without either is not a
-    status, so neither can go missing on its own. The rest are droppable, and
-    the sweep below removes each in turn.
+    ``roomTemperature``. Both are *required core*: a status without either is
+    not a status, so neither can go missing on its own. The rest can be
+    dropped, and the sweep below removes each in turn.
     """
 
 
-#: §5.2, transcribed. The climate entity's name is ``None`` because it takes
-#: the device's own — it *is* the panel — and its three measurement columns are
+#: §5.2, copied. The climate entity's name is ``None`` because it takes the
+#: device's own name: it *is* the panel. Its three measurement columns are
 #: empty because a thermostat is not a measurement. The states are the
 #: reference capture's own readings: room 23.0 °C, no power, no consumption,
 #: no open window.
@@ -312,10 +312,10 @@ ENTITY_TABLE = [
         state="0",
         read_path="parameters.OWD.activeTime",
     ),
-    # The two presses that discard device state, and so the other two rows
-    # §5.4 ships opt-in. Neither reads anything — a button only writes — so
-    # neither can be dropped by a firmware that returns one field less, and
-    # neither has a state until a user enables it.
+    # The two presses that discard device state, so the two rows §5.4 ships
+    # opt-in. Neither reads anything, because a button only writes. So neither
+    # can be dropped by a firmware that returns one field less, and neither
+    # has a state until a user enables it.
     Row(
         platform=Platform.BUTTON,
         key="reset_energy",
@@ -361,11 +361,11 @@ ENTITY_TABLE = [
 def test_every_platform_module_declares_parallel_updates(
     platform: Platform, expected: int
 ) -> None:
-    """§9.2's rule test, in one place rather than once per platform module.
+    """§9.2's rule test, in one place instead of once per platform module.
 
-    ``PARALLEL_UPDATES`` has to be a module-level name in each platform — that
-    is how Home Assistant reads it — so the declaration cannot be shared; the
-    *assertion* can, and this is it.
+    ``PARALLEL_UPDATES`` has to be a module-level name in each platform. That
+    is how Home Assistant reads it, so the declaration cannot be shared. The
+    *assertion* can be shared, and this is it.
     """
     if not (INTEGRATION_DIR / f"{platform}.py").is_file():
         pytest.skip(f"the {platform} platform has not shipped yet")
@@ -379,7 +379,7 @@ def test_every_platform_module_declares_parallel_updates(
 def registry_entries(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> dict[str, er.RegistryEntry]:
-    """Every entity the entry owns, by unique id."""
+    """Return every entity the entry owns, by unique id."""
     return {
         registered.unique_id: registered
         for registered in er.async_entries_for_config_entry(
@@ -414,7 +414,7 @@ async def test_each_entity_is_the_one_the_table_describes(
     assert registered.entity_category == row.category
     assert (registered.disabled_by is None) == row.enabled
     # The registry carries the three measurement columns for **every** row,
-    # disabled ones included: the platform records them as it registers the
+    # disabled ones included. The platform records them as it registers the
     # entity, before it declines to add a disabled one.
     assert registered.original_device_class == row.device_class
     assert registered.unit_of_measurement == row.unit
@@ -424,7 +424,7 @@ async def test_each_entity_is_the_one_the_table_describes(
     if not row.enabled:
         assert state is None
         return
-    # And the state carries them as the user meets them, which is the encoding
+    # And the state carries them as the user sees them. That is the encoding
     # that matters for a row that ships enabled.
     assert state is not None
     assert state.state == row.state
@@ -446,13 +446,13 @@ async def test_a_dropped_parameter_costs_only_its_own_entity(
 ) -> None:
     """§8.5, over the whole table: setup succeeds, and one entity is missing.
 
-    §5.4 gates creation on the **first** status, so a firmware that never
-    returns a parameter costs exactly that parameter's entity — and the check
-    that matters is the other half, that every other entity is still there. A
-    per-platform version of this test could not see a dropped switch taking the
-    climate entity with it.
+    §5.4 gates creation on the **first** status. So a firmware that never
+    returns a parameter costs exactly that parameter's entity. The check that
+    matters is the other half: every other entity is still there. A
+    per-platform version of this test could not see a dropped switch taking
+    the climate entity with it.
     """
-    assert row.read_path is not None, "the parametrisation dropped the None rows"
+    assert row.read_path is not None, "the parametrize list dropped the None rows"
     patched_client.set_status({row.read_path: ABSENT})
 
     assert await setup_entry(hass, mock_config_entry)
@@ -470,7 +470,7 @@ async def test_a_dropped_parameter_costs_only_its_own_entity(
 async def loaded(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> HeatitWifiPanelCoordinator:
-    """Set the entry up and hand back its coordinator."""
+    """Set the entry up and return its coordinator."""
     assert await setup_entry(hass, entry)
     coordinator: HeatitWifiPanelCoordinator = entry.runtime_data
     return coordinator
@@ -497,7 +497,7 @@ async def test_an_entity_joins_the_device_by_identifiers_alone(
     """Repeating the device's name here would undo a rename on every restart.
 
     The device is registered from the first status in ``__init__.py``, where
-    ``name`` and the *assigned room* are spent once (§4.4).
+    ``name`` and the *assigned room* are used once (§4.4).
     """
     coordinator = await loaded(hass, mock_config_entry)
     device = panel_device(hass, mock_config_entry)
@@ -533,7 +533,7 @@ async def test_nothing_stays_available_while_the_poll_is_failing(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The poll is the sole judge, the reset buttons included (§6.3)."""
+    """Only the poll decides availability, for the reset buttons too (§6.3)."""
     coordinator = await loaded(hass, mock_config_entry)
     entity = HeatitWifiPanelEntity(coordinator, "writes-only")
     patched_client.fail(HeatitConnectionError("timed out"))

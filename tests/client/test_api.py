@@ -1,6 +1,6 @@
 """The client at the HTTP seam: the real client over aioresponses, no hass.
 
-Every expected request line here is transcribed from the spec (§2.2, §2.5,
+Every expected request line here is copied by hand from the spec (§2.2, §2.5,
 §8.5), never derived from the registry, so the two encodings can disagree.
 """
 
@@ -40,7 +40,7 @@ NOT_FOUND_BODY = "Nothing matches the given URI"
 
 
 def requests_made(mocked: aioresponses) -> list[tuple[str, str]]:
-    """Every request the mock saw, as ``(METHOD, url-with-query)`` in order."""
+    """Return every request the mock saw, as ``(METHOD, url-with-query)`` in order."""
     return [
         (method, str(url))
         for (method, url), calls in mocked.requests.items()
@@ -152,7 +152,7 @@ async def test_local_rejection_emits_no_request(
 async def test_no_code_path_emits_a_parameter_less_post(
     client: HeatitClient, mocked: aioresponses
 ) -> None:
-    """Across the whole write surface, every POST carries a query."""
+    """Every POST across the whole write surface carries a query."""
     mocked.post(ANY_URL, body='{"status":"Success"}', content_type=JSON, repeat=True)
     mocked.delete(ANY_URL, body='{"status":"Success"}', content_type=JSON, repeat=True)
     for descriptor in PARAMETERS.values():
@@ -173,7 +173,7 @@ async def test_no_code_path_emits_a_parameter_less_post(
     assert all(url.startswith(f"{PARAMETERS_URL}?") for url in posts), posts
 
 
-# --- the verdict ------------------------------------------------------------
+# --- success or failure -----------------------------------------------------
 
 
 @pytest.mark.parametrize("status", ["Success", "success", "Success.", " SUCCESS!\n"])
@@ -253,7 +253,7 @@ async def test_a_missing_or_unparseable_echo_falls_back_to_the_requested_value(
     assert await client.set_parameter("heatingSetpoint", 19) == 19.0
 
 
-# --- the exception taxonomy -------------------------------------------------
+# --- the exception classes --------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -424,7 +424,7 @@ async def test_reset_settings_sends_exactly_the_bare_delete(
 async def test_a_reset_uses_the_one_status_envelope(
     client: HeatitClient, mocked: aioresponses
 ) -> None:
-    """There is no ``reset`` key: a body carrying one instead is not success."""
+    """There is no ``reset`` key. A body carrying one instead is not a success."""
     mocked.delete(RESET_KWH_URL, body='{"reset":"success"}', content_type=JSON)
 
     with pytest.raises(HeatitProtocolError):
