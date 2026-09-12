@@ -25,7 +25,7 @@ probe script that drives it is specified there too.
 
 | | |
 |---|---|
-| *the vendor document says X* | Evidence, never truth. The register lists ten places where it is simply wrong as `disagrees`. |
+| *the vendor document says X* | Evidence, never truth. The register records each place where it is simply wrong as `disagrees`. Count them there. |
 | *this panel does X* | One 600 W unit at firmware **1.21**. Every measurement here carries that qualifier. |
 | *every panel does X* | Never claimed. The register exists so a second panel can show where we were wrong. |
 
@@ -390,10 +390,11 @@ not use them. **No sleep of any kind in setup** (§3.6).
 
 The coordinator subclasses `DataUpdateCoordinator[PanelStatus]`. It carries a class-level
 `config_entry: HeatitWifiPanelConfigEntry` annotation to narrow away the inherited `| None`. It
-passes `config_entry=` to `super().__init__`. That argument is ignored for custom integrations, but
-it wires `async_on_unload(self.async_shutdown)` and honours `pref_disable_polling`. It marks
-`_async_update_data` with `@override`. `async_config_entry_first_refresh()` is called **only** from
-`async_setup_entry` in `__init__.py`. It asserts `SETUP_IN_PROGRESS` and raises hard anywhere else.
+passes `config_entry=` to `super().__init__`. Core does not enforce that for custom integrations,
+but passing it wires `async_on_unload(self.async_shutdown)` and honours `pref_disable_polling`. It
+marks `_async_update_data` with `@override`. `async_config_entry_first_refresh()` is called
+**only** from `async_setup_entry` in `__init__.py`. It asserts `SETUP_IN_PROGRESS` and raises hard
+anywhere else.
 The coordinator is built in `__init__.py`, never inside a platform's `async_setup_entry`.
 
 `update_interval` comes from the options *poll interval* (§4.5). Option changes take effect by
@@ -1531,8 +1532,9 @@ Seven columns: `id | claim | vs spec | tier | status | evidence | dependents`.
   It is never what the vendor document says. So a status is truly binary. Nuance ("accepted but
   silently snapped") is written into the claim rather than fudged in a verdict.
 - **`vs spec`** is `agrees` / `disagrees` / `silent`. It is the three-claims problem of §0 turned
-  into a column. Ten rows are `disagrees`. They are the most valuable rows in the file. Each records
-  a place where a future firmware could quietly revert to the documented behaviour.
+  into a column. The `disagrees` rows are the most valuable rows in the file. The register's summary
+  line says how many there are. Each records a place where a future firmware could quietly revert
+  to the documented behaviour.
 - **`contradicted` is not `disagrees`.** A `disagrees` row was never true. A `contradicted` row
   *stopped* being true, with shipped code resting on it. The register starts with zero
   contradicted rows. That is why that status is the one that triggers work.
@@ -1636,7 +1638,10 @@ appendix is the contributor-facing half of the document.
    discipline §9.2 puts on quality-scale `done` comments;
 5. an `open` `manual` row cites no procedure, or an appendix procedure is cited by no row;
 6. **the set of non-`manual` ids in the register is not exactly the set registered in `probe.py`**.
-   That is the one place the two can silently diverge.
+   That is the one place the two can silently diverge;
+7. the summary line under the table is missing, or any of its three figures (verified at the named
+   firmware, `open`, `disagrees`) is not what the table counts. The line stays hand-written prose.
+   Its one bold sentence is the form the check reads, and the script's docstring holds that form.
 
 The escape hatch is the vocabulary itself: `manual` tier and `open` status ask for nothing.
 
@@ -1708,6 +1713,17 @@ rather than a surprise.
 
 Corrections to this document after v1 was frozen. Each entry names the register row or issue that
 forced it, and the PR that carried it.
+
+**2026-09-12 — §3.4 had `config_entry=` both ignored and wired; the register's summary line is CI-checked** ([#79](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/79), [PR #83](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/pull/83)).
+§3.4 said the coordinator's `config_entry=` argument "is ignored for custom integrations" and, in
+the same sentence, that it wires the shutdown on unload and honours `pref_disable_polling`. Both
+could not be true, and the first was wrong. Core only leaves the *omission* unenforced for custom
+integrations. Passing the entry always registers `async_shutdown` on unload and always honours the
+polling toggle, as `docs/research/ha-integration-conventions.md` §2 says. The coordinator passes
+it, and does not change. §3.4 now says that one thing. In the same pass, §0 and §12.1 stop naming
+how many register rows are `disagrees`. The figure had drifted from ten to twelve without either
+sentence noticing. Both now send the reader to the register, whose summary line carries the count.
+§12.4 gains condition 7: `check_conformance.py` holds that line's three figures to the table.
 
 **2026-09-11 — §4.3's mDNS negative is hard, not soft** ([#32](https://github.com/Normio/HeatIt-Wifi-Home-Assistant/issues/32), PR pending).
 §4.3 called both discovery negatives soft, because link-local multicast could not cross the VLAN
