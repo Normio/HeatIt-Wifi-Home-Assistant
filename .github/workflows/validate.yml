@@ -2,15 +2,15 @@ name: Validate
 
 on:
   # main only, as in test.yml. A bare `push:` doubles both jobs on every pull
-  # request — the branch push and the pull_request event each start a run — and
-  # the required status checks then name a job that ran twice.
+  # request, because the branch push and the pull_request event each start a
+  # run. The required status checks then name a job that ran twice.
   push:
     branches: [main]
   pull_request:
   schedule:
     # Nightly. HACS and hassfest can change their rules under us between our own
-    # pushes, and the scheduled run against our own repository is the only fully
-    # truthful signal: five HACS checks carry allow_fork = False and skip on
+    # pushes. The scheduled run against our own repository is the only fully
+    # truthful signal. Five HACS checks carry allow_fork = False and skip on
     # fork pull requests, while hacs/default runs all ten.
     - cron: "0 4 * * *"
   workflow_dispatch:
@@ -24,10 +24,10 @@ jobs:
     name: HACS Action
     runs-on: ubuntu-latest
     steps:
-      # Deliberately unpinned, here and in hassfest below: the nightly run
-      # exists to catch a validator changing its rules, and pinning is what
-      # would make it stop telling the truth. No ignore: input, ever — a
-      # skipped check is a rejection deferred to the hacs/default reviewer.
+      # Unpinned on purpose, here and in hassfest below. The nightly run
+      # exists to catch a validator changing its rules, and pinning would make
+      # it stop telling the truth. No ignore: input, ever. A skipped check is
+      # a rejection put off until the hacs/default reviewer.
       - name: HACS validation
         uses: hacs/action@main
         with:

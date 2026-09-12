@@ -1,15 +1,16 @@
 """The Heatit WiFi Panel integration.
 
-Setup order is fixed (§3.4): first refresh → ``runtime_data`` → the device →
-forward platforms. ``hass.data`` is untouched, ``runtime_data`` is never cleared
-on unload (core removes it), and there is **no sleep of any kind** here — the
-first refresh raises ``ConfigEntryNotReady`` and Home Assistant retries with its
-own backoff, the status read has its own retry, and ``DataUpdateCoordinator``
-already jitters every scheduled refresh (§3.6).
+Setup order is fixed (§3.4): first refresh, then ``runtime_data``, then the
+device, then forward the platforms. ``hass.data`` is not used. ``runtime_data``
+is never cleared on unload, because core removes it. There is **no sleep of any
+kind** here. The first refresh raises ``ConfigEntryNotReady`` and Home Assistant
+retries with its own backoff. The status read has its own retry, and
+``DataUpdateCoordinator`` already adds a random delay to every scheduled
+refresh (§3.6).
 
-The device is registered here rather than by an entity, so a panel with no
-platforms yet still appears as one device, and so `name` and *assigned room*
-are spent at setup and never touched by a poll (§4.4).
+The device is registered here, not by an entity. So a panel with no platforms
+yet still appears as one device. `name` and the *assigned room* are set once
+at setup and never touched by a poll (§4.4).
 """
 
 from __future__ import annotations
@@ -42,7 +43,7 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.SWITCH,
 ]
-"""The platform modules to forward to; each platform ticket adds its own."""
+"""The platform modules to forward to. Each platform ticket adds its own."""
 
 
 async def async_setup_entry(
@@ -61,7 +62,7 @@ async def async_setup_entry(
 async def async_unload_entry(
     hass: HomeAssistant, entry: HeatitWifiPanelConfigEntry
 ) -> bool:
-    """Unload the entry's platforms. The session is Home Assistant's to keep."""
+    """Unload the entry's platforms. Home Assistant keeps the session."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
@@ -71,26 +72,27 @@ def _async_register_device(
 ) -> None:
     """Register the panel as one device, from the first status (§3.5).
 
-    Identity is the *device id*; the MAC sits in ``connections``, where core
-    normalises it through ``format_mac``, so a firmware found to churn the
-    device id has a migration path rather than a dead end (ADR-0003). There is
-    deliberately **no** ``configuration_url``: the panel serves no web UI.
+    The identity is the *device id*. The MAC sits in ``connections``, where
+    core formats it through ``format_mac``. So if a firmware is found to
+    change the device id, there is a migration path, not a dead end
+    (ADR-0003). There is **no** ``configuration_url`` on purpose: the panel
+    serves no web UI.
 
     ``name`` and the area are written **at creation only** (§4.4). The
-    registry honours ``suggested_area`` when it makes the device and ignores it
-    afterwards; ``name`` is withheld on every later setup, so a rename in the
-    MyHeatit app simply diverges instead of overwriting what Home Assistant
-    shows. The room is suggested only when it already names an area — see
-    ``_suggested_area``. ``model`` and ``sw_version`` are refreshed each
-    setup instead — they are facts about the hardware, and §3.5 has a firmware
+    registry uses ``suggested_area`` when it makes the device and ignores it
+    afterwards. ``name`` is left out on every later setup, so a rename in the
+    MyHeatit app only diverges instead of overwriting what Home Assistant
+    shows. The room is suggested only when it already names an area; see
+    ``_suggested_area``. ``model`` and ``sw_version`` are refreshed on each
+    setup instead. They are facts about the hardware, and §3.5 has a firmware
     change picked up on reload.
     """
     device_registry = dr.async_get(hass)
-    # Asked of the entry, not of the identifiers: one entry is one device
-    # (§4.7), so "does this entry already own one?" is the question, and it is
-    # the question that keeps working — ``async_get_device`` is deprecated from
-    # Home Assistant 2026.9 because identifiers stopped being unique across
-    # entries, and it breaks in 2027.8.
+    # Ask the entry, not the identifiers. One entry is one device (§4.7), so
+    # the question is "does this entry already own one?". That question also
+    # keeps working. ``async_get_device`` is deprecated from Home Assistant
+    # 2026.9, because identifiers stopped being unique across entries, and it
+    # breaks in 2027.8.
     creating = not dr.async_entries_for_config_entry(device_registry, entry.entry_id)
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
@@ -110,14 +112,14 @@ def _async_register_device(
 def _suggested_area(hass: HomeAssistant, room: str | None) -> str | UndefinedType:
     """Suggest the panel's room, but only when it already names an area (§4.4).
 
-    ``suggested_area`` is core's only creation-time area input, and core resolves
-    it through ``area_registry.async_get_or_create`` — a room Home Assistant has
-    no area for is *created* as one. The room is a label from the MyHeatit app;
-    it gets to pick between the areas the user has made, not to add to them. With
-    no match the device is left unassigned, which is what has Home Assistant offer
-    its own area picker for it.
+    ``suggested_area`` is core's only area input at creation time. Core
+    resolves it through ``area_registry.async_get_or_create``, so a room Home
+    Assistant has no area for is *created* as one. The room is a label from
+    the MyHeatit app. It may pick between the areas the user has made, not add
+    to them. With no match the device is left unassigned, and that is what
+    makes Home Assistant offer its own area picker for it.
 
-    Matching is the registry's, so it is the same normalisation an area rename
+    Matching is the registry's, so it is the same matching rule an area rename
     would apply: "bedroom" finds "Bedroom".
     """
     if not room:

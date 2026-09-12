@@ -1,4 +1,4 @@
-# This repository is not a Python package — there is no [project] table and
+# This repository is not a Python package: there is no [project] table and
 # nothing is built from it. pyproject.toml exists to configure the linters, so
 # that scripts/check.sh and CI read one set of rules.
 
@@ -6,10 +6,10 @@
 # Home Assistant 2026.3.1, the declared floor, requires Python 3.14.2.
 target-version = "py314"
 
-# `ruff format` reformats Python inside Markdown fences: without this, a run
-# rewrites five of the documents under docs/. They quote illustrative
-# snippets that are deliberately not the shipped code, and a spec excerpt
-# eliding its annotations is not a formatting failure.
+# `ruff format` reformats Python inside Markdown fences. Without this, a run
+# rewrites five of the documents under docs/. They quote example snippets
+# that are, on purpose, not the shipped code. A spec excerpt that leaves out
+# its annotations is not a formatting failure.
 extend-exclude = ["docs"]
 
 [tool.ruff.lint]
@@ -19,7 +19,7 @@ ignore = [
   "CPY001", # the MIT LICENSE at the root is the notice; per-file headers are not the HA convention
   "D203",   # mutually exclusive with D211; we take D211, no blank line before a class docstring
   "D213",   # mutually exclusive with D212; we take D212, summary on the first line
-  "INP001", # scripts/ holds standalone entry points, deliberately not an importable package
+  "INP001", # scripts/ holds standalone entry points, on purpose not an importable package
   "ISC001", # implicit string concatenation on one line is what the formatter produces
 ]
 
@@ -41,22 +41,22 @@ strict = true
 # __init__.py there), and scripts/capture_fixtures.py imports the client by its
 # full dotted name. Without this, mypy sees api.py under two module names.
 explicit_package_bases = true
-# ...which makes the base directories explicit too, and scripts/ is one of them:
-# without this, scripts/probe.py becomes module ``scripts.probe`` and the
+# That setting also makes the base directories explicit, and scripts/ is one of
+# them. Without this, scripts/probe.py becomes module ``scripts.probe`` and the
 # ``import probe`` in check_conformance.py and the tests stops resolving. The
 # pytest equivalent is ``pythonpath`` below.
 mypy_path = ["scripts"]
 
 [[tool.mypy.overrides]]
 # pytest-homeassistant-custom-component ships no py.typed marker, so mypy
-# strict refuses it outright. Its source is annotated, so follow it rather than
-# silencing it: ignore_missing_imports would make every MockConfigEntry an Any
-# and quietly disarm mypy across the integration tests.
+# strict refuses it outright. Its source is annotated, so follow it instead of
+# silencing it. ignore_missing_imports would make every MockConfigEntry an Any
+# and quietly turn off mypy across the integration tests.
 module = ["pytest_homeassistant_custom_component.*"]
 follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-# scripts/ is deliberately not a package; the tests import its modules by name.
+# scripts/ is not a package, on purpose; the tests import its modules by name.
 pythonpath = ["scripts"]

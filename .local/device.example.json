@@ -3,8 +3,8 @@
   "host": "192.168.1.100",
   "scheme": "http",
   "port": 80,
-  "label": "Heatit WiFi Panel — where?",
-  "firmware": null,
-  "maxLoad": null,
+  "label": "Heatit WiFi Panel, where?",
+  "firmware": 1.21,
+  "maxLoad": 6,
   "notes": "Anything a probe run should know: model wattage, which room, whether it is safe to write to."
 }

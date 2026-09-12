@@ -1,9 +1,9 @@
 """The quality-scale gate: every failure mode red, the clean case green.
 
-Each test builds a throwaway tree — the yaml, the manifest and whatever
-evidence the yaml points at — breaks one invariant, and asserts the script
-names exactly that problem. The last test runs the gate over the real tree,
-which is the check itself.
+Each test builds a throwaway tree: the yaml, the manifest and whatever
+evidence the yaml points at. It breaks one rule and asserts the script names
+exactly that problem. The last test runs the gate over the real tree. That is
+the check itself.
 """
 
 import json
@@ -31,8 +31,8 @@ RULE_KEY = re.compile(r"^[a-z]+(-[a-z]+)*$")
 def rules_yaml(*, without: str | None = None, **overrides: str) -> str:
     """Render every rule as ``done`` with evidence, then apply the overrides.
 
-    An override is the yaml for that one rule's value, verbatim, so a test
-    reads as the yaml it is about; ``without`` leaves one rule out.
+    An override is the yaml for that one rule's value, word for word, so a test
+    reads as the yaml it is about. ``without`` leaves one rule out.
     """
     lines = ["rules:"]
     for rule in RULES:
@@ -77,11 +77,11 @@ def problems(root: Path) -> list[str]:
     return check_quality_scale(root).problems
 
 
-# --- the vendored rule list --------------------------------------------------
+# --- the copied-in rule list -------------------------------------------------
 
 
 def test_the_rule_list_is_hassfests_fifty_four() -> None:
-    """§9.2: all 54 hyphen-slugged keys, vendored with the core commit."""
+    """§9.2: all 54 hyphenated keys, copied in with the core commit."""
     assert len(RULES) == 54
     assert len(set(RULES)) == len(RULES)
     assert all(RULE_KEY.match(rule) for rule in RULES)
@@ -272,7 +272,7 @@ def test_free_text_may_follow_the_path(tmp_path: Path, comment: str) -> None:
 
 
 def test_every_repo_path_the_comment_names_must_exist(tmp_path: Path) -> None:
-    """A second module named as evidence is held to it, wherever it sits."""
+    """A second module named as evidence must exist too, wherever it sits."""
     root = tree(
         tmp_path,
         rules_yaml(

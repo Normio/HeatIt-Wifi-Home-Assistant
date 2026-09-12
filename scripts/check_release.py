@@ -1,21 +1,25 @@
 """The release gate's lockstep check (spec §10.2, ADR-0002).
 
-HACS reads the release tag as the version of record and never the manifest;
-Home Assistant reads the manifest and never the tag. Nothing upstream binds the
-two, so this script does, and it also asserts everything else a release must
-not exist without: the tagged commit is on ``main`` (a tag pushed from a side
-branch must never become a release), the files HACS and the licence check
-depend on are present, ``hacs.json`` keeps the floor gate on,
-``CHANGELOG.md`` carries a non-empty section for the version — which becomes
-the release notes — and the README installs the way this version is installed.
+HACS reads the release tag as the version of record and never the manifest.
+Home Assistant reads the manifest and never the tag. Nothing upstream binds
+the two, so this script does. It also checks everything else a release must
+not exist without:
+
+- The tagged commit is on ``main``. A tag pushed from a side branch must
+  never become a release.
+- The files HACS and the licence check depend on are present.
+- ``hacs.json`` keeps the floor gate on.
+- ``CHANGELOG.md`` carries a non-empty section for the version. That section
+  becomes the release notes.
+- The README installs the way this version is installed.
 
 Run by ``.github/workflows/release.yml`` against the tagged checkout::
 
     python3 scripts/check_release.py v0.1.0 --main origin/main --notes notes.md
 
-Silent and exit 0 when the tag may become a release, writing the changelog
-section to ``--notes``; otherwise one line per problem and exit non-zero,
-writing nothing. It never creates, deletes or moves anything.
+When the tag may become a release: silent, exit 0 and the changelog section
+written to ``--notes``. Otherwise one line per problem, exit non-zero and
+nothing written. It never creates, deletes or moves anything.
 """
 
 import argparse
@@ -30,7 +34,7 @@ from check_layout import json_document
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: A release tag is ``v`` plus a bare SemVer triple, and that form is permanent:
+#: A release tag is ``v`` plus a bare SemVer triple, and that form is permanent.
 #: HACS compares tag strings, so the first release fixes it for good.
 TAG_PATTERN = re.compile(r"^v(\d+\.\d+\.\d+)$")
 
@@ -40,10 +44,10 @@ CHANGELOG = Path("CHANGELOG.md")
 README = Path("README.md")
 
 #: The README's install section. §11.3 defers writing it to the ``v0.1.0``
-#: release pull request; asserting it here is the "not later" half, and
-#: ``tests/test_readme.py`` holds the "not before" half offline. The heading is
-#: exactly the one ``docs/releasing.md`` and every problem line below name, so
-#: a section titled anything else reads as absent rather than passing quietly.
+#: release pull request. This check is the "not later" half;
+#: ``tests/test_readme.py`` holds the "not before" half offline. The heading
+#: is exactly the one ``docs/releasing.md`` and every problem line below name.
+#: A section titled anything else reads as absent, not as a quiet pass.
 INSTALL_SECTION = re.compile(
     r"^## Installation\s*$(?P<body>.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL
 )
@@ -58,9 +62,9 @@ MANUAL_COPY = "custom_components"
 #: The release that turns the custom-repository route into the wrong advice.
 DEFAULT_STORE_LISTING = AwesomeVersion("1.0.0")
 
-#: The files a release cannot exist without: the OSI-licence check, both
-#: documents HACS reads, the README HACS's ``information`` check renders, and
-#: the icon the brand renders from.
+#: The files a release cannot exist without. They serve the OSI-licence check,
+#: the two documents HACS reads, the README HACS's ``information`` check
+#: renders and the icon the brand renders from.
 REQUIRED_FILES = (
     Path("LICENSE"),
     HACS_JSON,
@@ -69,8 +73,8 @@ REQUIRED_FILES = (
     Path("custom_components/heatit_wifi_panel/brand/icon.png"),
 )
 
-#: A Keep a Changelog link definition, ``[0.1.0]: https://...``. These trail
-#: the file and are not release notes.
+#: A Keep a Changelog link definition, ``[0.1.0]: https://...``. These sit at
+#: the end of the file and are not release notes.
 LINK_DEFINITION = re.compile(r"^\[[^\]]+\]:\s")
 
 
@@ -101,10 +105,10 @@ def version_from_tag(tag: str) -> str | None:
 def changelog_section(text: str, version: str) -> str | None:
     """Return the body of ``## [version]``, or ``None`` when there is no such heading.
 
-    The body runs to the next ``##`` heading or the end of the file, with the
-    trailing link definitions dropped and surrounding blank lines trimmed. An
-    empty string means the heading is there and nothing but sub-headings, if
-    that, is under it: a ``### Added`` with no entries is not release notes.
+    The body runs to the next ``##`` heading or the end of the file. Trailing
+    link definitions are dropped and surrounding blank lines trimmed. An empty
+    string means the heading is there with nothing but sub-headings, if
+    anything, under it. A ``### Added`` with no entries is not release notes.
     """
     heading = re.compile(rf"^## \[{re.escape(version)}\](\s|$)")
     lines = text.splitlines()
@@ -124,14 +128,14 @@ def changelog_section(text: str, version: str) -> str | None:
 
 
 def check_required_files(root: Path) -> list[str]:
-    """Assert every file the release depends on is in the checkout."""
+    """Check that every file the release depends on is in the checkout."""
     return [
         f"{name}: missing" for name in REQUIRED_FILES if not (root / name).is_file()
     ]
 
 
 def check_manifest_version(root: Path, version: str) -> list[str]:
-    """Assert the manifest carries exactly the version the tag names."""
+    """Check that the manifest carries exactly the version the tag names."""
     manifest = json_document(root / MANIFEST)
     if manifest is None:
         return []  # reported by check_required_files
@@ -139,15 +143,15 @@ def check_manifest_version(root: Path, version: str) -> list[str]:
     if declared != version:
         return [
             (
-                f"{MANIFEST}: version is {declared!r}, but the tag names {version!r} — "
-                f"the manifest bump lands on main before the tag is pushed"
+                f"{MANIFEST}: version is {declared!r}, but the tag names {version!r}. "
+                f"The manifest bump lands on main before the tag is pushed"
             )
         ]
     return []
 
 
 def check_hacs_json(root: Path) -> list[str]:
-    """Assert ``hacs.json`` keeps the floor gate on and declares a parseable floor."""
+    """Check ``hacs.json`` keeps the floor gate on and declares a parseable floor."""
     hacs = json_document(root / HACS_JSON)
     if hacs is None:
         return []  # reported by check_required_files
@@ -155,27 +159,27 @@ def check_hacs_json(root: Path) -> list[str]:
     problems = []
     if hacs.get("hide_default_branch") is not True:
         problems.append(
-            f"{HACS_JSON}: hide_default_branch must be true — without it an "
+            f"{HACS_JSON}: hide_default_branch must be true. Without it an "
             f"install falls back to the default branch, past the floor gate"
         )
     floor = hacs.get("homeassistant")
     if not isinstance(floor, str) or not AwesomeVersion(floor).valid:
         problems.append(
             f"{HACS_JSON}: homeassistant is {floor!r}, must be a version "
-            f"AwesomeVersion parses — it is the floor HACS enforces"
+            f"AwesomeVersion parses. It is the floor HACS enforces"
         )
     return problems
 
 
 def check_readme(root: Path, version: str) -> list[str]:
-    """Assert the README installs the way this version is actually installed.
+    """Check that the README installs the way this version is installed.
 
     Before the default-store listing the only route is HACS's custom-repository
-    dialog, and from ``1.0.0`` the route inverts, because HACS refuses a
-    custom-repository entry for a repository already in the default store and a
+    dialog. From ``1.0.0`` the route flips, because HACS refuses a
+    custom-repository entry for a repository already in the default store. A
     README still telling users to add one sends them into an error. A manual
-    copy into ``custom_components/`` is offered at neither: it bypasses the
-    ``homeassistant`` floor gate and never sees a release at all (§11.3).
+    copy into ``custom_components/`` is offered at neither version: it bypasses
+    the ``homeassistant`` floor gate and never sees a release (§11.3).
     """
     path = root / README
     if not path.is_file():
@@ -185,7 +189,7 @@ def check_readme(root: Path, version: str) -> list[str]:
     if match is None:
         return [
             (
-                f"{README}: no '## Installation' section — a release is the "
+                f"{README}: no '## Installation' section. A release is the "
                 f"moment the install route becomes real, and v0.1.0 is where "
                 f"it is written"
             )
@@ -195,9 +199,9 @@ def check_readme(root: Path, version: str) -> list[str]:
     if MANUAL_COPY in match["body"]:
         problems.append(
             f"{README}: the install section names {MANUAL_COPY}/, so it "
-            f"offers a manual copy — that route bypasses the floor gate "
+            f"offers a manual copy. That route bypasses the floor gate "
             f"hacs.json declares and installs a tree that never saw a "
-            f"release, and §11.3 offers it at no version"
+            f"release. §11.3 offers it at no version"
         )
 
     names_dialog = CUSTOM_REPOSITORY.lower() in match["body"].lower()
@@ -205,22 +209,22 @@ def check_readme(root: Path, version: str) -> list[str]:
     if before_the_listing and not names_dialog:
         problems.append(
             f"{README}: the install section does not name HACS's "
-            f"'{CUSTOM_REPOSITORY}' dialog — until the default-store "
+            f"'{CUSTOM_REPOSITORY}' dialog. Until the default-store "
             f"listing that is the only route there is"
         )
     if not before_the_listing and names_dialog:
         problems.append(
             f"{README}: the install section still names HACS's "
-            f"'{CUSTOM_REPOSITORY}' dialog — HACS refuses a "
+            f"'{CUSTOM_REPOSITORY}' dialog. HACS refuses a "
             f"custom-repository entry for a repository already in the "
-            f"default store, so this section becomes plain default-store "
-            f"instructions at 1.0.0"
+            f"default store. At 1.0.0 this section becomes plain "
+            f"default-store instructions"
         )
     return problems
 
 
 def check_ancestry(root: Path, tag: str, main_ref: str) -> list[str]:
-    """Assert the tag exists and its commit is reachable from ``main``."""
+    """Check that the tag exists and its commit is reachable from ``main``."""
     tagged = git(
         root, "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}^{{commit}}"
     )
@@ -238,14 +242,14 @@ def check_ancestry(root: Path, tag: str, main_ref: str) -> list[str]:
 
 
 def check_changelog(root: Path, version: str) -> tuple[list[str], str | None]:
-    """Assert a non-empty ``## [version]`` section exists, and return its body."""
+    """Check that a non-empty ``## [version]`` section exists, and return its body."""
     path = root / CHANGELOG
     if not path.is_file():
         return [f"{CHANGELOG}: missing"], None
     section = changelog_section(path.read_text(encoding="utf-8"), version)
     if section is None:
         return [
-            f"{CHANGELOG}: no '## [{version}]' section — it becomes the release notes"
+            f"{CHANGELOG}: no '## [{version}]' section. It becomes the release notes"
         ], None
     if not section:
         return [f"{CHANGELOG}: the '## [{version}]' section is empty"], None
@@ -277,7 +281,7 @@ def check_release(root: Path, tag: str, main_ref: str) -> ReleaseCheck:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Parse the command line, run the gate, and write the notes or the problems."""
+    """Parse the command line, run the gate and write the notes or the problems."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("tag", help="the pushed tag, vX.Y.Z")
     parser.add_argument(

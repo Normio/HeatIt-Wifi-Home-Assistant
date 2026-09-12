@@ -1,8 +1,8 @@
-"""Setup, the device, unload, and §6.2's failure matrix.
+"""Setup, the device, unload and §6.2's failure matrix.
 
-Everything that fails at setup retries — a panel that answers nothing, a captive
-page, a mid-reboot stack and a status short a *required core* field are
-indistinguishable from a panel that is about to come back. The one exception is
+Everything that fails at setup retries. A panel that answers nothing, a captive
+page, a mid-reboot stack and a status short of a *required core* field all look
+alike. Each looks like a panel that is about to come back. The one exception is
 a *foreign panel*, which retrying can never fix.
 """
 
@@ -41,8 +41,8 @@ if TYPE_CHECKING:
 
 INTEGRATION_DIR = Path(__file__).parents[2] / "custom_components" / "heatit_wifi_panel"
 
-#: Everything §6.2 retries. A permanent error here would strand a panel that
-#: comes back by itself, which is the common case for all four.
+#: Everything §6.2 retries. A permanent error here would leave the entry stuck
+#: when the panel comes back by itself, which is the common case for all four.
 RETRYING_FAILURES = [
     HeatitConnectionError("timed out"),
     HeatitResponseError(404, "Not Found"),
@@ -72,9 +72,9 @@ async def test_setup_registers_one_device(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The device stands on its own, registered here rather than by an entity.
+    """The device stands on its own, registered here and not by an entity.
 
-    Which entities hang off it is ``tests/integration/test_entity.py``'s table.
+    The entities it owns are listed in ``tests/integration/test_entity.py``.
     """
     assert await setup_entry(hass, mock_config_entry)
 
@@ -96,7 +96,7 @@ async def test_the_assigned_room_picks_an_area_the_user_already_has(
 ) -> None:
     """A suggestion only: Home Assistant's own area wins from then on (§4.4).
 
-    Matched by the area registry's own normalisation, so the panel's "bedroom"
+    The area registry's own name matching is used, so the panel's "bedroom"
     finds the user's "Bedroom".
     """
     existing = ar.async_get(hass).async_create("Bedroom")
@@ -116,10 +116,10 @@ async def test_a_room_with_no_area_of_that_name_creates_none(
     mock_config_entry: MockConfigEntry,
     room: str,
 ) -> None:
-    """The room suggests between the user's areas; it does not add one (§4.4).
+    """The room picks between the user's areas. It does not add one (§4.4).
 
-    With nothing to suggest the device is left unassigned, which is what has
-    Home Assistant offer its own area picker for it.
+    With nothing to pick, the device is left unassigned. Home Assistant then
+    offers its own area picker for it.
     """
     patched_client.set_status({"room": room})
 
@@ -134,7 +134,7 @@ async def test_the_mac_is_normalised_by_core(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The device sends the MAC uppercase with colons; ``connections`` lowercases."""
+    """The device sends the MAC uppercase with colons. ``connections`` lowercases it."""
     patched_client.set_status({"Network.mac": "AA:BB:CC:DD:EE:FF"})
 
     assert await setup_entry(hass, mock_config_entry)
@@ -148,7 +148,7 @@ async def test_an_absent_mac_costs_only_the_connection(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Identity is the *device id*, so the whole ``Network`` block is optional."""
+    """Identity is the *device id*, so the ``Network`` block is optional."""
     patched_client.set_status({"Network": ABSENT})
 
     assert await setup_entry(hass, mock_config_entry)
@@ -162,11 +162,11 @@ async def test_the_name_and_the_room_are_read_once_at_creation(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """An app rename simply diverges; it does not reach Home Assistant (§4.4).
+    """An app rename diverges. It does not reach Home Assistant (§4.4).
 
-    Not only per poll: a reload does not pick it up either, because there is no
-    way to tell "the user renamed this in Home Assistant" from "the user never
-    touched it", and following the app would silently destroy the first.
+    Not only per poll: a reload does not pick it up either. There is no way to
+    tell "the user renamed this in Home Assistant" from "the user never touched
+    it". Following the app would silently destroy the first.
     """
     areas = ar.async_get(hass)
     areas.async_create("Bedroom")
@@ -220,7 +220,7 @@ async def test_setup_fails_permanently_on_a_foreign_panel(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Retrying can never fix it; the fix is the reconfigure step (§6.2)."""
+    """Retrying can never fix it. The fix is the reconfigure step (§6.2)."""
     patched_client.set_status({"id": FOREIGN_DEVICE_ID})
 
     assert not await setup_entry(hass, mock_config_entry)
@@ -252,13 +252,13 @@ async def test_unload_releases_the_entry_and_retains_nothing(
 ) -> None:
     """§9.2's ``config-entry-unloading``: true, and nothing held afterwards.
 
-    That the entry unloads is the framework's own (§8.6), so the assertions
-    that earn their keep are the two halves that are ours to get wrong.
-    ``hass.data`` is untouched at every point in the entry's life (§3.4), and
-    the session belongs to Home Assistant — we borrow it through
-    ``async_get_clientsession`` and closing it on unload would take every other
+    That the entry unloads is the framework's own work (§8.6). The assertions
+    that matter are the two halves that are ours to get wrong. ``hass.data``
+    is untouched at every point in the entry's life (§3.4). The session
+    belongs to Home Assistant; we borrow it through
+    ``async_get_clientsession``. Closing it on unload would take every other
     integration's HTTP down with this one. ``runtime_data`` is core's to
-    remove, so this asserts core removed it rather than that we cleared it.
+    remove, so this asserts that core removed it, not that we cleared it.
     """
     assert await setup_entry(hass, mock_config_entry)
     session = async_get_clientsession(hass)
@@ -278,9 +278,9 @@ def test_nothing_on_the_setup_path_sleeps() -> None:
     Multi-device restart failures on related Heatit hardware were traced to
     swallowed exceptions and a missing ``ConfigEntryNotReady``, not to the
     device. ``async_config_entry_first_refresh`` and the coordinator's own
-    jitter are what replace a stagger, so a ``sleep`` reappearing on this path
-    is a regression to the thing that did not work. Asserted over the syntax
-    tree, so the word may still be written in prose.
+    jitter replace a stagger. So a ``sleep`` coming back on this path is a
+    return to the thing that did not work. Checked over the syntax tree, so
+    the word may still be written in prose.
     """
     for name in ("__init__.py", "coordinator.py"):
         tree = ast.parse((INTEGRATION_DIR / name).read_text(encoding="utf-8"))

@@ -1,8 +1,8 @@
-"""The safety properties of ``scripts/probe.py`` that must hold before any run.
+"""The safety rules of ``scripts/probe.py`` that must hold before any run.
 
-These read the script as text or drive its seams against an in-memory panel;
-nothing here opens a socket. The register parser and the CI gate are covered in
-``test_check_conformance.py``.
+These tests read the script as text or drive its seams against an in-memory
+panel. Nothing here opens a socket. The register parser and the CI gate are
+covered in ``test_check_conformance.py``.
 """
 
 import ast
@@ -19,8 +19,8 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROBE_SOURCE = REPO_ROOT / "scripts" / "probe.py"
 
-#: The wire shape of a real status at firmware 1.21, identifying values replaced
-#: by the fixture placeholders of the spec's §8.3.
+#: The wire shape of a real status at firmware 1.21, with identifying values
+#: replaced by the fixture placeholders of the spec's §8.3.
 STATUS_DOC: dict[str, Any] = {
     "id": "FIXTUREFIXTUREFIXTUREX",
     "room": "Bedroom",
@@ -61,7 +61,7 @@ class FakePanel:
     """A panel that applies writes to a status document, honestly or not."""
 
     def __init__(self, *, honest: bool = True) -> None:
-        """Start from the reference status; ``honest=False`` echoes but ignores."""
+        """Start from the reference status; ``honest=False`` echoes without applying."""
         self.doc = json.loads(json.dumps(STATUS_DOC))
         self.honest = honest
         self.writes: list[tuple[str, str]] = []
@@ -99,7 +99,7 @@ def no_sleep(_seconds: float) -> None:
 
 
 def test_factory_reset_path_is_absent_from_the_source() -> None:
-    """The path is structurally absent: not a flag, not a string, nowhere."""
+    """The path is absent from the source: not a flag, not a string, nowhere."""
     source = PROBE_SOURCE.read_text(encoding="utf-8")
     assert "reset/factory" not in source
     assert set(re.findall(r"reset/(\w+)", source)) == {"kwh", "settings"}
@@ -140,7 +140,7 @@ def test_thermal_target_refuses_more_than_two_degrees_above_room() -> None:
 
 
 def test_thermal_target_refuses_when_the_limit_blocks_it() -> None:
-    """A maximum limit below room + 1 leaves no lawful target, so refuse."""
+    """A maximum limit below room + 1 leaves no allowed target, so refuse."""
     with pytest.raises(probe.ThermalRefusedError):
         probe.thermal_target(23.0, maximum_limit=23.5)
 
@@ -174,7 +174,7 @@ def test_fixture_saving_fails_closed_on_a_scrub_key_or_a_known_value(
 
 
 def test_fixture_saving_writes_raw_bytes_and_headers(tmp_path: Path) -> None:
-    """A clean echo lands byte-for-byte, its headers beside it."""
+    """A clean echo is saved byte for byte, with its headers beside it."""
     body = b'{"status":"Success","heatingSetpoint":19}'
     response = probe.Response(
         status=200,
@@ -337,14 +337,14 @@ def test_wire_serialisation_matches_what_the_panel_stores() -> None:
 
 
 def test_a_settings_reset_touches_every_writable_parameter() -> None:
-    """The restore surface of a settings reset is the whole writable set."""
+    """A settings reset must restore the whole writable set."""
     assert len(probe.WRITABLE_PARAMETERS) == 13
     assert "openWindowDetection" in probe.WRITABLE_PARAMETERS
     assert "maxLoad" not in probe.WRITABLE_PARAMETERS
 
 
 def test_exit_codes_are_the_spec_s_four() -> None:
-    """0 all passed, 1 a check failed, 2 a revert failed, 3 usage or connectivity."""
+    """0 all passed, 1 a check failed, 2 a revert failed, 3 usage or connection."""
     assert (probe.EXIT_OK, probe.EXIT_FAILED, probe.EXIT_REVERT, probe.EXIT_USAGE) == (
         0,
         1,

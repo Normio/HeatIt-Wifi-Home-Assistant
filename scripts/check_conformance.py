@@ -1,25 +1,32 @@
-"""Assert the conformance register and the probe that verifies it agree.
+"""Check that the conformance register and the probe that verifies it agree.
 
 ``docs/conformance/checklist.md`` is a living register with seven columns and a
-fixed vocabulary, and ``scripts/probe.py`` runs its automated rows. Nothing
-upstream reads either, so the ways they can drift are checked here or nowhere:
-a duplicated or malformed id, a word outside the vocabulary, a firmware nobody
-has captured, evidence that does not resolve, a dependents cell with no
-resolvable reference, a manual row without its procedure, a summary line whose
-figures no longer match the table, and — the one place the two files can
-silently diverge — a set of automated ids the probe does not register exactly.
+fixed vocabulary. ``scripts/probe.py`` runs its automated rows. Nothing
+upstream reads either file, so the ways they can drift are checked here or
+nowhere:
 
-The summary line under the table is hand-written prose, but its figures are
-the check's contract. It must be one bold sentence of exactly this shape, on
-its own line::
+- a duplicated or malformed id
+- a word outside the vocabulary
+- a firmware nobody has captured
+- evidence that does not resolve
+- a dependents cell with no resolvable reference
+- a manual row without its procedure
+- a summary line whose figures no longer match the table
+- a set of automated ids the probe does not register exactly
+
+The last one is the one place the two files can drift apart unnoticed.
+
+The summary line under the table is written by hand, but its figures are
+part of the check. It must be one bold sentence of exactly this shape, on its
+own line::
 
     **48 verified at firmware 1.21, 10 open, 12 `disagrees`.**
 
-followed by whatever prose the register wants. The three counts are held to
-the table: rows whose status is ``verified fw <that firmware>``, rows whose
-status is ``open``, and rows whose ``vs spec`` is ``disagrees``.
+Any prose may follow it. The three counts are held to the table: rows whose
+status is ``verified fw <that firmware>``, rows whose status is ``open`` and
+rows whose ``vs spec`` is ``disagrees``.
 
-Run from ``scripts/check.sh``. Silent when the register is clean; otherwise
+Run from ``scripts/check.sh``. Silent when the register is clean. Otherwise
 prints one line per problem and exits non-zero. The escape hatch is the
 vocabulary itself: ``manual`` tier and ``open`` status ask for nothing.
 """
@@ -68,7 +75,7 @@ def procedures_cited(cell: str) -> list[str]:
 
 
 def entry_resolves(entry: str, *, repo_root: Path, procedures: frozenset[str]) -> bool:
-    """Whether an entry is an issue link, a defined procedure, or an existing path."""
+    """Say if an entry is an issue link, a defined procedure or an existing path."""
     if ISSUE_LINK.fullmatch(entry):
         return True
     procedure = PROCEDURE_LINK.fullmatch(entry)
@@ -81,7 +88,7 @@ def entry_resolves(entry: str, *, repo_root: Path, procedures: frozenset[str]) -
 
 
 def cell_references(cell: str) -> list[str]:
-    """Return every reference-shaped token in a cell, prose left behind."""
+    """Return every reference-shaped token in a cell and leave the prose behind."""
     tokens = [match.group(0) for match in ISSUE_LINK.finditer(cell)]
     tokens += [match.group(0) for match in PROCEDURE_LINK.finditer(cell)]
     tokens += [
@@ -97,8 +104,8 @@ def check_shape(
 ) -> tuple[list[str], probe.Row | None]:
     """Condition 1: id well-formed and unique, seven columns, vocabulary held.
 
-    Returns the problems and the row, or ``None`` when the column count is
-    wrong and no row can be built from the cells.
+    Return the problems and the row. The row is ``None`` when the column count
+    is wrong and no row can be built from the cells.
     """
     row_id = cells[0] if cells else "?"
     problems: list[str] = []
@@ -257,8 +264,9 @@ def problems(
 def verified_firmwares(path: Path = CONST_PATH) -> frozenset[str]:
     """Read ``VERIFIED_FIRMWARES`` from ``const.py`` by path, without the package.
 
-    Loading the file directly keeps the integration's own imports — Home
-    Assistant, once the package grows — out of a check that needs one constant.
+    Loading the file directly keeps the integration's own imports out of a
+    check that needs one constant. Once the package grows, those imports
+    include Home Assistant.
     """
     spec = importlib.util.spec_from_file_location("heatit_const", path)
     if spec is None or spec.loader is None:
@@ -276,7 +284,7 @@ def verified_firmwares(path: Path = CONST_PATH) -> frozenset[str]:
 
 
 def main() -> None:
-    """Run every condition over the committed register; exit non-zero if any speaks."""
+    """Run every condition over the committed register; exit non-zero on a problem."""
     found = problems(
         REGISTER_PATH.read_text(encoding="utf-8"),
         repo_root=REPO_ROOT,

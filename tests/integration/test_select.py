@@ -1,14 +1,14 @@
 """The two selects of §5.2: the standby display and the physical buttons.
 
 Neither is a switch, and for two different reasons. ``temperatureDisplay`` has
-two states a user would choose between by name — the standby display shows the
-setpoint or the measured temperature — and calling one of them "on" would make
-the card ask a question nobody asked. ``disableButtons`` has three states, so a
+two states a user would choose between by name: the standby display shows the
+setpoint or the measured temperature. Calling one of them "on" would make the
+card ask a question nobody asked. ``disableButtons`` has three states, so a
 switch cannot hold it at all: a boolean would silently lose *menu locked*.
 
 Both are **named as the device and the MyHeatit app name them**. The parameter
 is called ``disableButtons``; the entity is called Buttons, with *enabled*
-first. Inverting it into a lock would have a user reading "off" and getting
+first. Turning it into a lock would have a user reading "off" and getting
 working buttons.
 """
 
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 
 class Select(NamedTuple):
-    """One select of §5.2, transcribed rather than read from the module."""
+    """One select of §5.2, copied instead of read from the module."""
 
     key: str
     parameter: str
@@ -149,8 +149,8 @@ async def test_every_option_is_a_state_the_select_can_show(
 ) -> None:
     """Each option comes back as the state, so no reading falls off the map.
 
-    One mapping is read both ways round, and this is the half a reversed or
-    duplicated entry would break — the panel would then answer a value the
+    One mapping is read both ways round. This is the half a reversed or
+    duplicated entry would break: the panel would then answer a value the
     select shows as unknown.
     """
     assert await setup_entry(hass, mock_config_entry)

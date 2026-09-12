@@ -1,24 +1,25 @@
 """Capture an observed status fixture from a real panel, read-only (§8.1).
 
-Reads a device pointer — ``.local/device.json`` unless ``--device`` names
-another, so a second unit needs a second pointer file and no edit here —
-imports the client **directly** — no Home Assistant boot — performs one
-``GET /api/status`` through the real read path,
-scrubs the bytes on the way, and writes them under
-``tests/fixtures/observed/fw-<firmware>/`` beside the raw response headers and
-a manifest. Then it prints a diff against what is committed.
+Reads a device pointer. That is ``.local/device.json`` unless ``--device``
+names another file, so a second unit needs a second pointer file and no edit
+here. Imports the client **directly**, with no Home Assistant boot. Performs
+one ``GET /api/status`` through the real read path and scrubs the bytes on
+the way. Writes them under ``tests/fixtures/observed/fw-<firmware>/`` beside
+the raw response headers and a manifest. Then it prints a diff against what
+is committed.
 
-The diff keeps the four fields that move on their own — ``roomTemperature``,
-``currentPower``, ``totalConsumption`` and ``Network.wifiSignalStrength`` — in a
-separate **live values** block, reported for information and never counted as
-drift. A difference outside them is the drift signal.
+The diff keeps the four fields that change on their own in a separate
+**live values** block: ``roomTemperature``, ``currentPower``,
+``totalConsumption`` and ``Network.wifiSignalStrength``. They are reported
+for information and never counted as drift. A difference outside them is the
+drift signal.
 
 Read-only by construction: the only request this file can issue is the
-client's status read, and ``tests/test_capture_safety.py`` asserts that by
-reading this source. It never runs in CI.
+client's status read. ``tests/test_capture_safety.py`` checks that by reading
+this source. It never runs in CI.
 
-Exit codes: ``0`` no drift · ``1`` drift outside the live values · ``2`` the
-scrub did not hold, nothing written · ``3`` usage or connectivity.
+Exit codes: ``0`` no drift. ``1`` drift outside the live values. ``2`` the
+scrub did not hold, nothing written. ``3`` usage or connectivity.
 """
 
 from __future__ import annotations
@@ -51,15 +52,15 @@ DEVICE_FILE = REPO_ROOT / ".local" / "device.json"
 DEFAULT_PORT = 80
 OBSERVED_DIR = REPO_ROOT / "tests" / "fixtures" / "observed"
 
-#: The fixture-only fifth placeholder (§8.3). ``name`` is kept by the shared
-#: redaction — it is a label, not an identifier — but a committed fixture
+#: The fixture-only fifth placeholder (§8.3). The shared redaction keeps
+#: ``name`` because it is a label, not an identifier. But a committed fixture
 #: should not carry someone's room name. It stays non-ASCII on purpose: this
 #: field is the evidence that the charset-less UTF-8 decode is required.
 NAME_PLACEHOLDER = "Näytehuone 1"
 SCRUBBED_FIELDS: tuple[str, ...] = (*REDACTED_FIELDS, "name")
 PLACEHOLDERS: dict[str, str] = {**REDACTED_FIELDS, "name": NAME_PLACEHOLDER}
 
-#: Computed per request and moving on their own (Q54); shown, never drift.
+#: Computed per request and changing on their own (Q54). Shown, never drift.
 LIVE_VALUES: tuple[str, ...] = (
     "roomTemperature",
     "currentPower",
@@ -67,7 +68,7 @@ LIVE_VALUES: tuple[str, ...] = (
     "Network.wifiSignalStrength",
 )
 
-#: Follows the body, and the body was scrubbed.
+#: It follows the body, and the body was scrubbed.
 VOLATILE_HEADERS = frozenset({"content-length"})
 
 EXIT_DRIFT = 1
@@ -83,14 +84,14 @@ def say(line: str) -> None:
 def device_host(path: Path = DEVICE_FILE) -> str:
     """Read the panel's address from the gitignored device pointer.
 
-    One pointer is one panel, as ``probe.py`` reads them: the destructive
-    prompt there names a host, and a file holding several would make "which
-    panel?" a flag away from someone else's heater. A second unit is a second
-    file, named on the command line.
+    One pointer is one panel, as ``probe.py`` reads them. The destructive
+    prompt there names a host. A file holding several panels would put
+    someone else's heater one flag away from "which panel?". A second unit
+    is a second file, named on the command line.
     """
     if not path.is_file():
-        # ``EXIT_USAGE``, as the docstring promises: a bare ``sys.exit(str)``
-        # exits 1, which is ``EXIT_DRIFT`` — and a mistyped ``--device`` is a
+        # ``EXIT_USAGE``, as the docstring promises. A bare ``sys.exit(str)``
+        # exits 1, which is ``EXIT_DRIFT``. A mistyped ``--device`` is a
         # usage error, not a fixture that has drifted.
         sys.stderr.write(f"{path} is missing; copy .local/device.example.json\n")
         sys.exit(EXIT_USAGE)
@@ -101,12 +102,12 @@ def device_host(path: Path = DEVICE_FILE) -> str:
 
 
 async def read_status(host: str) -> tuple[bytes, dict[str, str], str | None]:
-    """One status read through the real client; the raw bytes and headers."""
+    """Do one status read through the real client; return raw bytes and headers."""
     async with aiohttp.ClientSession() as session:
         client = HeatitClient(host, session=session)
         status = await client.get_status()
     if client.last_raw_body is None or client.last_raw_headers is None:
-        msg = "the client retained no raw status"
+        msg = "the client kept no raw status"
         raise AssertionError(msg)
     return client.last_raw_body, dict(client.last_raw_headers), status.firmware
 
@@ -117,7 +118,7 @@ def scrub(raw: bytes) -> bytes:
 
 
 def scrub_problems(scrubbed: bytes) -> list[str]:
-    """Every scrubbed field must read exactly its placeholder; else the problems."""
+    """Return one problem per scrubbed field that is not exactly its placeholder."""
     document = json.loads(scrubbed.decode("utf-8"))
     return [
         f"{path} is {resolve(document, path)!r}, not {placeholder!r}"

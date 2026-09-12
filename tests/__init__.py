@@ -1,1 +1,1 @@
-"""The offline test suite (§8): never talks to hardware, never writes."""
+"""The offline test suite (§8). It never talks to hardware and never writes."""

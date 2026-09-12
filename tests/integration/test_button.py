@@ -1,17 +1,17 @@
 """The two buttons of §5.2, and the reset verification of §5.5.
 
-Both of these discard device state on purpose — one zeroes the *energy
-counter*, the other puts every setting back to its default — so both ship
+Both buttons discard device state on purpose. One zeroes the *energy
+counter*, the other puts every setting back to its default, so both ship
 **disabled by default**. A button entity has no confirmation dialog, and §5.4
 makes opt-in the only guard the platform offers for a press that throws
 something away.
 
 The verification is the other half of the file. A parameter write has a *write
-echo* to compare against; a reset has none, so the only check available is *did
-the counter drop*. What that buys is one warning when the panel acknowledged a
-reset and the counter did not move, and it is bought without ever complaining
-about a drop Home Assistant did not cause — a reset from the MyHeatit app is a
-legitimate act and not the device misbehaving.
+echo* to compare against. A reset has none, so the only check available is
+whether the counter dropped. That buys one warning when the panel acknowledged
+a reset and the counter did not move. It never complains about a drop Home
+Assistant did not cause. A reset from the MyHeatit app is a valid act, not the
+device going wrong.
 """
 
 import logging
@@ -51,14 +51,14 @@ if TYPE_CHECKING:
 
 LOGGER_NAME = f"custom_components.{DOMAIN}"
 
-#: A reading well clear of zero, and the *energy counter* has nowhere to go
-#: from it but down: the reference panel reports ``0.00``, which is the one
-#: reading §5.5 has nothing to verify against.
+#: A reading well above zero, so the *energy counter* has nowhere to go from
+#: it but down. The reference panel reports ``0.00``, which is the one reading
+#: §5.5 has nothing to verify against.
 BANKED_KWH = 4.32
 
 
 class Button(NamedTuple):
-    """One button of §5.2, transcribed rather than read from the module."""
+    """One button of §5.2, written out instead of read from the module."""
 
     key: str
     reset: str
@@ -90,9 +90,9 @@ async def press(
     """Press one button by building it, the way a disabled entity is reached.
 
     Both buttons ship disabled, so neither has a state or an entity id until a
-    user enables one — and what these tests are about is what a press *does*,
-    not the registry. The press through the service registry, enabling
-    included, is its own test below.
+    user enables one. These tests are about what a press *does*, not the
+    registry. The press through the service registry, enabling included, is
+    its own test below.
     """
     coordinator = await loaded(hass, entry)
     await HeatitPanelButton(coordinator, description(key)).async_press()
@@ -134,10 +134,10 @@ async def test_each_button_sends_its_own_reset_once(
 ) -> None:
     """One press, one request: a reset is never retried (§3.6).
 
-    The exact ``DELETE`` each of these becomes on the wire —
-    ``/api/reset/kwh?resetKwh=Reset`` and ``/api/reset/settings`` — is asserted
-    at the HTTP seam, where the query parameter and the bare path are the
-    client's business (§8.4).
+    The ``DELETE`` each press becomes on the wire,
+    ``/api/reset/kwh?resetKwh=Reset`` and ``/api/reset/settings``, is asserted
+    at the HTTP seam. The query parameter and the bare path are the client's
+    business (§8.4).
     """
     await press(hass, mock_config_entry, row.key)
 
@@ -152,9 +152,8 @@ async def test_both_buttons_ship_disabled(
     """§5.4's opt-in rule, for the two presses that discard device state.
 
     A button entity gets no confirmation dialog, so this is the only guard
-    Home Assistant offers — and the entity is registered either way, so
-    enabling one is a switch a user flips rather than a reload they have to
-    know about.
+    Home Assistant offers. The entity is registered either way, so a user
+    enables one with a switch, not a reload they have to know about.
     """
     assert await setup_entry(hass, mock_config_entry)
 
@@ -174,7 +173,7 @@ async def test_a_button_a_user_enabled_presses_through_the_service_registry(
     mock_config_entry: MockConfigEntry,
     row: Button,
 ) -> None:
-    """The whole path a user walks: enable the entity, then press it."""
+    """The path a user walks: enable the entity, then press it."""
     assert await setup_entry(hass, mock_config_entry)
     er.async_get(hass).async_update_entity(
         entity_id(hass, BUTTON_DOMAIN, row.key), disabled_by=None
@@ -199,21 +198,20 @@ async def test_a_settings_reset_lets_the_staggered_state_settle_itself(
     freezer: FrozenDateTimeFactory,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """It applies over ~5 s, so the 1.5 s refresh catches it mid-way (§5.2).
+    """It applies over about 5 s, so the 1.5 s refresh catches it half-way (§5.2).
 
-    There is nothing to retry and nothing to fix: the refresh reports whatever
-    the panel says at that moment and a later poll carries the rest. What this
-    asserts is that a half-applied state costs no warning and no second
-    request — a reset is one request, and the poll goes on being the sole
-    judge. A partial state is the *hardest* case for that and so the one worth
-    staging; on the panel itself the 1.5 s refresh saw the pre-reset state
-    instead (§15, 2026-09-11), which is the easier half of the same rule.
+    A half-applied state costs no warning and no second request. The refresh
+    reports whatever the panel says at that moment and a later poll carries
+    the rest. A reset is one request, and the poll stays the only thing that
+    decides. A partial state is the *hardest* case for that rule, so it is the
+    one set up here. On the panel itself the 1.5 s refresh saw the pre-reset
+    state instead (§15, 2026-09-11), the easier half of the same rule.
     """
     coordinator = await press(hass, mock_config_entry, RESTORE_DEFAULTS.key)
     reads = patched_client.status_reads
 
-    # Half-way through the stagger: the setpoint is back to its default and
-    # the brightness has not moved yet.
+    # Half-way through the spread-out apply: the setpoint is back to its
+    # default and the brightness has not moved yet.
     patched_client.set_status({"parameters.heatingSetpoint": 21.0})
     await advance(hass, freezer, POST_WRITE_REFRESH_DELAY)
 
@@ -236,7 +234,7 @@ async def test_a_reset_the_counter_did_not_follow_warns_once(
     """§5.5: a non-zero reading that did not fall is one warning, then debug.
 
     The warning names both numbers, because "the reset did not take" is only
-    actionable next to what the counter read before and reads now.
+    useful next to what the counter read before and reads now.
     """
     patched_client.set_status({TOTAL_CONSUMPTION: BANKED_KWH})
 
@@ -270,9 +268,9 @@ async def test_a_poll_before_the_delay_neither_judges_nor_drops_the_record(
 ) -> None:
     """The counter reads ``0.00`` within 5 s of the ack (Q45), not sooner.
 
-    So the write-triggered refresh at 1.5 s is too early to settle anything,
-    and the record it cannot judge has to survive it — otherwise the press
-    that mattered is the one never checked.
+    So the write-triggered refresh at 1.5 s is too early to decide anything,
+    and the record it cannot check has to survive it. Otherwise the press that
+    mattered is the one never checked.
     """
     patched_client.set_status({TOTAL_CONSUMPTION: BANKED_KWH})
 
@@ -315,9 +313,9 @@ async def test_pressing_at_zero_still_sends_and_verifies_nothing(
 ) -> None:
     """The reference panel reads ``0.00``: the request goes, the check does not.
 
-    The last reading may be a whole *poll interval* stale and the request is
-    harmless either way, so the press is never withheld. What a zero reading
-    cannot do is fall below itself, which is exactly why it is not judged.
+    The last reading may be a *poll interval* stale and the request is
+    harmless either way, so the press is never held back. A zero reading
+    cannot fall below itself, so it is not checked.
     """
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
         coordinator = await press(hass, mock_config_entry, RESET_ENERGY.key)
@@ -338,9 +336,9 @@ async def test_a_second_press_replaces_the_pending_record(
     """Two presses are one pending record: the second one's (§5.5).
 
     The counter falls between the presses, so the two records disagree about
-    the verdict — against the first reading the drop is a reset that took,
-    against the second it is a counter that did not move. The warning is the
-    second record's, which is the one the user's last press made.
+    the outcome. Against the first reading the drop is a reset that took.
+    Against the second it is a counter that did not move. The warning is the
+    second record's, the one the user's last press made.
     """
     patched_client.set_status({TOTAL_CONSUMPTION: BANKED_KWH})
     coordinator = await press(hass, mock_config_entry, RESET_ENERGY.key)
@@ -368,9 +366,9 @@ async def test_a_press_at_zero_clears_a_record_still_pending(
 ) -> None:
     """A zero reading replaces the pending record with nothing to verify.
 
-    The counter then climbs back above where the *first* press found it, which
-    is what makes this discriminating: a record left standing from that press
-    would read the climb as a reset that did not take and warn about it.
+    The counter then climbs back above where the *first* press found it. A
+    record left standing from that press would read the climb as a reset that
+    did not take and warn about it.
     """
     patched_client.set_status({TOTAL_CONSUMPTION: BANKED_KWH})
     coordinator = await press(hass, mock_config_entry, RESET_ENERGY.key)
@@ -397,9 +395,9 @@ async def test_a_counter_the_panel_stopped_returning_ends_the_check_quietly(
     """A reading that is gone is not a reset that failed (§6.3).
 
     The *energy counter* has no registry descriptor, so the coordinator's
-    vanished-parameter warning never covers it — the energy sensor going
-    unavailable is how §6.3 reports this one. What the verification owes is
-    the record that it gave up, at ``debug``, and no accusation.
+    vanished-parameter warning never covers it. The energy sensor going
+    unavailable is how §6.3 reports this one. The verification owes one
+    ``debug`` line saying it gave up, and no blame.
     """
     patched_client.set_status({TOTAL_CONSUMPTION: BANKED_KWH})
 
@@ -420,11 +418,11 @@ async def test_a_drop_home_assistant_did_not_cause_is_never_logged(
     freezer: FrozenDateTimeFactory,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A reset from the MyHeatit app is a legitimate act, not an anomaly (§5.5).
+    """A reset from the MyHeatit app is a valid act, not an anomaly (§5.5).
 
     The statistics engine already treats the drop as a new meter cycle, and
-    nothing about it says the panel is misbehaving — so there is nothing to
-    say about it at any level.
+    nothing about it says the panel is going wrong. So there is nothing to say
+    about it at any level.
     """
     patched_client.set_status({TOTAL_CONSUMPTION: BANKED_KWH})
     coordinator = await loaded(hass, mock_config_entry)

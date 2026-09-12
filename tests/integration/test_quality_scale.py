@@ -1,17 +1,21 @@
 """§9.2's rule tests that no platform suite owns, over every entity at once.
 
 ``quality_scale.yaml`` marks four rules ``done`` with this file as the
-evidence — ``entity-unique-id``, ``has-entity-name``, ``entity-translations``
-and ``icon-translations`` — and ``scripts/check_quality_scale.py`` fails the
-build if it goes away. The rest of §9.2's table points at the suites that
-already held the fact: ``parallel-updates``, ``entity-category`` and its
-neighbours in ``test_entity.py``, unloading in ``test_init.py``, the second
-entry in ``test_config_flow.py``, the download in ``test_diagnostics.py``.
+evidence: ``entity-unique-id``, ``has-entity-name``, ``entity-translations``
+and ``icon-translations``. ``scripts/check_quality_scale.py`` fails the build
+if this file goes away. The rest of §9.2's table points at the suites that
+already held the fact:
+
+- ``parallel-updates``, ``entity-category`` and its neighbours in
+  ``test_entity.py``
+- unloading in ``test_init.py``
+- the second entry in ``test_config_flow.py``
+- the download in ``test_diagnostics.py``
 
 Every assertion runs over **all** the entities the integration ships, the
-three that ship disabled included: those are enabled in the registry and the
-entry reloaded, so the objects the platforms build are the ones inspected
-rather than the descriptions they were built from.
+three that ship disabled included. Those are enabled in the registry and the
+entry reloaded. So the objects the platforms build are inspected, not the
+descriptions they were built from.
 """
 
 import json
@@ -33,7 +37,7 @@ if TYPE_CHECKING:
 
 INTEGRATION_DIR = Path(__file__).parents[2] / "custom_components" / "heatit_wifi_panel"
 
-#: §5.2: the device id, a hyphen, and the key — which is also the translation key.
+#: §5.2: the device id, a hyphen and the key, which is also the translation key.
 UNIQUE_ID = re.compile(rf"^{re.escape(REFERENCE_DEVICE_ID)}-(?P<key>[a-z_]+)$")
 
 #: What ``icons.json`` may hold: a Material Design Icons name, and nothing else.
@@ -49,12 +53,12 @@ def read_json(name: str) -> dict[str, Any]:
 
 
 def registered(hass: HomeAssistant, entry: MockConfigEntry) -> list[er.RegistryEntry]:
-    """Every registry entry the config entry owns."""
+    """Return every registry entry the config entry owns."""
     return er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
 
 
 def shipped(hass: HomeAssistant) -> list[Entity]:
-    """Every entity object the platforms have added, across all platforms."""
+    """Return every entity object the platforms have added, across all platforms."""
     return [
         entity
         for platform in async_get_platforms(hass, DOMAIN)
@@ -63,7 +67,7 @@ def shipped(hass: HomeAssistant) -> list[Entity]:
 
 
 def translation_keys(entities: list[Entity]) -> set[tuple[str, str]]:
-    """Each entity's ``(platform, translation_key)``, the two halves of a key."""
+    """Return each entity's ``(platform, translation_key)``, the two halves of a key."""
     return {
         (entity.platform.domain, entity.translation_key)
         for entity in entities
@@ -72,11 +76,11 @@ def translation_keys(entities: list[Entity]) -> set[tuple[str, str]]:
 
 
 def sets_attr_name(entity: Entity) -> bool:
-    """Whether one of *our* classes sets ``_attr_name`` on this entity.
+    """Say whether one of *our* classes sets ``_attr_name`` on this entity.
 
-    Asked of the integration's own classes rather than of ``hasattr``, so a
-    default core might one day give ``Entity`` cannot make every entity look
-    like the one that took the device's name.
+    This asks the integration's own classes, not ``hasattr``. So a
+    default that core might one day give ``Entity`` cannot make every entity
+    look like the one that took the device's name.
     """
     return any(
         "_attr_name" in vars(cls)
@@ -123,7 +127,7 @@ async def test_every_unique_id_is_the_device_id_and_the_key(
 async def test_every_unique_id_survives_a_reload(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry
 ) -> None:
-    """A reload finds the same registry entries, and mints none."""
+    """A reload finds the same registry entries, and creates none."""
     assert await setup_entry(hass, mock_config_entry)
     before = {
         entity.entity_id: entity.unique_id
@@ -157,14 +161,14 @@ async def test_no_entity_carries_a_name_or_an_icon_literal(
 ) -> None:
     """Names come from ``translations/en.json`` and icons from ``icons.json``.
 
-    ``_attr_name = None`` is allowed — it is how the climate entity marks
-    itself the main feature — and a string is not. An entity description is
-    the other place a literal could hide, so its two fields are held to the
-    same rule.
+    ``_attr_name = None`` is allowed: it is how the climate entity marks itself
+    the main feature. A string is not allowed. An entity description is the
+    other place a literal could hide, so its two fields are held to the same
+    rule.
     """
     for entity in every_entity:
         if sets_attr_name(entity):
-            assert entity._attr_name is None, entity.entity_id  # noqa: SLF001 — the literal is the subject
+            assert entity._attr_name is None, entity.entity_id  # noqa: SLF001 (the literal is the subject)
         assert getattr(entity, "_attr_icon", None) is None, entity.entity_id
         description = getattr(entity, "entity_description", None)
         if description is not None:
@@ -178,7 +182,7 @@ async def test_every_translation_key_resolves_in_en_json(
 ) -> None:
     """A key with nothing under it is a raw key in front of a user.
 
-    Every entity has a node; every entity but the one that took the device's
+    Every entity has a node. Every entity but the one that took the device's
     name (``_attr_name = None``) has a ``name`` under it.
     """
     translations = read_json("translations/en.json")["entity"]
@@ -210,10 +214,11 @@ async def test_icons_json_is_keyed_by_the_same_translation_keys(
 ) -> None:
     """Every icon names a shipping entity, and every icon is an ``mdi:`` name.
 
-    Not every entity has an icon — a device class supplies one where there is
-    no entry (§5.2) — so the containment runs one way. The frontend resolves
-    these, not the state machine, so there is no state attribute to read back;
-    what can be held is that no key here is an orphan and no value a typo.
+    Not every entity has an icon, because a device class supplies one where
+    there is no entry (§5.2). So the containment check runs one way. The
+    frontend resolves these, not the state machine, so there is no state
+    attribute to read back. What can be checked is that no key here is an
+    orphan and no value a typo.
     """
     icons = read_json("icons.json")
     assert set(icons) == {"entity"}

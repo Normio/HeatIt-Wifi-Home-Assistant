@@ -3,18 +3,18 @@
 Neither of these is a switch, and for two different reasons.
 
 ``temperatureDisplay`` has **two meaningful states**: the panel's standby
-display shows the setpoint or it shows the measured temperature. Neither is the
-absence of the other, so a switch would have to call one of them "on" and leave
-the user to guess which.
+display shows the setpoint, or it shows the measured temperature. Neither is
+the absence of the other. A switch would have to call one of them "on" and
+leave the user to guess which.
 
 ``disableButtons`` has **three**, and a switch cannot hold three: a boolean
 would silently lose *menu locked*. It is named the way the device and the
-MyHeatit app name it — Buttons, *enabled* first — and deliberately **not**
-inverted into a lock, which would have "off" mean working buttons.
+MyHeatit app name it, Buttons, with *enabled* first. On purpose it is **not**
+turned into a lock, which would have "off" mean working buttons.
 
-Each description carries the option names and the device value behind each, and
-that one mapping is read both ways: an option chosen becomes a value written, a
-value read becomes the option shown.
+Each description carries the option names and the device value behind each.
+That one mapping is read both ways: an option chosen becomes a value written,
+and a value read becomes the option shown.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ PARALLEL_UPDATES = 1
 
 @dataclass(frozen=True, kw_only=True)
 class HeatitSelectDescription(SelectEntityDescription):
-    """One enumerated parameter, as a select."""
+    """One parameter with a fixed list of choices, as a select."""
 
     parameter: str
     """The wire name in the registry, which is *not* always ``key`` (§5.2)."""
@@ -51,9 +51,8 @@ class HeatitSelectDescription(SelectEntityDescription):
     """Each option and the device value behind it, in the order offered.
 
     The option names are also state-translation keys, resolved at
-    ``entity.select.<key>.state.<option>``; the values are the device's own —
-    ``false``/``true``, or 0/1/2 — and the registry validates them on the way
-    out.
+    ``entity.select.<key>.state.<option>``. The values are the device's own,
+    ``false``/``true`` or 0/1/2, and the registry checks them on the way out.
     """
 
 
@@ -63,8 +62,8 @@ def _select(
     """Build a select's description, its options taken from its own states.
 
     ``options`` is what Home Assistant offers and ``states`` is what each one
-    means to the panel; deriving the first from the second is what keeps a
-    select from offering an option it cannot write.
+    means to the panel. Taking the first from the second keeps a select from
+    offering an option it cannot write.
     """
     return HeatitSelectDescription(
         key=key,
@@ -90,7 +89,7 @@ SELECTS: tuple[HeatitSelectDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 - the platform signature is core's
+    hass: HomeAssistant,  # noqa: ARG001  # the platform signature is core's
     entry: HeatitWifiPanelConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
@@ -104,7 +103,7 @@ async def async_setup_entry(
 
 
 class HeatitPanelSelect(HeatitParameterEntity, SelectEntity):
-    """One enumerated setting on the panel."""
+    """One setting on the panel with a fixed list of choices."""
 
     entity_description: HeatitSelectDescription
 
@@ -116,9 +115,9 @@ class HeatitPanelSelect(HeatitParameterEntity, SelectEntity):
         """Bind to the parameter this select chooses."""
         super().__init__(coordinator, description.key, parameter=description.parameter)
         self.entity_description = description
-        # Typed to what the coordinator *answers* with rather than to what the
-        # states hold, so a reading can be looked up without narrowing it first:
-        # ``bool | int`` collapses to ``int``, which no float would fit.
+        # Typed to what the coordinator *answers* with, not to what the states
+        # hold, so a reading can be looked up without a type check first.
+        # ``bool | int`` would become ``int``, which no float fits.
         self._options_by_value: dict[float | bool, str] = {
             value: option for option, value in description.states.items()
         }
@@ -129,16 +128,16 @@ class HeatitPanelSelect(HeatitParameterEntity, SelectEntity):
     def current_option(self) -> str | None:
         """The option the panel's value names, a pending *write echo* winning.
 
-        ``None`` for a value no option names — a firmware that grows a fourth
-        button state shows nothing rather than the wrong thing, and adding the
-        option is then a deliberate edit with a fixture behind it.
+        ``None`` for a value no option names. A firmware that grows a fourth
+        button state shows nothing instead of the wrong thing. Adding the
+        option is then an edit made on purpose, with a fixture behind it.
         """
         value = self.coordinator.parameter(self._parameter)
         return None if value is None else self._options_by_value.get(value)
 
     @override
     async def async_select_option(self, option: str) -> None:
-        """Write the value behind ``option``; the refresh at 1.5 s settles it."""
+        """Write the value behind ``option``; the refresh at 1.5 s decides the state."""
         await self.coordinator.async_write_parameter(
             self._parameter, value=self.entity_description.states[option]
         )

@@ -1,7 +1,7 @@
 """Every transcribed write-path response behaves as its manifest says (§8.3).
 
-The manifest is the provenance record; this test is what keeps a file from
-sitting unused, and what tells the probe which ones its captures replace.
+The manifest records where each file came from. This test keeps a file from
+sitting unused, and tells the probe which files its captures replace.
 """
 
 import json
@@ -78,7 +78,7 @@ async def test_each_synthesised_response_behaves_as_documented(
         with pytest.raises(HeatitResponseError) as response_error:
             await client.get_status()
         assert response_error.value.status_code == entry["status"]
-    else:  # pragma: no cover - a new kind needs a new branch
+    else:  # pragma: no cover  # a new kind needs a new branch
         pytest.fail(f"unknown kind {kind!r} for {name}")
 
 

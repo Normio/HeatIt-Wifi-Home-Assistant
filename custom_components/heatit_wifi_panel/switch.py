@@ -1,17 +1,18 @@
 """The two switches: open window detection and the external sensor (§5.2).
 
-Both are settings the panel's own display and the MyHeatit app offer, and both
+Both are settings the panel's own display and the MyHeatit app offer. Both
 are one boolean parameter each, so the platform is one entity class over a
-description that names the parameter. The read/write asymmetry of
-``openWindowDetection`` — nested under ``parameters.OWD`` on the way in, flat on
-the way out — is the registry's and stays there; this module names the
-parameter and nothing else knows the difference.
+description that names the parameter. ``openWindowDetection`` is read and
+written in different shapes: nested under ``parameters.OWD`` on the way in,
+flat on the way out. That difference is the registry's and stays there. This
+module names the parameter, and nothing else knows the difference.
 
-``external_sensor`` is here even though the panel's *write echo* lies about it:
-with no sensor paired the write is **inert**, not dangerous, and §5.4 keeps the
-optimistic update at one rule rather than giving this parameter an honesty
-flag. What a user sees is the switch coming on and going off again at the 1.5 s
-refresh, and what the log gets is the *silent undo* warning of §6.5 — once.
+``external_sensor`` is here even though the panel's *write echo* lies about
+it. With no sensor paired the write does **nothing**; it is not dangerous.
+§5.4 keeps the optimistic update at one rule instead of giving this
+parameter an honesty flag. What a user sees is the switch coming on and going
+off again at the 1.5 s refresh. What the log gets is the *silent undo* warning
+of §6.5, once.
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ SWITCHES: tuple[HeatitSwitchDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001 - the platform signature is core's
+    hass: HomeAssistant,  # noqa: ARG001  # the platform signature is core's
     entry: HeatitWifiPanelConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
@@ -89,8 +90,8 @@ class HeatitPanelSwitch(HeatitParameterEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         """The parameter, a pending *write echo* winning over the status.
 
-        ``None`` for anything the registry's declared type cannot absorb, which
-        is also when the entity is unavailable; the two answers agree because
+        ``None`` for anything the registry's declared type cannot take, which
+        is also when the entity is unavailable. The two answers agree because
         both come from the same read.
         """
         value = self.coordinator.parameter(self._parameter)
@@ -98,7 +99,7 @@ class HeatitPanelSwitch(HeatitParameterEntity, SwitchEntity):
 
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Write ``true``; the refresh at 1.5 s is what settles it (§5.4)."""
+        """Write ``true``; the refresh at 1.5 s decides the state (§5.4)."""
         await self.coordinator.async_write_parameter(self._parameter, value=True)
 
     @override

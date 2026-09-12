@@ -1,7 +1,7 @@
 """The parameter registry: one descriptor per observed parameter (§2.4, §3.3).
 
-Expected wire strings are transcribed from the spec's serialisation column,
-not derived from the registry, so the two encodings can disagree.
+Expected wire strings are copied by hand from the spec's serialisation
+column, not derived from the registry, so the two encodings can disagree.
 """
 
 import pytest
@@ -40,7 +40,7 @@ def test_registry_holds_exactly_the_thirteen_observed_parameters() -> None:
         ("maximumTemperatureLimit", 40.0, "40.0"),
         ("sensorCalibration", 1.1, "1.1"),
         ("sensorCalibration", -1.0, "-1.0"),
-        # Float noise from caller arithmetic sits on the grid.
+        # Float noise from the caller's arithmetic still lands on the grid.
         ("sensorCalibration", 0.1 * 3, "0.3"),
         ("standbyDisplayBrightness", 50, "5"),
         ("standbyDisplayBrightness", 50.0, "5"),
@@ -172,7 +172,7 @@ def test_enumerated_parameters(key: str, choices: tuple[int, ...]) -> None:
 
 
 def test_a_scaled_integer_parameter_steps_by_its_scale() -> None:
-    """Why an on-grid user value is always a whole number on the wire."""
+    """An on-grid user value is always a whole number on the wire, because of this."""
     for descriptor in PARAMETERS.values():
         if descriptor.kind == "int" and descriptor.choices is None:
             assert descriptor.step == descriptor.scale, descriptor.key

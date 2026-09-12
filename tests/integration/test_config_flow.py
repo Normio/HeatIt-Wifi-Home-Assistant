@@ -1,7 +1,7 @@
 """Every path through the config flow (§4), at 100 % line coverage.
 
 The gate is in ``scripts/check.sh``: this module is small, and a missed path in
-it is a user-facing bug rather than a coverage statistic.
+it is a user-facing bug, not a coverage statistic.
 """
 
 from typing import TYPE_CHECKING
@@ -44,10 +44,10 @@ OTHER_HOST = "10.0.0.3"
 DISCOVERY = DhcpServiceInfo(ip=OTHER_HOST, hostname="heatit", macaddress="020000000001")
 
 #: The two failure classes §4.2 separates, and the key each must show. A
-#: refused connection is one thing; something answering that is not a panel is
+#: refused connection is one thing. Something answering that is not a panel is
 #: another, and the *required core* is what tells them apart. The same pair
-#: names a form error in the user and reconfigure steps and an abort reason in
-#: the DHCP step (§4.3), which is why one list serves all three.
+#: names a form error in the user and reconfigure steps. It names an abort
+#: reason in the DHCP step (§4.3). So one list serves all three.
 VALIDATION_FAILURES = [
     (HeatitConnectionError("refused"), "cannot_connect"),
     (HeatitMissingFieldError("parameters.panelMode"), "invalid_response"),
@@ -108,7 +108,7 @@ async def test_user_step_falls_back_to_a_name_when_the_panel_has_none(
 async def test_user_step_does_not_gate_on_model(
     hass: HomeAssistant, patched_client: FakeHeatitClient
 ) -> None:
-    """``model`` is undocumented and spent on ``DeviceInfo`` alone (§4.2)."""
+    """``model`` is undocumented and used only for ``DeviceInfo`` (§4.2)."""
     patched_client.set_status({"model": ABSENT})
 
     result = await hass.config_entries.flow.async_init(
@@ -134,7 +134,7 @@ async def test_user_step_reports_the_failure_and_recovers(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": error}
 
-    # The form is live, not terminal: a corrected address goes straight through.
+    # The form stays open, it is not the end: a corrected address goes through.
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_HOST: REFERENCE_HOST}
     )
@@ -146,7 +146,7 @@ async def test_user_step_aborts_rather_than_repointing_a_configured_panel(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """``_abort_if_unique_id_configured()`` is bare: adding is adding (§4.2)."""
+    """``_abort_if_unique_id_configured()`` gets no updates: adding is adding (§4.2)."""
     mock_config_entry.add_to_hass(hass)
 
     result = await hass.config_entries.flow.async_init(
@@ -176,7 +176,7 @@ async def test_dhcp_follows_a_configured_panel_to_its_new_address(
     assert result["reason"] == "already_configured"
     assert mock_config_entry.data == {CONF_HOST: OTHER_HOST}
     # The device id is not in the DHCP packet, so the status read is what
-    # identified the panel — repointing on the MAC alone would skip it.
+    # identified the panel. Repointing on the MAC alone would skip it.
     assert patched_client.status_reads == 1
 
 
@@ -190,12 +190,12 @@ async def test_dhcp_aborts_quietly_on_any_failure(
 ) -> None:
     """Home Assistant re-fires on the next DHCP event; nothing is shown (§4.3).
 
-    Quiet, but true: the abort carries the reason validation computed, so a
+    Quiet, but true: the abort carries the reason validation computed. So a
     host that answered without being a panel does not abort saying nothing
-    answered. Nobody reads either reason — core discards a discovery flow's
-    result and logs nothing — so the abort is silent either way, which is the
-    whole of §4.3's quiet. The assertion is here because the reason is what
-    picks the string, and an unasserted reason is an unasserted string.
+    answered. Nobody reads either reason. Core discards a discovery flow's
+    result and logs nothing, so the abort is silent either way. That is all
+    §4.3's quiet means. The reason picks the string, so an unasserted reason
+    is an unasserted string.
     """
     mock_config_entry.add_to_hass(hass)
     patched_client.fail(failure)
@@ -292,7 +292,7 @@ async def test_reconfigure_never_adopts_a_replacement_panel(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """A replaced unit means delete-and-re-add, with the history loss (§4.5)."""
+    """A replaced unit means delete and add again, and the history is lost (§4.5)."""
     mock_config_entry.add_to_hass(hass)
     patched_client.set_status({"id": FOREIGN_DEVICE_ID})
 

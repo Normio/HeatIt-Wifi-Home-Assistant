@@ -1,23 +1,23 @@
 """Hardware conformance probe for the Heatit WiFi Panel.
 
 Runs the automated rows of ``docs/conformance/checklist.md`` against a real
-panel and prints a Markdown table that pastes into an issue. Standard library
-only, and nothing imported from the integration: a stranger with a second panel
-runs it with nothing but Python.
+panel. Prints a Markdown table that can be pasted into an issue. It uses the
+standard library only and imports nothing from the integration. Anyone with a
+second panel can run it with nothing but Python.
 
-Four ascending flags, one per probe tier::
+Four flags, one per probe tier, each one adding to the one before::
 
     probe.py                 read tier only, unattended, no approval
-    probe.py --writes        + benign writes, snapshotted and restore-verified
+    probe.py --writes        + harmless writes, snapshotted and restore-verified
     probe.py --destructive   + kWh reset, settings reset          (y/N)
     probe.py --thermal       + heater-on sequences                (y/N, TTY)
 
-A check registers its id and tier only; the claim it prints is read from the
+A check registers only its id and tier. The claim it prints is read from the
 register at runtime, so the sentence exists once. Every write run snapshots the
-status first, registers each touched parameter, and restores them on any exit —
-then re-reads the status to verify, because this panel's write echo lies.
-``--restore <file>`` replays a snapshot for the run that died too hard for any
-hook to fire.
+status first, registers each touched parameter and restores them on any exit.
+It then re-reads the status to verify, because this panel's write echo lies.
+``--restore <file>`` replays a snapshot for a run that died before any hook
+could fire.
 
 Exit codes: 0 all selected checks passed, 1 a check failed, 2 a revert failed,
 3 usage or connectivity.
@@ -56,10 +56,10 @@ WRITE = "write"
 DESTRUCTIVE = "destructive"
 THERMAL = "thermal"
 MANUAL = "manual"
-#: The automated tiers, ascending by hazard; the order the flags enable them in.
+#: The automated tiers, least dangerous first; the order the flags enable them in.
 TIERS: tuple[str, ...] = (READ, WRITE, DESTRUCTIVE, THERMAL)
 
-PASS = "PASS"  # noqa: S105 — a verdict, not a password
+PASS = "PASS"  # noqa: S105  # a verdict, not a password
 FAIL = "FAIL"
 INCONCLUSIVE = "INCONCLUSIVE"
 SKIPPED = "SKIPPED (tier not enabled)"
@@ -69,7 +69,7 @@ EXIT_FAILED = 1
 EXIT_REVERT = 2
 EXIT_USAGE = 3
 
-#: The observed writable parameters, and so the whole restore surface.
+#: The writable parameters seen on a real panel, so also all that a restore covers.
 WRITABLE_PARAMETERS: tuple[str, ...] = (
     "panelMode",
     "heatingSetpoint",
@@ -110,7 +110,7 @@ THERMAL_DECAY_WATCH = 25.0
 
 REQUEST_TIMEOUT = 5.0
 CONNECT_TIMEOUT = 1.0
-#: Q31's bound: a write is reflected in the status within this.
+#: Q31's bound: a write shows in the status within this.
 REFLECT_BOUND = 1.5
 REFLECT_DEADLINE = 3.0
 REFLECT_POLL = 0.05
@@ -161,8 +161,8 @@ class CheckFailedError(Exception):
     """The claim did not hold: a contradiction, or an open row answered no."""
 
 
-class Inconclusive(Exception):  # noqa: N818 — a verdict, not an error condition
-    """The run could not settle the claim on this panel in this state."""
+class Inconclusive(Exception):  # noqa: N818  # a verdict, not an error condition
+    """The run could not decide the claim on this panel in this state."""
 
 
 class ThermalRefusedError(Exception):
@@ -211,7 +211,7 @@ class Row:
 
 
 def split_cells(line: str) -> tuple[str, ...]:
-    """Split a Markdown table line into its cells, honouring escaped pipes."""
+    """Split a Markdown table line into its cells; an escaped pipe does not split."""
     inner = line.strip()
     inner = inner.removeprefix("|").removesuffix("|")
     return tuple(cell.strip() for cell in re.split(r"(?<!\\)\|", inner))
@@ -279,7 +279,7 @@ CheckFunction = Callable[["Run"], str | None]
 
 @dataclass(frozen=True)
 class Check:
-    """A registered check: its id, its tier, and the function that runs it."""
+    """A registered check: its id, its tier and the function that runs it."""
 
     row_id: str
     tier: str
@@ -290,7 +290,7 @@ CHECKS: dict[str, Check] = {}
 
 
 def check(row_id: str, *, tier: str) -> Callable[[CheckFunction], CheckFunction]:
-    """Register a check by register id and probe tier — nothing else."""
+    """Register a check by register id and probe tier, nothing else."""
     if tier not in TIERS:
         msg = f"{row_id}: unknown tier {tier!r}"
         raise ValueError(msg)
@@ -306,14 +306,14 @@ def check(row_id: str, *, tier: str) -> Callable[[CheckFunction], CheckFunction]
 
 
 def registered_ids() -> frozenset[str]:
-    """Return the ids the probe can run — what the CI gate compares to the register."""
+    """Return the ids the probe can run; the CI gate compares them to the register."""
     return frozenset(CHECKS)
 
 
 def enabled_tiers(
     *, writes: bool = False, destructive: bool = False, thermal: bool = False
 ) -> frozenset[str]:
-    """Return the tiers a flag set enables: each flag, and every tier below it."""
+    """Return the tiers a flag set enables: each flag and every tier below it."""
     highest = READ
     if writes:
         highest = WRITE
@@ -373,7 +373,7 @@ def parse_wire_value(value: str) -> object:
 
 
 def on_grid(value: float, step: float = 0.5) -> bool:
-    """Whether a temperature sits on the panel's grid."""
+    """Return whether a temperature sits on the panel's grid."""
     return math.isclose(round(value / step) * step, value, abs_tol=1e-9)
 
 
@@ -403,7 +403,7 @@ def assert_thermal_setpoint(*, room_temperature: float, target: float) -> None:
 
 
 def thermal_target(room_temperature: float, *, maximum_limit: float) -> float:
-    """Return a thermal check's setpoint: just above room + 1, on the grid."""
+    """Return a thermal check's setpoint: room + 1, rounded up to the grid."""
     target = grid_ceil(room_temperature + 1.0)
     assert_thermal_setpoint(room_temperature=room_temperature, target=target)
     if target > maximum_limit:
@@ -422,7 +422,7 @@ def thermal_target(room_temperature: float, *, maximum_limit: float) -> float:
 
 @dataclass
 class Response:
-    """An HTTP response as received: status, headers, and the raw body bytes."""
+    """An HTTP response as received: status, headers and the raw body bytes."""
 
     status: int
     reason: str
@@ -439,14 +439,14 @@ class Response:
                 return value
         return None
 
-    def json(self) -> Any:  # noqa: ANN401 — a JSON document is any shape
+    def json(self) -> Any:  # noqa: ANN401  # a JSON document is any shape
         """Return the body parsed as JSON."""
         return json.loads(self.body.decode("utf-8"))
 
 
 @dataclass
 class Status:
-    """A status read: the raw bytes, the headers, and the parsed document."""
+    """A status read: the raw bytes, the headers and the parsed document."""
 
     raw: bytes
     headers: dict[str, str]
@@ -532,7 +532,7 @@ class Panel:
         return Status(raw=response.body, headers=response.headers, doc=response.json())
 
     def write(self, name: str, value: str) -> Response:
-        """Write one parameter through the query string, body-less."""
+        """Write one parameter through the query string, with no body."""
         return self.write_query(f"{name}={value}")
 
     def write_query(
@@ -542,12 +542,12 @@ class Panel:
         body: bytes | None = None,
         headers: dict[str, str] | None = None,
     ) -> Response:
-        """``POST /api/parameters`` with an arbitrary query string."""
+        """``POST /api/parameters`` with any query string."""
         path = f"/api/parameters?{query}" if query else "/api/parameters"
         return self.request("POST", path, body=body, headers=headers)
 
     def reset_kwh(self) -> Response:
-        """``DELETE /api/reset/kwh`` bare — the documented parameter is Q7's point."""
+        """``DELETE /api/reset/kwh`` without the documented parameter (Q7's point)."""
         return self.request("DELETE", "/api/reset/kwh")
 
     def reset_settings(self) -> Response:
@@ -757,10 +757,10 @@ class Ledger:
 
 
 def restore_banner(host: str, port: int, failures: list[RestoreFailure]) -> str:
-    """Render the loud one: what is wrong and the curl that fixes it by hand."""
+    """Render the loud banner: what is wrong and the curl that fixes it by hand."""
     lines = [
         "",
-        "!!! RESTORE FAILED — the panel is NOT back in its original state.",
+        "!!! RESTORE FAILED: the panel is NOT back in its original state.",
         f"!!! Panel: {host}:{port}. Fix each parameter by hand and re-check status:",
     ]
     for failure in failures:
@@ -790,7 +790,7 @@ def replay_snapshot(
 
 
 class FixtureStore:
-    """Save write and reset responses as raw bytes, refusing anything scrubbable."""
+    """Save write and reset responses as raw bytes; refuse anything identifying."""
 
     def __init__(self, directory: Path, *, secrets: tuple[str, ...]) -> None:
         """Bind to a directory (created on first save) and the values to refuse."""
@@ -798,10 +798,10 @@ class FixtureStore:
         self.secrets = tuple(secret for secret in secrets if secret)
         self.saved: list[Path] = []
         self.kept: list[Path] = []
-        """Fixtures a run declined to overwrite, because they already exist."""
+        """Fixtures a run did not overwrite, because they already exist."""
 
     def check_scrubbable(self, body: bytes) -> None:
-        """Fail closed: a scrub key or a known identifying value refuses the save."""
+        """Refuse the save if the body carries a scrub key or an identifying value."""
         for key in SCRUB_KEYS:
             if f'"{key}"'.encode() in body:
                 msg = f"response carries the scrub key {key!r}; not saved"
@@ -815,13 +815,13 @@ class FixtureStore:
         """Write ``<name>.json`` or ``<name>.txt`` plus ``<name>.headers``.
 
         **A fixture already in the tree is never overwritten.** A committed
-        fixture is reviewed evidence, and a probe run is not a review: three
+        fixture is reviewed evidence, and a probe run is not a review. Three
         runs in a row rewrote the heating-setpoint echo to whatever value the
-        room temperature implied that hour, once losing the integer the fixture
-        existed to show, and once reaching a commit unnoticed inside a
+        room temperature implied that hour. Once that lost the integer the
+        fixture existed to show. Once it reached a commit unnoticed inside a
         ``git add -A``. A new firmware's directory is empty, so a capture there
-        still lands; refreshing an existing one is a deliberate act — delete
-        the file and re-run.
+        still lands. Refreshing an existing one is done on purpose: delete
+        the file and run again.
         """
         self.check_scrubbable(response.body)
         content_type = response.header("Content-Type") or ""
@@ -880,21 +880,21 @@ class SettingsResetOutcome:
     nudged: dict[str, str]
     """Each parameter confirmed off its documented default first, and at what.
 
-    A parameter missing from here could not be put off its default
-    (:func:`nudge_plan`), so the reset leaving it there proves nothing about it
-    either way.
+    A parameter missing from here could not be moved off its default
+    (:func:`nudge_plan`). So if the reset leaves it there, that proves nothing
+    about it either way.
     """
 
 
 @dataclass
 class Run:
-    """Everything a check may reach: the panel, the ledger, fixtures, shared."""
+    """Everything a check may reach: panel, ledger, fixtures and shared outcomes."""
 
     panel: Panel
     ledger: Ledger
     fixtures: FixtureStore | None
     measurements: dict[str, str] = field(default_factory=dict)
-    #: Outcomes shared between the rows one reset or one heating serves.
+    #: Outcomes shared by the rows that one reset or one heater-on sequence serves.
     shared: dict[str, Any] = field(default_factory=dict)
     confirm_thermal: Callable[[str], bool] = lambda _row_id: False
     sleep: Callable[[float], None] = time.sleep
@@ -904,7 +904,7 @@ class Run:
         self.measurements[key] = value
 
     def save_fixture(self, name: str, response: Response) -> None:
-        """Save a response as a fixture when writes are enabled; fail closed."""
+        """Save a response as a fixture when writes are enabled; refuse a scrub hit."""
         if self.fixtures is None:
             return
         try:
@@ -913,7 +913,7 @@ class Run:
             self.measure(f"fixture {name}", f"refused: {error}")
 
     def write(self, name: str, value: str) -> Response:
-        """Touch, then write."""
+        """Register the parameter for restore, then write it."""
         self.ledger.touch(name)
         return self.panel.write(name, value)
 
@@ -955,14 +955,14 @@ class Run:
         return response
 
 
-def expect(condition: bool, message: str) -> None:  # noqa: FBT001 — an assertion
+def expect(condition: bool, message: str) -> None:  # noqa: FBT001  # an assertion
     """Fail the check unless the condition holds."""
     if not condition:
         raise CheckFailedError(message)
 
 
 def require[T](value: T | None, message: str) -> T:
-    """Fail the check when a value is missing; otherwise return it, narrowed."""
+    """Fail the check when a value is missing; otherwise return it."""
     if value is None:
         raise CheckFailedError(message)
     return value
@@ -996,7 +996,7 @@ def other_brightness(current: int) -> int:
 
 
 def walk_for_null(value: object, path: str = "") -> list[str]:
-    """Every path in a JSON document whose value is ``null``."""
+    """Return every path in a JSON document whose value is ``null``."""
     found: list[str] = []
     if value is None:
         found.append(path or "<root>")
@@ -1296,7 +1296,7 @@ def status_is_computed_per_request(run: Run) -> str | None:
 
 @check("Q1", tier=WRITE)
 def temperatures_snap_and_limits_reject(run: Run) -> str | None:
-    """Setpoints accept bare integers and snap off-step; limits reject off-step."""
+    """Setpoints accept bare integers and snap off-step values; limits reject them."""
     status = run.panel.status()
     cold = cold_setpoint(status)
     off_step = round(cold + 0.3, 1)
@@ -1314,7 +1314,7 @@ def temperatures_snap_and_limits_reject(run: Run) -> str | None:
 
 @check("Q2", tier=WRITE)
 def decimals_on_integer_parameters_are_rejected(run: Run) -> str | None:
-    """``panelMode=1.0`` and friends are rejected, not truncated."""
+    """``panelMode=1.0`` and the like are rejected, not truncated."""
     parameters = run.panel.status().parameters
     run.write_rejected("panelMode", f"{parameters['panelMode']}.0")
     run.write_rejected(
@@ -1346,7 +1346,7 @@ def boolean_spellings_apply(run: Run) -> str | None:
 
 @check("Q4", tier=WRITE)
 def multi_parameter_writes_are_atomic(run: Run) -> str | None:
-    """One valid plus one out-of-range parameter applies neither."""
+    """Check that one valid plus one out-of-range parameter applies neither."""
     status = run.panel.status()
     cold = cold_setpoint(status)
     if math.isclose(cold, float(status.parameters["heatingSetpoint"])):
@@ -1372,12 +1372,12 @@ def echo_reports_the_applied_value(run: Run) -> str | None:
     """Check that the echo uses the name sent and the value applied."""
     status = run.panel.status()
     cold = cold_setpoint(status)
-    # A **whole** degree wherever one is also safely below the room. Type
-    # normalisation is what this check exists to show — `20` coming back for
-    # `20.0` — and only an integer-valued setpoint can show it; a `.5` echoes
-    # `20.5` and says nothing about the type. It is also why the committed
-    # fixture kept drifting: `cold_setpoint` lands on a half degree whenever
-    # the room does, so two runs in a row rewrote the evidence away.
+    # Use a **whole** degree wherever one is also safely below the room. This
+    # check exists to show type normalisation: `20` coming back for `20.0`.
+    # Only an integer-valued setpoint can show it; a `.5` echoes `20.5` and
+    # says nothing about the type. This is also why the committed fixture kept
+    # drifting. `cold_setpoint` lands on a half degree whenever the room does,
+    # so two runs in a row rewrote the evidence away.
     floor = float(math.floor(cold))
     minimum = float(status.parameters["minimumTemperatureLimit"])
     cold = floor if floor >= minimum + 1.0 else cold
@@ -1407,7 +1407,7 @@ def writing_the_current_value_is_200(run: Run) -> str | None:
 
 @check("Q8", tier=WRITE)
 def query_string_writes_apply(run: Run) -> str | None:
-    """Check that a query-string write applies; a JSON body is noted, not shipped."""
+    """Check that a query-string write applies; a JSON body is only recorded."""
     current = int(run.panel.status().parameters["standbyDisplayBrightness"])
     run.write_applied("standbyDisplayBrightness", str(other_brightness(current)))
     body = json.dumps({"standbyDisplayBrightness": current}).encode()
@@ -1605,7 +1605,7 @@ def sensor_mode_echo_lies_when_unpaired(run: Run) -> str | None:
 
 
 # --------------------------------------------------------------------------- #
-# Destructive-tier checks — one reset each, shared by the rows that read it
+# Destructive-tier checks: one reset each, shared by the rows that read it
 # --------------------------------------------------------------------------- #
 
 
@@ -1639,7 +1639,7 @@ def kwh_reset(run: Run) -> KwhResetOutcome:
 
 
 def require_banked_energy(outcome: KwhResetOutcome) -> None:
-    """Refuse to judge a reset when the counter was already at zero."""
+    """Refuse to decide on a reset when the counter was already at zero."""
     if outcome.before == 0.0:
         msg = "the counter was already 0.00; bank some kWh first"
         raise Inconclusive(msg)
@@ -1681,7 +1681,7 @@ def counter_is_zero_within_five_seconds(run: Run) -> str | None:
 
 @check("Q57", tier=DESTRUCTIVE)
 def reset_uses_the_status_envelope(run: Run) -> str | None:
-    """Check that a reset returns ``{"status":"Success"}`` — no ``reset`` key."""
+    """Check that a reset returns ``{"status":"Success"}`` with no ``reset`` key."""
     outcome = kwh_reset(run)
     expect(outcome.response.status == HTTPStatus.OK, f"got {outcome.response.status}")
     envelope = outcome.response.json()
@@ -1701,20 +1701,20 @@ def nudge_plan(status: Status, defaults: dict[str, object]) -> dict[str, str]:
 
     The point is to make the reset prove itself. A parameter already sitting on
     the value the reset would restore cannot tell "written back to its default"
-    from "left alone" — and on both units probed so far nine of thirteen were
-    exactly that, the load limit included. Making sure each one sits off its
-    default first gives the reset somewhere to move it from.
+    from "left alone". On both units probed so far, nine of thirteen were
+    exactly that, the load limit included. Moving each one off its default
+    first gives the reset somewhere to move it from.
 
-    Nothing here can make the panel heat: both setpoints go **below** room
-    temperature, the mode goes to Eco rather than Heating, and the load limit
-    one step under the unit's own ``maxLoad`` — which is also what makes the
-    load limit's landing place observable at all, the document's fixed 15 being
-    a value this hardware rejects (Q17).
+    Nothing here can make the panel heat. Both setpoints go **below** room
+    temperature and the mode goes to Eco, not Heating. The load limit goes one
+    step under the unit's own ``maxLoad``. That is also what makes the load
+    limit's landing place visible at all, because the document's fixed 15 is a
+    value this hardware rejects (Q17).
 
-    ``sensorMode`` is deliberately absent: the write is inert without a paired
-    sensor, so the panel acknowledges it and keeps the old value (Q58). Any
-    parameter whose planned value is its default anyway drops out, so every
-    entry returned is genuinely off-default by construction.
+    ``sensorMode`` is left out on purpose. The write does nothing without a
+    paired sensor, so the panel acknowledges it and keeps the old value (Q58).
+    Any parameter whose planned value is its default anyway drops out, so every
+    entry returned is off its default by construction.
     """
     cold = serialise(cold_setpoint(status))
     plan = {
@@ -1739,16 +1739,16 @@ def nudge_plan(status: Status, defaults: dict[str, object]) -> dict[str, str]:
 
 
 def nudge_off_defaults(run: Run) -> dict[str, str]:
-    """Put every writable parameter somewhere other than its default, fail-soft.
+    """Move every writable parameter off its default; a refused write is skipped.
 
-    Returns only the parameters confirmed off-default by a fresh status read. A
-    write the panel refuses is left out rather than raised: the aim is to make
-    as much of the reset observable as this panel allows, and whatever it
-    declines is reported as undemonstrated instead of counted as a match.
+    Returns only the parameters a fresh status read confirms off their default.
+    A write the panel refuses is left out, not raised. The aim is to make
+    as much of the reset visible as this panel allows. Whatever it refuses is
+    reported as not demonstrated instead of counted as a match.
 
     Every value goes through :meth:`Run.write`, so the ledger holds the
     original and the per-check restore puts it back. The reset is about to
-    overwrite all of it anyway, which is why this adds no risk in the only
+    overwrite all of it anyway. That is why this adds no risk in the only
     tier that calls it.
     """
     status = run.panel.status()
@@ -1758,17 +1758,17 @@ def nudge_off_defaults(run: Run) -> dict[str, str]:
     order = sorted(plan, key=lambda name: name in RESTORE_FIRST)
     moved: dict[str, str] = {}
     for name in order:
-        # Some parameters are already off their default — the panel ships with
-        # buttons disabled where the document defaults them on, say. Those need
-        # no write at all; what the reset has to prove is the same either way.
+        # Some parameters are already off their default. For example, the panel
+        # ships with buttons disabled where the document defaults them on. Those
+        # need no write at all; what the reset has to prove is the same either way.
         if serialise(read_parameter(status.doc, name)) != plan[name]:
             response = run.write(name, plan[name])
             if response.status != HTTPStatus.OK:
                 continue
         # Confirm by polling, never by one immediate read: the panel commits a
         # write in 305-632 ms (Q31). The first two runs of this function read
-        # once and lost a different parameter each time — and on both runs the
-        # one written last, whose read raced its own write most tightly.
+        # once and lost a different parameter each time. On both runs it was
+        # the one written last, whose read raced its own write most tightly.
         _, reflected = run.reflect(name, plan[name])
         if reflected is not None:
             moved[name] = plan[name]
@@ -1776,7 +1776,7 @@ def nudge_off_defaults(run: Run) -> dict[str, str]:
 
 
 def settings_reset(run: Run) -> SettingsResetOutcome:
-    """Reset the settings once per run, every writable parameter registered."""
+    """Reset the settings once per run, with every writable parameter registered."""
     if "settings" in run.shared:
         outcome: SettingsResetOutcome = run.shared["settings"]
         return outcome
@@ -1804,7 +1804,7 @@ def settings_reset(run: Run) -> SettingsResetOutcome:
 
 
 def last_change_at(timeline: list[StatusSample]) -> float:
-    """When the parameters last changed during the watch."""
+    """Return when the parameters last changed during the watch."""
     last = 0.0
     for (_, earlier), (at, later) in itertools.pairwise(timeline):
         if earlier["parameters"] != later["parameters"]:
@@ -1825,7 +1825,7 @@ def id_survives_a_settings_reset(run: Run) -> str | None:
 
 @check("Q34", tier=DESTRUCTIVE)
 def settings_reset_keeps_identity_and_settles(run: Run) -> str | None:
-    """Identity and network untouched, no reboot, settled within ~5 s."""
+    """Identity and network untouched, no reboot, settled within about 5 s."""
     outcome = settings_reset(run)
     expect(outcome.response.status == HTTPStatus.OK, f"got {outcome.response.status}")
     expect(outcome.read_failures == 0, f"{outcome.read_failures} reads failed")
@@ -1850,22 +1850,22 @@ def settings_reset_keeps_identity_and_settles(run: Run) -> str | None:
 
 @check("Q53", tier=DESTRUCTIVE)
 def post_reset_values_match_the_documented_defaults(run: Run) -> str | None:
-    """Post-reset values match the document's defaults, bar the load limit.
+    """Post-reset values match the document's defaults, except the load limit.
 
     The load limit is compared against the unit's own ``maxLoad`` instead,
-    because that is what the firmware does: at fw 1.21 on a 600 W unit every
-    other documented default matched and ``loadLimit`` landed on 6 rather than
-    the document's fixed 15 — which that unit would have rejected anyway
-    (Q17). A panel that starts honouring the documented 15 fails here, which
-    is the point of keeping the row.
+    because that is what the firmware does. At fw 1.21 on a 600 W unit every
+    other documented default matched. ``loadLimit`` landed on 6 instead of
+    the document's fixed 15, which that unit would have rejected anyway
+    (Q17). A panel that starts to use the documented 15 fails here. That is
+    the point of keeping the row.
     """
     outcome = settings_reset(run)
     expect(bool(outcome.timeline), "no status could be read after the reset")
     final = outcome.timeline[-1][1]
     expected = openapi_defaults() | {"loadLimit": read_parameter(final, "maxLoad")}
-    # Only the parameters the reset was made to move can be judged: one that
-    # was already on its default and could not be nudged ends there either
-    # way, and counting it as a match is how this check used to flatter itself.
+    # Only the parameters the reset was made to move can be checked. One that
+    # was already on its default and could not be moved ends there either
+    # way. Counting it as a match is how this check used to pass too easily.
     judged = {name: value for name, value in expected.items() if name in outcome.nudged}
     undemonstrated = sorted(set(expected) - set(judged))
     differing = [
@@ -1879,7 +1879,7 @@ def post_reset_values_match_the_documented_defaults(run: Run) -> str | None:
     )
     run.measure(
         "Q53 defaults",
-        f"{len(judged)} judged, {'; '.join(differing) or 'all match'}{missed}",
+        f"{len(judged)} checked, {'; '.join(differing) or 'all match'}{missed}",
     )
     expect(bool(judged), "no parameter could be moved off its default")
     expect(not differing, "; ".join(differing))
@@ -1887,7 +1887,7 @@ def post_reset_values_match_the_documented_defaults(run: Run) -> str | None:
 
 
 # --------------------------------------------------------------------------- #
-# Thermal-tier checks — one heater-on sequence, shared
+# Thermal-tier checks: one heater-on sequence, shared
 # --------------------------------------------------------------------------- #
 
 
@@ -1912,7 +1912,7 @@ def latest(timeline: list[RelaySample]) -> RelaySample:
 
 
 def heat_sequence(run: Run, row_id: str) -> HeatOutcome:
-    """Close the relay once per run in Eco mode, briefly, and record the edges."""
+    """Close the relay once per run, briefly, in Eco mode and record the edges."""
     if "heat" in run.shared:
         outcome: HeatOutcome = run.shared["heat"]
         return outcome
@@ -2018,13 +2018,13 @@ def power_trails_the_relay(run: Run) -> str | None:
 
 
 def say(message: str) -> None:
-    """Progress, to stderr, so the report on stdout pastes clean."""
-    print(message, file=sys.stderr, flush=True)  # noqa: T201 — a CLI's progress line
+    """Print a progress line to stderr, so the report on stdout pastes clean."""
+    print(message, file=sys.stderr, flush=True)  # noqa: T201  # a CLI's progress line
 
 
 def emit(message: str = "") -> None:
-    """Report, to stdout."""
-    print(message, flush=True)  # noqa: T201 — a CLI's report line
+    """Print a report line to stdout."""
+    print(message, flush=True)  # noqa: T201  # a CLI's report line
 
 
 def run_one(entry: Check, run: Run) -> tuple[str, str]:
@@ -2080,7 +2080,7 @@ def ask_yes_no(question: str) -> bool:
 
 
 def make_thermal_confirmer(host: str) -> Callable[[str], bool]:
-    """Build a confirmer that needs a TTY and the check named back, typed."""
+    """Build a confirmer that needs a TTY and the check's id typed back."""
 
     def confirm(row_id: str) -> bool:
         if not sys.stdin.isatty():
@@ -2116,7 +2116,7 @@ class Report:
         doc = self.status.doc
         stamp = datetime.now(tz=UTC).isoformat(timespec="seconds")
         yield (
-            f"## probe.py — firmware {doc.get('firmware')!r}, model "
+            f"## probe.py: firmware {doc.get('firmware')!r}, model "
             f"{doc.get('model')!r}, maxLoad {doc['parameters'].get('maxLoad')!r}"
         )
         yield ""
@@ -2150,7 +2150,7 @@ class Report:
             yield "- none"
         if self.snapshot is not None:
             yield ""
-            yield f"Snapshot: `{self.snapshot}` — replay with `probe.py --restore`."
+            yield f"Snapshot: `{self.snapshot}`. Replay it with `probe.py --restore`."
 
 
 def load_device(path: Path) -> tuple[str, int]:
@@ -2176,7 +2176,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="probe.py",
         description="Run the conformance register's automated rows against a panel.",
     )
-    parser.add_argument("--writes", action="store_true", help="enable benign writes")
+    parser.add_argument("--writes", action="store_true", help="enable harmless writes")
     parser.add_argument(
         "--destructive", action="store_true", help="+ kWh reset, settings reset (y/N)"
     )
@@ -2216,7 +2216,7 @@ def restore_and_report(ledger: Ledger, panel: Panel) -> bool:
     say(f"restoring {len(ledger.pending)} parameter(s) and verifying…")
     try:
         failures = ledger.restore()
-    except BaseException:  # noqa: BLE001 — the hook must report even a second Ctrl-C
+    except BaseException:  # noqa: BLE001  # the hook must report even a second Ctrl-C
         failures = [
             RestoreFailure(name, ledger.originals[name], "restore interrupted")
             for name in ledger.pending
@@ -2258,8 +2258,8 @@ def run_checks(
     """Run every selected check its tier allows, restoring after each one.
 
     Restoring per check keeps one check's writes out of the next one's
-    preconditions, and keeps a settings reset's defaults — comfort 21 °C in
-    Heating mode — from standing for the rest of the run. A revert the status
+    preconditions. It also keeps a settings reset's defaults (comfort 21 °C in
+    Heating mode) from standing for the rest of the run. A revert the status
     does not confirm stops the run: the exit hook then prints the banner.
     """
     results: list[Result] = []
@@ -2285,10 +2285,10 @@ def confirm_tiers(
     if DESTRUCTIVE in enabled and any(entry.tier == DESTRUCTIVE for entry in checks):
         question = (
             f"Run destructive checks on the panel at {host}? The kWh counter is "
-            f"zeroed for good; every writable parameter is first moved off its "
-            f"documented default so the reset can be seen to undo it, and a "
+            f"zeroed for good. Every writable parameter is first moved off its "
+            f"documented default, so the reset can be seen to undo it. A "
             f"settings reset then puts the panel at its defaults (comfort 21.0 °C, "
-            f"Heating mode) for about 15 s until the restore lands — the heater "
+            f"Heating mode) for about 15 s until the restore lands. The heater "
             f"runs for that long if the room is colder. Every parameter is "
             f"restored and verified from a fresh read."
         )
@@ -2314,7 +2314,7 @@ def main_restore(args: argparse.Namespace) -> int:
 
 
 def main_probe(args: argparse.Namespace) -> int:
-    """Run the selected checks, restore, and print the report."""
+    """Run the selected checks, restore and print the report."""
     register = load_register(args.register)
     checks = select_checks(register, args)
     host, port = load_device(args.device)
@@ -2327,8 +2327,8 @@ def main_probe(args: argparse.Namespace) -> int:
     say(f"panel at {host}: firmware {status.doc.get('firmware')!r}")
 
     if (args.thermal or args.destructive) and not sys.stdin.isatty():
-        # A settings reset lands the panel at its defaults — comfort 21 °C in
-        # Heating mode — until the restore, so it can heat as surely as the
+        # A settings reset lands the panel at its defaults (comfort 21 °C in
+        # Heating mode) until the restore. So it can heat as surely as the
         # thermal tier can. Neither may ever run from a cron or a pipe.
         msg = "--destructive and --thermal need an interactive terminal"
         raise UsageError(msg)
@@ -2359,7 +2359,7 @@ def main_probe(args: argparse.Namespace) -> int:
         say(f"\ninterrupted: {error or 'SIGINT'}")
     except RevertFailedError as error:
         say(f"stopping: {error}")
-    except Exception as error:  # noqa: BLE001 — a bug must not skip the report
+    except Exception as error:  # noqa: BLE001  # a bug must not skip the report
         interrupted = True
         say(f"\naborted by an internal error: {error!r}")
     finally:

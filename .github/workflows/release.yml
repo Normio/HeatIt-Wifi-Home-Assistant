@@ -2,11 +2,11 @@ name: Release
 
 # Pushing a vX.Y.Z tag is the only way a release is created (spec §10.2,
 # ADR-0002). Every gate below runs against the tagged commit; the publish job
-# needs all of them. A failed gate leaves the bare tag — HACS ignores tags
-# without releases — and deletes nothing: the owner deletes it, bumps, and
-# retags. No job here may delete a tag: the token's `contents: write` in the
-# publish job is the minimum for creating a release, and the owner-only `v*`
-# tag ruleset denies that token tag creation, update and deletion.
+# needs all of them. A failed gate leaves the bare tag and deletes nothing.
+# HACS ignores tags without releases. The owner deletes the tag, bumps and
+# retags. No job here may delete a tag. The token's `contents: write` in the
+# publish job is the minimum for creating a release. The owner-only `v*` tag
+# ruleset denies that token tag creation, update and deletion.
 on:
   push:
     tags: ["v*"]
@@ -20,10 +20,10 @@ jobs:
     name: Validate
     uses: ./.github/workflows/validate.yml
 
-  # Everything test.yml runs — the shared entry point, so the linters, mypy,
-  # the check scripts and the tests — and, once §8.7's two pytest rows exist
-  # there, both of them: a Home Assistant release that breaks us blocks our own
-  # release until fixed, by choice.
+  # Everything test.yml runs: the shared entry point, so the linters, mypy,
+  # the check scripts and the tests. Both of §8.7's pytest rows run too. A
+  # Home Assistant release that breaks us blocks our own release until fixed,
+  # by choice.
   test:
     name: Test
     uses: ./.github/workflows/test.yml

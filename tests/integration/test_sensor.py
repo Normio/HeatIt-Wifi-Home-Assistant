@@ -1,11 +1,11 @@
 """The five sensors of §5.2, and the energy rules of §5.5.
 
-What the entity table in ``test_entity.py`` already pins — the device classes,
-the units, the state classes, the categories and which row is disabled — is not
-repeated here. This file asserts the behaviour behind those rows: that each
-sensor follows its own reading, that the energy sensor claims no ``last_reset``,
-that the signal strength is the panel's own signed number or nothing at all,
-and that a reading this firmware does not return costs exactly one sensor.
+The entity table in ``test_entity.py`` already pins the device classes, the
+units, the state classes, the categories and which row is disabled. None of
+that is repeated here. This file asserts the behaviour behind those rows. Each
+sensor follows its own reading. The energy sensor claims no ``last_reset``. The
+signal strength is the panel's own signed number or nothing at all. A reading
+this firmware does not return costs exactly one sensor.
 """
 
 import logging
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 #: Every sensor that can be absent, with the read path §5.2 gives it. The room
 #: temperature is missing on purpose: it is *required core*, so a status without
-#: it is not a status and the poll fails rather than the sensor going away.
+#: it is not a status. The poll fails and no sensor goes away.
 OPTIONAL_READINGS = [
     ("power", "currentPower"),
     ("energy", "totalConsumption"),
@@ -51,12 +51,12 @@ def description(key: str) -> sensor.HeatitSensorEntityDescription:
 
 
 def sensor_id(hass: HomeAssistant, key: str) -> str:
-    """Return one sensor's entity id, asked of the registry."""
+    """Return one sensor's entity id, read from the registry."""
     return entity_id(hass, SENSOR_DOMAIN, key)
 
 
 def unique_ids(hass: HomeAssistant, entry: MockConfigEntry) -> set[str]:
-    """Every unique id the entry owns."""
+    """Return every unique id the entry owns."""
     return {
         registered.unique_id
         for registered in er.async_entries_for_config_entry(
@@ -68,7 +68,7 @@ def unique_ids(hass: HomeAssistant, entry: MockConfigEntry) -> set[str]:
 async def loaded(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> HeatitWifiPanelCoordinator:
-    """Set the entry up and hand back its coordinator."""
+    """Set the entry up and return its coordinator."""
     assert await setup_entry(hass, entry)
     coordinator: HeatitWifiPanelCoordinator = entry.runtime_data
     return coordinator
@@ -113,10 +113,10 @@ async def test_the_energy_sensor_claims_no_last_reset(
 ) -> None:
     """§5.5: the counter is zeroed from the app too, and we never learn when.
 
-    ``total_increasing`` — which the entity table pins — is the state class that
+    ``total_increasing``, which the entity table pins, is the state class that
     needs no such attribute. A ``last_reset`` would be a claim about a moment
-    Home Assistant only knows when it pressed the button itself, and wrong the
-    first time anyone else pressed one.
+    Home Assistant only knows when it pressed the button itself. It would be
+    wrong the first time anyone else pressed one.
     """
     await loaded(hass, mock_config_entry)
 
@@ -130,8 +130,8 @@ async def test_the_energy_sensor_claims_no_last_reset(
     [
         ("-66dBm", -66),
         ("-5 DBM", -5),
-        # No sign fix-up: the device emits a signed value, so an unsigned one
-        # is reported as it came rather than guessed at.
+        # No sign fix-up: the device sends a signed value, so an unsigned one
+        # is reported as it came, not guessed at.
         ("67dBm", 67),
         ("strong", None),
     ],
@@ -146,9 +146,9 @@ async def test_the_signal_strength_is_the_panels_own_number_or_nothing(
 ) -> None:
     """A reading we cannot parse is *unknown*, never an exception.
 
-    The sensor is built here rather than read out of ``hass``: §5.2 has it
+    The sensor is built here instead of read out of ``hass``. §5.2 has it
     disabled by default as a noisy diagnostic, so it has no state until a user
-    enables it, and what is under test is the reading and not the registry.
+    enables it. Under test is the reading, not the registry.
     """
     coordinator = await loaded(hass, mock_config_entry)
     patched_client.set_status({"Network.wifiSignalStrength": reading})
@@ -158,7 +158,7 @@ async def test_the_signal_strength_is_the_panels_own_number_or_nothing(
         entity = HeatitPanelSensor(coordinator, description("signal_strength"))
         assert entity.native_value == value
 
-    # A value we could not read is still a value the panel returned, so the
+    # A value we could not read is still a value the panel returned. So the
     # entity stays available and only its own state is unknown (§6.3).
     assert entity.available is True
     assert (value is None) == any(
@@ -176,8 +176,8 @@ async def test_a_reading_absent_at_setup_makes_no_entity(
 ) -> None:
     """§5.4: presence is decided by the first status, and costs one entity.
 
-    §8.5 wants the other half said out loud — *every other entity present* —
-    so the surviving set is compared against §5.2's whole table less this row.
+    §8.5 wants the other half said out loud: *every other entity present*. So
+    the surviving set is compared against §5.2's full table less this row.
     """
     patched_client.set_status({read_path: ABSENT})
 
@@ -212,7 +212,7 @@ async def test_a_reading_of_the_wrong_type_is_unknown_rather_than_an_error(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """The path resolves, so the sensor is there; the value is not a number."""
+    """The path resolves, so the sensor is there. The value is not a number."""
     coordinator = await loaded(hass, mock_config_entry)
     patched_client.set_status({"currentPower": "lots"})
 

@@ -1,23 +1,23 @@
 """Every key the flow and the coordinator can produce resolves in ``en.json``.
 
-There is deliberately no ``strings.json``: its ``[%key:...%]`` syntax is a
-build-time feature nothing resolves at runtime, so a custom integration shipping
-one shows raw keys (§3.1). The authored artifact is a fully-expanded
+There is no ``strings.json``, on purpose. Its ``[%key:...%]`` syntax is a
+build-time feature nothing resolves at runtime, so a custom integration that
+ships one shows raw keys (§3.1). The written file is a fully expanded
 ``translations/en.json``, and an unresolved key here is a raw key in front of a
 user.
 
-**Wording is reviewed, not tested** (§8.6.4). What is asserted is that a key
-resolves and that a message carries the placeholders its call site fills — an
-`{expected_id}` the code never substitutes renders as literal braces to the
-user, which is a bug and not a matter of phrasing. The key lists are
-transcribed from §4, §5.2 and §6 rather than read out of the module, so the two
-encodings stay independent; the placeholder *names* are read from the code,
-because agreeing on them is the whole point.
+**Wording is reviewed, not tested** (§8.6.4). The assertions are that a key
+resolves and that a message carries the placeholders its call site fills. An
+`{expected_id}` the code never fills in reaches the user as literal braces.
+That is a bug, not a matter of phrasing. The key lists are copied from §4, §5.2
+and §6, not read out of the module, so the two encodings stay independent. The
+placeholder *names* are read from the code, because agreeing on them is the
+point.
 
-An entity's own two kinds of string are here as well: its **name**, which
-``has_entity_name`` resolves and without which the entity carries the device's
-name alone, and a select's **options**, which are states resolved at
-``entity.select.<key>.state.<option>`` — an option with nothing there reaches a
+An entity's own two kinds of string are here as well. Its **name** is what
+``has_entity_name`` resolves; without it the entity carries the device's name
+alone. A select's **options** are states resolved at
+``entity.select.<key>.state.<option>``. An option with nothing there reaches a
 dashboard as ``menu_locked``.
 """
 
@@ -63,16 +63,16 @@ EXCEPTIONS = [
 ]
 
 #: Every entity §5.2 names in ``translations/en.json``, by platform and key.
-#: The climate entity is deliberately absent: it sets ``_attr_name = None`` and
+#: The climate entity is left out on purpose. It sets ``_attr_name = None`` and
 #: takes the device's own name, so it has no ``name`` to resolve.
 #:
 #: This list is **not** made redundant by the entity table's own name column.
 #: Core falls back to the device class's name for an entity that has one and no
-#: resolvable translation, so a row whose §5.2 name *equals* its device class
-#: name — Temperature, Power, Energy, Signal strength — registers the same
-#: string either way, and the table cannot tell a translated name from a
-#: missing one. For those four rows this is the only assertion that the string
-#: a user reads was authored rather than inherited.
+#: translation that resolves. So a row whose §5.2 name *equals* its device
+#: class name (Temperature, Power, Energy, Signal strength) registers the same
+#: string either way. The table cannot tell a translated name from a missing
+#: one there. For those four rows this is the only assertion that the string a
+#: user reads was written, not inherited.
 ENTITY_NAMES = [
     ("number", "comfort_setpoint"),
     ("number", "eco_setpoint"),
@@ -105,8 +105,8 @@ SELECT_STATES = [
 ]
 
 #: A write-time message and the placeholders its call site fills (§6.4). The
-#: device's ``reason`` reaches the user verbatim, so the message has to have
-#: somewhere to put it.
+#: device's ``reason`` reaches the user word for word, so the message has to
+#: have somewhere to put it.
 WRITE_PLACEHOLDERS = [
     ("invalid_value", ["error"]),
     ("parameter_rejected", ["parameter", "reason"]),
@@ -168,7 +168,7 @@ def test_a_foreign_panel_is_named_on_both_sides(
     """Naming one id leaves the user guessing which panel they are looking at.
 
     The names come from :func:`foreign_panel_placeholders`, the one builder both
-    call sites use, so a renamed placeholder fails here rather than reaching a
+    call sites use. So a renamed placeholder fails here instead of reaching a
     user as literal braces.
     """
     node: Any = translations
@@ -190,7 +190,7 @@ def test_a_write_failure_has_somewhere_to_put_the_panels_words(
 def test_the_missing_field_message_carries_the_path(
     translations: dict[str, Any],
 ) -> None:
-    """§6.3's key needs the dotted path, which is why the client carries it."""
+    """§6.3's key needs the dotted path, so the client carries it."""
     assert "{field}" in translations["exceptions"]["missing_field"]["message"]
 
 
@@ -198,7 +198,7 @@ def test_the_missing_field_message_carries_the_path(
 def test_every_entity_is_named(
     translations: dict[str, Any], platform: str, key: str
 ) -> None:
-    """A name is what ``has_entity_name`` resolves; without one there is none."""
+    """A name is what ``has_entity_name`` resolves. Without one there is none."""
     assert translations["entity"][platform][key]["name"]
 
 

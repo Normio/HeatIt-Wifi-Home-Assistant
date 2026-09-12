@@ -1,21 +1,25 @@
 """Enforce ``quality_scale.yaml``, because nothing upstream will (§9.2).
 
 hassfest returns early for a custom integration and never parses the file, and
-no reviewer grades it. So the file is a checklist we hold ourselves to, and this
-script is what makes a tick in it mean something: a rule marked ``done`` points
-at evidence that exists, and deleting that evidence breaks the build until the
+no reviewer grades it. So the file is a checklist we hold ourselves to, and
+this script makes a tick in it mean something. A rule marked ``done`` points
+at evidence that exists. Deleting that evidence breaks the build until the
 yaml is updated.
 
-It fails when a rule key is missing or unknown; when a ``done`` or ``exempt``
-entry has no comment; when a ``done`` comment does not start with a
-repo-relative path that exists; when the manifest carries a ``quality_scale``
-key; or when any rule is still ``todo`` and the version under check — the
-manifest's, which the release gate holds equal to the tag — is 1.0.0 or later.
-Below 1.0.0 it reports the ``todo`` count and passes.
+It fails when:
 
-The rule list is vendored here, with the core commit it was read from, and
-the yaml is parsed with the loader hassfest itself uses. Run from
-``scripts/check.sh``'s test stage, that loader being Home Assistant's.
+- a rule key is missing or unknown
+- a ``done`` or ``exempt`` entry has no comment
+- a ``done`` comment does not start with a repo-relative path that exists
+- the manifest carries a ``quality_scale`` key
+- any rule is still ``todo`` and the version under check is 1.0.0 or later
+
+The version under check is the manifest's, which the release gate holds equal
+to the tag. Below 1.0.0 it reports the ``todo`` count and passes.
+
+The rule list is copied in here with the core commit it was read from. The
+yaml is parsed with the loader hassfest itself uses. That loader is Home
+Assistant's, so this runs from ``scripts/check.sh``'s test stage.
 """
 
 import argparse
@@ -106,11 +110,11 @@ STATUSES = frozenset({"done", "todo", "exempt"})
 ENTRY_KEYS = frozenset({"status", "comment"})
 #: The first release that may carry no ``todo`` (§9.2, failure condition 5).
 FIRST_COMPLETE_VERSION = AwesomeVersion("1.0.0")
-#: Punctuation a comment may hang on a path before its prose.
+#: Punctuation a comment may attach to a path before its prose.
 TRAILING_PUNCTUATION = ".,:;"
-#: A word starting with one of these is a repo path, wherever it sits in the
-#: comment, and must exist like the first word must: a comment that names a
-#: second module as evidence is held to it.
+#: A word starting with one of these is a repo path wherever it sits in the
+#: comment, and must exist like the first word. A comment that names a second
+#: module as evidence is held to it.
 TREE_PREFIXES = ("custom_components/", "scripts/", "tests/", "docs/")
 
 
@@ -152,7 +156,7 @@ def load_rules(root: Path) -> tuple[dict[str, Any], list[str]]:
 
 
 def read_entry(rule: str, value: object) -> Entry:
-    """Read one rule's value, or raise :class:`MalformedRuleError` saying what is wrong.
+    """Read one rule's value, or raise :class:`MalformedRuleError` with the reason.
 
     hassfest's two shapes: a bare string is a status with no comment, and a
     mapping carries ``status`` and ``comment`` and nothing else.
@@ -183,8 +187,8 @@ def evidence_problems(root: Path, rule: str, comment: str) -> list[str]:
     """Return why a ``done`` comment's paths are not evidence, one line each.
 
     The first whitespace-delimited word must be a path inside ``root`` that
-    exists, and so must any later word that starts like one — with the
-    punctuation the prose hung on either removed.
+    exists. So must any later word that starts like one. Punctuation the prose
+    attached to either is removed first.
     """
     first, *rest = (word.rstrip(TRAILING_PUNCTUATION) for word in comment.split())
     named = [first, *(word for word in rest if word.startswith(TREE_PREFIXES))]
@@ -199,7 +203,7 @@ def evidence_problems(root: Path, rule: str, comment: str) -> list[str]:
         elif not (root / candidate).exists():
             problems.append(
                 f"{QUALITY_SCALE}: {rule} is done, but its evidence {word!r} does "
-                f"not exist — a done comment starts with the test, module or "
+                f"not exist. A done comment starts with the test, module or "
                 f"directory that proves it"
             )
     return problems
@@ -212,7 +216,7 @@ def check_rules(root: Path, rules: dict[str, Any]) -> QualityScaleCheck:
         f"{QUALITY_SCALE}: {rule} is missing" for rule in RULES if rule not in rules
     )
     result.problems.extend(
-        f"{QUALITY_SCALE}: {rule} is unknown — the vendored list is core's at "
+        f"{QUALITY_SCALE}: {rule} is unknown. The copied list is core's at "
         f"{CORE_COMMIT[:12]}"
         for rule in rules
         if rule not in RULES
@@ -237,14 +241,14 @@ def check_rules(root: Path, rules: dict[str, Any]) -> QualityScaleCheck:
 
 
 def check_manifest(root: Path) -> tuple[list[str], str | None]:
-    """Assert the manifest makes no claim, and return the version under check."""
+    """Check that the manifest makes no claim, and return the version under check."""
     manifest = json_document(root / MANIFEST)
     if manifest is None:
         return [f"{MANIFEST}: missing"], None
     problems = []
     if "quality_scale" in manifest:
         problems.append(
-            f"{MANIFEST}: no quality_scale key — the yaml says what we hold "
+            f"{MANIFEST}: no quality_scale key. The yaml says what we hold "
             f"ourselves to, and the manifest makes no claim a reviewer never graded"
         )
     version = manifest.get("version")
@@ -265,7 +269,7 @@ def check_todo(todo: list[str], version: str | None) -> list[str]:
         return []
     return [
         f"{QUALITY_SCALE}: {rule} is todo, and {version} is {FIRST_COMPLETE_VERSION} "
-        f"or later — done, or exempt with a reason"
+        f"or later. Mark it done, or exempt with a reason"
         for rule in todo
     ]
 
@@ -283,7 +287,7 @@ def check_quality_scale(root: Path) -> QualityScaleCheck:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Parse the command line, run the gate, and report."""
+    """Parse the command line, run the gate and report."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--root",
@@ -300,7 +304,7 @@ def main(argv: list[str] | None = None) -> None:
             "\n".join(f"check_quality_scale: {problem}" for problem in result.problems)
         )
     if result.todo:
-        print(  # noqa: T201 — the report is the script's output
+        print(  # noqa: T201  # the report is the script's output
             f"check_quality_scale: {len(result.todo)} rules todo: "
             + ", ".join(result.todo)
         )

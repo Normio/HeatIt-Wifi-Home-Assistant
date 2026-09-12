@@ -1,18 +1,18 @@
 """The device client: the Heatit WiFi Panel over its local HTTP API (§3.2).
 
-Imports nothing from ``homeassistant``. Not for portability — there is no
-library — but for testability: the client is exercised over ``aioresponses``
-with no ``hass``, and ``scripts/capture_fixtures.py`` imports it directly
-without booting Home Assistant.
+Imports nothing from ``homeassistant``. Not for portability, because there is
+no library, but for testability. The client is tested over ``aioresponses`` with
+no ``hass``, and ``scripts/capture_fixtures.py`` imports it directly without
+starting Home Assistant.
 
-Public surface, exactly four methods: :meth:`HeatitClient.get_status` (the only
-one with a retry), :meth:`HeatitClient.set_parameter`,
-:meth:`HeatitClient.reset_kwh` and :meth:`HeatitClient.reset_settings`. There
-is deliberately no request method taking a retry count, so a retried reset
-cannot be written by accident.
+Public interface, exactly four methods: :meth:`HeatitClient.get_status` (the
+only one with a retry), :meth:`HeatitClient.set_parameter`,
+:meth:`HeatitClient.reset_kwh` and :meth:`HeatitClient.reset_settings`. On
+purpose there is no request method that takes a retry count, so a retried
+reset cannot be written by accident.
 
-Alongside the client: the *status* parser and the one redaction function
-shared by logging, diagnostics and fixture capture (§7.1).
+Next to the client: the *status* parser and the one redaction function shared
+by logging, diagnostics and fixture capture (§7.1).
 """
 
 from __future__ import annotations
@@ -43,8 +43,9 @@ PARAMETERS_PATH: Final = "/api/parameters"
 RESET_KWH_PATH: Final = "/api/reset/kwh"
 RESET_SETTINGS_PATH: Final = "/api/reset/settings"
 
-#: The enum is not enforced at firmware 1.21 — provably ignored — and sending
-#: it matches the documented contract, so it is free insurance (§2.5).
+#: Firmware 1.21 does not enforce the enum; it is shown to ignore it. Sending
+#: it still matches the documented contract, so it costs nothing and may help
+#: (§2.5).
 RESET_KWH_QUERY: Final = {"resetKwh": "Reset"}
 
 HTTP_OK: Final = 200
@@ -66,10 +67,11 @@ REQUIRED_CORE: Final[tuple[str, ...]] = (
     *(d.read_path for d in PARAMETERS.values() if d.required),
 )
 
-#: Exactly the fields the shared redaction scrubs, and the fixed,
-#: shape-preserving placeholder each becomes (§7.1, §8.3). ``name`` and ``room``
-#: are kept: they are human labels, not identifiers, and ``name`` is the
-#: evidence that the charset-less UTF-8 decode is required.
+#: Exactly the fields the shared redaction scrubs, and the fixed placeholder
+#: each becomes. Each placeholder keeps the shape of the real value (§7.1,
+#: §8.3). ``name`` and ``room`` are kept: they are human labels, not
+#: identifiers, and ``name`` is the evidence that the UTF-8 decode without a
+#: charset is needed.
 REDACTED_FIELDS: Final[Mapping[str, str]] = {
     "id": "FIXTUREFIXTUREFIXTUREX",  # 22 chars, mixed case, like a real id
     "Network.mac": "02:00:00:00:00:01",  # locally administered, format_mac ok
@@ -80,9 +82,9 @@ REDACTED_FIELDS: Final[Mapping[str, str]] = {
 WIFI_SIGNAL_STRENGTH: Final = "Network.wifiSignalStrength"
 """Where the signal strength sits in a *status*.
 
-Named because two modules need the same path and must not drift: the
-:attr:`PanelStatus.signal_strength_dbm` parse below, and the read path the
-diagnostic sensor's presence and availability are gated on (§5.2).
+Named because two modules need the same path and must not drift. One is the
+:attr:`PanelStatus.signal_strength_dbm` parse below. The other is the read path
+that the diagnostic sensor's presence and availability depend on (§5.2).
 """
 
 TOTAL_CONSUMPTION: Final = "totalConsumption"
@@ -90,14 +92,15 @@ TOTAL_CONSUMPTION: Final = "totalConsumption"
 
 Named for the same reason as :data:`WIFI_SIGNAL_STRENGTH`: two modules read the
 same path and must not drift. The energy sensor publishes it, and the
-coordinator reads it twice more — once as the pre-reset value a press records,
-once as the reading a later poll judges that press by (§5.5).
+coordinator reads it twice more. Once as the value before a reset, which a
+press records, and once as the reading a later poll checks that press against
+(§5.5).
 """
 
 SIGNAL_STRENGTH: Final = re.compile(r"^\s*(-?\d+)\s*dBm\s*$", re.IGNORECASE)
 
 
-# --- exceptions (device vocabulary, no Home Assistant types) -----------------
+# --- exceptions (device terms, no Home Assistant types) ----------------------
 
 
 class HeatitError(Exception):
@@ -105,15 +108,15 @@ class HeatitError(Exception):
 
 
 class HeatitConnectionError(HeatitError):
-    """Timeout, refused, dropped, or an OS-level failure."""
+    """Timeout, refused, dropped or an OS-level failure."""
 
 
 class HeatitResponseError(HeatitError):
-    """An unexpected HTTP status, or a ``failed`` envelope on a reset.
+    """An unexpected HTTP status, or a ``failed`` wrapper on a reset.
 
-    Carries the status code and the device's ``reason`` verbatim — never
-    parsed, never branched on. When the body carries no ``reason`` the HTTP
-    reason phrase stands in, so raw response bytes never reach a log line.
+    Carries the status code and the device's ``reason`` word for word, never
+    parsed and never branched on. When the body carries no ``reason``, the
+    HTTP reason phrase stands in, so raw response bytes never reach a log line.
     """
 
     def __init__(
@@ -125,11 +128,11 @@ class HeatitResponseError(HeatitError):
         self.reason = reason
 
 
-class HeatitParameterRejected(HeatitResponseError):  # noqa: N818 - the spec names it
+class HeatitParameterRejected(HeatitResponseError):  # noqa: N818  # the spec names it
     """The device refused a parameter write: a ``400``, or a ``failed`` 200.
 
-    Additionally carries the parameter name **we sent**, because ``reason``
-    cannot be parsed for it.
+    Also carries the parameter name **we sent**, because ``reason`` cannot be
+    parsed for it.
     """
 
     def __init__(self, parameter: str, status_code: int, reason: str) -> None:
@@ -143,8 +146,8 @@ class HeatitParameterRejected(HeatitResponseError):  # noqa: N818 - the spec nam
 class HeatitProtocolError(HeatitError):
     """A 200 whose body we could not make sense of.
 
-    The message carries content type, byte length and the underlying error —
-    never the bytes (§7.1).
+    The message carries the content type, the byte length and the underlying
+    error, never the bytes (§7.1).
     """
 
 
@@ -163,8 +166,8 @@ class HeatitMissingFieldError(HeatitProtocolError):
 def resolve(document: Mapping[str, Any], path: str) -> object | None:
     """Walk a dotted path; ``None`` when it does not resolve or holds ``null``.
 
-    No status field has ever been ``null`` (Q24), so ``null`` is treated exactly
-    as absent and the integration models no third state.
+    No status field has ever been ``null`` (Q24), so ``null`` is treated
+    exactly like absent, and the integration models no third state.
     """
     node: object = document
     for segment in path.split("."):
@@ -175,7 +178,10 @@ def resolve(document: Mapping[str, Any], path: str) -> object | None:
 
 
 def parse_signal_strength(value: object) -> int | None:
-    """``"-67dBm"`` → ``-67``. No sign fix-up; garbage → ``None``, no exception."""
+    """Parse ``"-67dBm"`` to ``-67``.
+
+    No sign fix-up. Garbage gives ``None``, never an exception.
+    """
     match = SIGNAL_STRENGTH.match(value) if isinstance(value, str) else None
     if match is None:
         LOGGER.debug("wifiSignalStrength %r is not of the form -NNdBm", value)
@@ -187,14 +193,14 @@ def parse_signal_strength(value: object) -> int | None:
 class PanelStatus:
     """The panel's complete state, parsed from one ``GET /api/status``.
 
-    The *required core* is typed and guaranteed present. Everything else is
-    read through :meth:`get` and its typed variants, which answer ``None`` for
-    a field this firmware did not return — absent means that reading alone is
+    The *required core* is typed and always present. Everything else is read
+    through :meth:`get` and its typed variants, which answer ``None`` for a
+    field this firmware did not return. Absent means that reading alone is
     unknown. Unknown keys are kept in :attr:`document` and otherwise ignored.
     """
 
     device_id: str
-    """The panel's own identifier — 22 mixed-case alphanumerics, verbatim."""
+    """The panel's own identifier: 22 mixed-case alphanumerics, as received."""
 
     relay_state: str
     """The *relay state*, wire name ``state``: ``Idle`` or ``Heating``."""
@@ -236,7 +242,7 @@ class PanelStatus:
 
     @property
     def name(self) -> str | None:
-        """The MyHeatit app's device name; free text, non-ASCII in the wild."""
+        """The MyHeatit app's device name. Free text, non-ASCII in the wild."""
         return self.get_str("name")
 
     @property
@@ -246,12 +252,12 @@ class PanelStatus:
 
     @property
     def model(self) -> str | None:
-        """Undocumented, present because we looked; never a fingerprint."""
+        """Undocumented. Present because we looked, never used to tell panels apart."""
         return self.get_str("model")
 
     @property
     def firmware(self) -> str | None:
-        """The firmware version; absent means unverified, not an error."""
+        """The firmware version. Absent means unverified, not an error."""
         return self.get_str("firmware")
 
     @property
@@ -266,11 +272,11 @@ class PanelStatus:
 
 
 def _decode_json(raw: bytes, content_type: str) -> object:
-    """Bytes → UTF-8 explicitly → JSON. Never ``response.json()``.
+    """Bytes to UTF-8 explicitly, then JSON. Never ``response.json()``.
 
-    Success carries no ``charset`` and real non-ASCII; error paths serve
-    ``text/html``. Either failure is a :class:`HeatitProtocolError` naming the
-    content type and byte length, never the bytes.
+    A success response carries no ``charset`` and real non-ASCII. Error paths
+    serve ``text/html``. Either failure is a :class:`HeatitProtocolError`
+    naming the content type and byte length, never the bytes.
     """
     try:
         return json.loads(raw.decode("utf-8"))
@@ -283,8 +289,8 @@ def parse_status(raw: bytes, content_type: str = "application/json") -> PanelSta
     """Parse the bytes of ``GET /api/status`` into a :class:`PanelStatus`.
 
     Raises :class:`HeatitMissingFieldError` for an absent or ``null``
-    *required core* field and :class:`HeatitProtocolError` for a body that is
-    not a JSON object or holds a required field of the wrong type.
+    *required core* field. Raises :class:`HeatitProtocolError` for a body that
+    is not a JSON object or holds a required field of the wrong type.
     """
     document = _decode_json(raw, content_type)
     if not isinstance(document, dict):
@@ -339,7 +345,7 @@ def _required_float(document: Mapping[str, Any], path: str) -> float:
 def redact_status(document: Mapping[str, Any]) -> dict[str, Any]:
     """Copy a parsed status with exactly the four identifiers replaced.
 
-    Shared by logging and diagnostics; :func:`redact_status_bytes` is the same
+    Shared by logging and diagnostics. :func:`redact_status_bytes` is the same
     scrub at the wire level, for the raw section and fixture capture.
     """
     redacted: dict[str, Any] = dict(document)
@@ -361,7 +367,7 @@ def redact_status(document: Mapping[str, Any]) -> dict[str, Any]:
 def substitute_string_field(raw: bytes, key: str, placeholder: str) -> bytes:
     """Replace the string value of every ``"key"`` in raw JSON bytes, in place.
 
-    Only the quoted value moves; spacing, ordering and every other byte stay
+    Only the quoted value changes. Spacing, ordering and every other byte stay
     as the device sent them, so ``0.00`` stays ``0.00``.
     """
     pattern = rb'("' + re.escape(key.encode()) + rb'"\s*:\s*)"(?:[^"\\]|\\.)*"'
@@ -371,13 +377,13 @@ def substitute_string_field(raw: bytes, key: str, placeholder: str) -> bytes:
 def redact_text(text: str, document: Mapping[str, Any]) -> str:
     """Replace this panel's own identifiers wherever they occur in free text.
 
-    The third face of the one redaction, for text that is neither a parsed
+    The third form of the one redaction, for text that is neither a parsed
     status nor a JSON body: a response header. The fields and placeholders are
-    :data:`REDACTED_FIELDS`, but the value to look for is read from the status
-    the panel just returned, because a header does not name its contents.
+    :data:`REDACTED_FIELDS`. But the value to look for is read from the status
+    the panel last returned, because a header does not name its contents.
 
-    Substring matching, so it can only ever over-scrub — which at the wire is
-    the documented direction (:func:`redact_status_bytes`).
+    Substring matching, so it can only ever scrub too much. At the wire level
+    that is the documented direction (:func:`redact_status_bytes`).
     """
     for path, placeholder in REDACTED_FIELDS.items():
         value = resolve(document, path)
@@ -390,9 +396,9 @@ def redact_status_bytes(raw: bytes) -> bytes:
     """Apply the same scrub to the raw bytes, by targeted substitution.
 
     At the wire level a field is found by its key wherever it appears, not by
-    its path — a superset that can only ever over-scrub. On a real status the
-    two agree, and a test asserts that :func:`redact_status` of the parsed
-    document equals the parse of these bytes.
+    its path. That is a superset, so it can only ever scrub too much. On a
+    real status the two agree, and a test checks that :func:`redact_status`
+    of the parsed document equals the parse of these bytes.
     """
     for path, placeholder in REDACTED_FIELDS.items():
         raw = substitute_string_field(raw, path.rsplit(".", 1)[-1], placeholder)
@@ -412,10 +418,10 @@ class _Response:
 
 
 def _is_success(status: str) -> bool:
-    """Case-insensitive after stripping whitespace and trailing punctuation.
+    """Case-insensitive, after stripping whitespace and trailing punctuation.
 
-    Mandatory, not defensive: the device ships ``"Success"`` capitalised and
-    ``"failed"`` lowercase, contradicting the document and itself.
+    Required, not defensive: the device sends ``"Success"`` capitalised and
+    ``"failed"`` lowercase, which contradicts the document and itself.
     """
     return status.strip().rstrip(string.punctuation).strip().casefold() == "success"
 
@@ -423,11 +429,11 @@ def _is_success(status: str) -> bool:
 class HeatitClient:
     """One panel at one host, over a session the caller owns.
 
-    Every request to the panel — poll, write, reset — waits its turn on one
-    ``asyncio.Lock``, so a single Home Assistant instance never presents a
-    panel with more than one connection and write-then-refresh order is
-    guaranteed rather than left to the device. Lock wait is outside the
-    timeout budget: timeouts cover wire time only.
+    Every request to the panel (poll, write, reset) waits its turn on one
+    ``asyncio.Lock``. So a single Home Assistant instance never gives a panel
+    more than one connection, and write-then-refresh order is guaranteed, not
+    left to the device. Lock wait is outside the timeout budget: timeouts
+    cover wire time only.
     """
 
     def __init__(self, host: str, *, session: aiohttp.ClientSession) -> None:
@@ -441,19 +447,19 @@ class HeatitClient:
         self.last_raw_headers: Mapping[str, str] | None = None
         """The last status response headers as received."""
         self.last_status_retried = False
-        """Whether the last status read used its retry, successfully or not.
+        """Whether the last status read used its retry, whether or not it worked.
 
-        Set when the second attempt is *made*, so the diagnostics download of
-        §7.3 answers "did the retry fire?" for a poll that failed as well as
-        for one that recovered.
+        Set when the second attempt is *made*. So the diagnostics download of
+        §7.3 answers "did the retry fire?" for a failed poll as well as a
+        recovered one.
         """
 
     async def get_status(self) -> PanelStatus:
         """Read the whole *status*: the only read, and the only retried request.
 
-        Retried once on any transport failure, no backoff, within the *poll
-        budget*. Raises :class:`HeatitConnectionError` when both attempts
-        fail, :class:`HeatitResponseError` for a non-200, and
+        Retried once on any transport failure, with no backoff, within the
+        *poll budget*. Raises :class:`HeatitConnectionError` when both
+        attempts fail, :class:`HeatitResponseError` for a non-200 and
         :class:`HeatitProtocolError` for a 200 that is not a status.
         """
         async with self._lock:
@@ -475,11 +481,11 @@ class HeatitClient:
     async def set_parameter(self, key: str, value: object) -> object:
         """Write one *observed parameter* and return the value applied.
 
-        ``value`` is in user-facing units; the registry validates it locally —
-        a ``ValueError`` here means no request was sent — and scales it for
-        the wire. The return value is the device's *write echo* coerced to the
-        declared type, or the requested value when the echo is missing or
-        unparseable. One attempt, never retried.
+        ``value`` is in user-facing units. The registry validates it locally,
+        so a ``ValueError`` here means no request was sent, and scales it for
+        the wire. The return value is the device's *write echo* converted to
+        the declared type. When the echo is missing or cannot be parsed, it is
+        the requested value instead. One attempt, never retried.
         """
         descriptor = PARAMETERS.get(key)
         if descriptor is None:
@@ -510,9 +516,9 @@ class HeatitClient:
         await self._reset(RESET_KWH_PATH, params=RESET_KWH_QUERY)
 
     async def reset_settings(self) -> None:
-        """Parameters to defaults; keeps network, pairing, id, name and room.
+        """Reset parameters to defaults. Keeps network, pairing, id, name and room.
 
-        Applies staggered over about 5 s on the device. One attempt, never
+        The device applies them spread out over about 5 s. One attempt, never
         retried.
         """
         await self._reset(RESET_SETTINGS_PATH, params=None)
@@ -545,7 +551,7 @@ class HeatitClient:
                     first_error,
                 )
             return response
-        raise AssertionError  # pragma: no cover - the loop returns or raises
+        raise AssertionError  # pragma: no cover  # the loop returns or raises
 
     async def _fetch(
         self,
@@ -555,7 +561,7 @@ class HeatitClient:
         budget: aiohttp.ClientTimeout,
         params: Mapping[str, str] | None = None,
     ) -> _Response:
-        """One HTTP exchange; the body is read as bytes, never decoded here."""
+        """One HTTP exchange. The body is read as bytes, never decoded here."""
         try:
             async with self._session.request(
                 method, f"{self._base_url}{path}", params=params, timeout=budget
@@ -573,7 +579,7 @@ class HeatitClient:
             raise HeatitConnectionError(msg) from err
 
     def _verdict(self, response: _Response, *, parameter: str | None) -> dict[str, Any]:
-        """HTTP 200 **and** ``status`` matched, one envelope for the whole API."""
+        """HTTP 200 **and** ``status`` matched: one wrapper for the whole API."""
         if response.status != HTTP_OK:
             reason = self._reason_of(response)
             if parameter is not None and response.status == HTTP_BAD_REQUEST:
@@ -585,7 +591,7 @@ class HeatitClient:
         ):
             msg = (
                 f"a {response.content_type!r} 200 of {len(response.body)} bytes "
-                f"carries no status envelope"
+                f"carries no status wrapper"
             )
             raise HeatitProtocolError(msg)
         if not _is_success(envelope["status"]):
@@ -604,7 +610,7 @@ class HeatitClient:
     def _reason_of(response: _Response) -> str:
         """Return the device's ``reason``, else the HTTP reason phrase.
 
-        A ``text/html`` body therefore never becomes a message.
+        So a ``text/html`` body never becomes a message.
         """
         try:
             envelope = _decode_json(response.body, response.content_type)

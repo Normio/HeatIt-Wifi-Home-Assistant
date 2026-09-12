@@ -1,9 +1,9 @@
-"""The poll is the sole judge of availability (§6), and the §7.2 log table.
+"""Only the poll decides availability (§6), and the §7.2 log table.
 
 Every entity goes unavailable on the **first** failed poll: no coordinator-level
-grace, no hand-rolled failure counter, no stale data served as fresh. The
-tolerance for a single dropped packet lives one layer down, in the status read's
-own retry inside the *poll budget*.
+grace period, no failure counter of our own, no stale data served as fresh. A
+single dropped packet is forgiven one layer down, in the status read's own
+retry inside the *poll budget*.
 """
 
 import logging
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     )
 
 #: What each client failure becomes, and the placeholders the message needs.
-#: The dotted path travels on the exception rather than being re-parsed here.
+#: The dotted path travels on the exception instead of being parsed again here.
 POLL_FAILURES = [
     (HeatitConnectionError("timed out"), "cannot_connect", None),
     (
@@ -78,8 +78,8 @@ WRITE_FAILURES = [
     (HeatitResponseError(405, "Method Not Allowed"), "unexpected_response", None),
 ]
 
-#: §6.4's table again, for a request that carries no parameter: a reset has
-#: nothing for the registry to bound and nothing for a ``400`` to name, so the
+#: §6.4's table again, for a request that carries no parameter. A reset has
+#: nothing for the registry to bound and nothing for a ``400`` to name. So the
 #: rejection row is the one row it cannot reach.
 RESET_FAILURES = [
     (HeatitConnectionError("timed out"), "cannot_connect"),
@@ -106,10 +106,10 @@ async def loaded(
 def panel_lines(
     caplog: pytest.LogCaptureFixture, level: int = logging.INFO
 ) -> list[logging.LogRecord]:
-    """Only this integration's own lines, at ``level`` or above.
+    """Return only this integration's own lines, at ``level`` or above.
 
-    ``caplog`` captures whatever propagates to the root, Home Assistant's own
-    setup chatter included, and §7.2 is a table about *our* lines.
+    ``caplog`` captures whatever reaches the root logger, Home Assistant's own
+    setup noise included, and §7.2 is a table about *our* lines.
     """
     return [
         record
@@ -146,7 +146,7 @@ async def test_the_first_failed_poll_is_enough(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """No grace, and the last good status is not served as fresh."""
+    """No grace period, and the last good status is not served as fresh."""
     coordinator = await loaded(hass, mock_config_entry)
     assert coordinator.last_update_success is True
     patched_client.fail(HeatitConnectionError("timed out"))
@@ -210,7 +210,7 @@ async def test_a_foreign_panel_at_poll_time_is_never_escalated(
     """Keep the entry loaded: the user sees one error line, not a dead entry.
 
     A reload is what turns a *foreign panel* into the permanent setup error
-    (§6.2); the coordinator itself never escalates one.
+    (§6.2). The coordinator itself never passes one up.
     """
     coordinator = await loaded(hass, mock_config_entry)
     patched_client.set_status({"id": FOREIGN_DEVICE_ID})
@@ -282,7 +282,7 @@ async def test_a_vanished_parameter_warns_once_and_its_return_informs(
     mock_config_entry: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Once per transition, both ways — nothing repeats per poll (§7.2)."""
+    """Once per transition, both ways. Nothing repeats per poll (§7.2)."""
     coordinator = await loaded(hass, mock_config_entry)
 
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
@@ -311,7 +311,7 @@ async def test_a_parameter_appearing_after_setup_waits_for_a_reload(
     mock_config_entry: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Debug, once, and no dynamic entity addition (§6.3)."""
+    """Debug, once, and no entity is added at run time (§6.3)."""
     patched_client.set_status({"parameters.sensorMode": ABSENT})
     coordinator = await loaded(hass, mock_config_entry)
     assert "sensorMode" not in coordinator.observed_parameters
@@ -344,8 +344,8 @@ async def test_a_late_parameter_is_noted_once_per_transition(
     """§7.2 says *once per transition*, and a transition can happen twice.
 
     A parameter that was absent at setup, appeared, went away again and came
-    back has appeared **twice**, and the second debug line is the record that
-    the panel is flapping rather than that it changed once.
+    back has appeared **twice**. The second debug line records that the panel
+    is going back and forth, not that it changed once.
     """
     patched_client.set_status({"parameters.sensorMode": ABSENT})
     coordinator = await loaded(hass, mock_config_entry)
@@ -413,12 +413,11 @@ async def test_a_failed_write_says_what_the_panel_said(
     key: str,
     placeholders: dict[str, str] | None,
 ) -> None:
-    """§6.4's table, with the device's ``reason`` verbatim and never parsed.
+    """§6.4's table, with the device's ``reason`` word for word and never parsed.
 
-    A ``400`` is not a user error: Home Assistant's own layers and the registry
-    have both bounded the value before the device sees it, so a rejection means
-    our bounds and the panel's disagree — which is drift, and drift is an
-    error.
+    A ``400`` is not a user error. Home Assistant's own layers and the registry
+    have both bounded the value before the device sees it. So a rejection means
+    our bounds and the panel's disagree. That is drift, and drift is an error.
     """
     coordinator = await loaded(hass, mock_config_entry)
     patched_client.refuse(failure)
@@ -455,7 +454,7 @@ async def test_the_refresh_is_scheduled_even_when_the_write_failed(
 ) -> None:
     """The panel commits in 300-600 ms, so a lost *response* proves nothing.
 
-    The refresh is what converges Home Assistant to whatever the device did.
+    The refresh is what brings Home Assistant in line with what the device did.
     """
     coordinator = await loaded(hass, mock_config_entry)
     reads = patched_client.status_reads
@@ -480,9 +479,9 @@ async def test_a_silent_undo_warns_once_per_parameter(
 ) -> None:
     """§6.5's one known instance: ``sensorMode`` with no sensor paired.
 
-    Client-side quantisation has already removed the snap case, so every
-    mismatch that survives is a device refusal disguised as success. Warning
-    once per parameter per entry lifetime, debug after that (§7.2).
+    Client-side rounding to the grid has already removed the snap case, so
+    every mismatch that survives is a device refusal that looks like success.
+    Warn once per parameter per entry lifetime, debug after that (§7.2).
     """
     coordinator = await loaded(hass, mock_config_entry)
     patched_client.echoes["sensorMode"] = True
@@ -555,8 +554,8 @@ async def test_a_poll_inside_the_window_neither_judges_nor_drops_the_echo(
     """A poll can land in the 1.5 s a write needs to reach the status (Q31).
 
     Core cancels the debounced refresh when a scheduled poll runs, so that poll
-    is the only one coming. Judging it would report a *silent undo* that never
-    happened and drop the user's value back for a whole *poll interval*; §6.5
+    is the only one coming. Checking it would report a *silent undo* that never
+    happened and drop the user's value back for a full *poll interval*. §6.5
     names the **post-write** refresh, and this is not yet it.
     """
     coordinator = await loaded(hass, mock_config_entry)
@@ -580,10 +579,10 @@ async def test_a_value_the_registry_refuses_never_reaches_the_panel(
     patched_client: FakeHeatitClient,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Off the 0.5 grid, refused locally — and §6.4 wants that translated too.
+    """Off the 0.5 grid, refused locally, and §6.4 wants that translated too.
 
     Core checks a ``climate.set_temperature`` against ``min_temp`` and
-    ``max_temp`` and never against ``target_temperature_step``, so an off-grid
+    ``max_temp`` and never against ``target_temperature_step``. So an off-grid
     value does reach the registry, which raises before a request exists.
     """
     coordinator = await loaded(hass, mock_config_entry)
@@ -613,8 +612,8 @@ async def test_a_failed_reset_says_what_the_panel_said(
     """A reset fails the way a write fails (§6.4), minus the rejection row.
 
     There is no parameter to name and no value to bound, so the device's
-    ``400`` reaches the client as a plain response error — and the user gets
-    the panel's own words either way.
+    ``400`` reaches the client as a plain response error. The user gets the
+    panel's own words either way.
     """
     coordinator = await loaded(hass, mock_config_entry)
     patched_client.refuse_reset(failure)
@@ -675,9 +674,9 @@ async def test_a_reset_the_panel_never_acknowledged_verifies_nothing(
 ) -> None:
     """§5.5 records the *ack*, so a press that never got one is not pending.
 
-    Warning about a counter that did not fall after a request that did not
-    arrive would blame the panel for a network failure the user has already
-    been told about.
+    The request never arrived, so the counter did not fall. Warning about that
+    would blame the panel for a network failure the user has already been told
+    about.
     """
     patched_client.set_status({TOTAL_CONSUMPTION: 4.32})
     coordinator = await loaded(hass, mock_config_entry)

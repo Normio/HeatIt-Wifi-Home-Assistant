@@ -1,17 +1,17 @@
 """The two switches of §5.2: open window detection and the external sensor.
 
-Two booleans the panel's own display and the MyHeatit app expose, and the one
-asymmetry in the parameter registry: ``openWindowDetection`` is **read nested**
-under ``parameters.OWD`` and **written flat**. The write key is asserted here as
-well as at the client seam, because it is the switch a user touches that would
-silently write nothing if the two ever diverged.
+Two booleans the panel's own display and the MyHeatit app expose. One of them
+is the one asymmetry in the parameter registry: ``openWindowDetection`` is
+**read nested** under ``parameters.OWD`` and **written flat**. The write key is
+asserted here as well as at the client seam. The switch a user touches is what
+would silently write nothing if the two diverged.
 
 The external sensor is the parameter whose *write echo* lies (§6.5, register
-Q58): with no sensor paired the panel acknowledges ``sensorMode=true`` and does
-not apply it. The switch is exposed anyway — the write is inert, not dangerous —
-and what a user sees is the uniform optimistic update of §5.4 running its
-course: on at once, off again at the 1.5 s refresh, with one warning in the log
-and nothing after it.
+Q58). With no sensor paired, the panel acknowledges ``sensorMode=true`` and
+does not apply it. The switch is exposed anyway: the write does nothing and is
+not dangerous. A user sees §5.4's uniform optimistic update run its course. The
+switch is on at once and off again at the 1.5 s refresh, with one warning in
+the log and nothing after it.
 """
 
 import logging
@@ -41,7 +41,7 @@ LOGGER_NAME = f"custom_components.{DOMAIN}"
 
 
 class Switch(NamedTuple):
-    """One switch of §5.2, transcribed rather than read from the module."""
+    """One switch of §5.2, copied instead of read from the module."""
 
     key: str
     parameter: str
@@ -95,7 +95,7 @@ async def test_each_switch_reads_its_own_parameter(
     patched_client: FakeHeatitClient,
     row: Switch,
 ) -> None:
-    """Both read ``false`` on the reference panel; both follow their own path."""
+    """Both read ``false`` on the reference panel. Both follow their own path."""
     assert await setup_entry(hass, mock_config_entry)
     assert state_of(hass, row.key) == STATE_OFF
 
@@ -166,12 +166,12 @@ async def test_an_inert_external_sensor_write_flips_back_and_warns_once(
     freezer: FrozenDateTimeFactory,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Register Q58, as a user meets it: on, then off, then nothing more.
+    """Register Q58, as a user sees it: on, then off, then nothing more.
 
-    The echo says ``true``, the panel's status goes on saying ``false``, and
-    §5.4's one rule is kept rather than given a per-parameter honesty flag. The
-    *silent undo* warning is what surfaces the exception, once per parameter
-    per entry lifetime and debug from then on (§6.5).
+    The echo says ``true``, and the panel's status goes on saying ``false``.
+    §5.4's one rule is kept; there is no per-parameter honesty flag. The
+    *silent undo* warning shows the exception, once per parameter per entry
+    lifetime and debug from then on (§6.5).
     """
     assert await setup_entry(hass, mock_config_entry)
     patched_client.echoes[EXTERNAL_SENSOR.parameter] = True
